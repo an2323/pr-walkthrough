@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "summary": {
-    "problem": "When the floating sidebar was open, the top-right toolbar buttons (including the hamburger menu trigger) rendered above the sidebar at z-index 100, obscuring it. Tapping the hamburger button also had no effect on the sidebar, because the trigger button carried a `data-prevent-outside-click` attribute that silenced every panel's outside-click handler globally — so the sidebar never heard the tap.",
+    "problem": "When the floating sidebar was open, the top-right toolbar buttons (including the hamburger menu trigger) rendered above the sidebar at z-index 100, obscuring it. Tapping the hamburger button also had no effect on the sidebar, because the trigger button carried a `data-prevent-outside-click` attribute that silenced every panel's outside-click handler globally \u2014 so the sidebar never heard the tap.",
     "solution": "Raise the sidebar's z-index above the toolbar. Remove the global suppress attribute from the trigger, replacing it with a targeted container-level check inside the menu's own outside-click handler, so the menu still ignores clicks on its own trigger while the sidebar's handler now correctly fires."
   },
   "plain": {
@@ -84,7 +84,7 @@
         "from": "zindex",
         "to": "sidebar",
         "label": "--zIndex-ui-library: 80",
-        "plainLabel": "sidebar z-index was 80 (before)",
+        "plainLabel": "z-index was 80",
         "kind": "data",
         "state": "before",
         "problem": true,
@@ -95,7 +95,7 @@
         "from": "zindex",
         "to": "sidebar",
         "label": "--zIndex-ui-library: 120",
-        "plainLabel": "sidebar z-index raised to 120",
+        "plainLabel": "z-index \u2192 120",
         "kind": "data",
         "state": "after",
         "visibleFrom": 2
@@ -105,7 +105,7 @@
         "from": "trigger",
         "to": "outsideclick",
         "label": "data-prevent-outside-click suppressed all panels",
-        "plainLabel": "suppressed every close signal",
+        "plainLabel": "blocked all closes",
         "kind": "event",
         "state": "before",
         "problem": true,
@@ -116,7 +116,7 @@
         "from": "dropdown",
         "to": "content",
         "label": ".dropdown-menu-container wrapper",
-        "plainLabel": "new shared container",
+        "plainLabel": "shared container",
         "kind": "props",
         "state": "after",
         "visibleFrom": 5
@@ -126,7 +126,7 @@
         "from": "content",
         "to": "outsideclick",
         "label": "container-aware check",
-        "plainLabel": "smarter outside-click guard",
+        "plainLabel": "container-aware close",
         "kind": "call",
         "state": "after",
         "visibleFrom": 6
@@ -136,7 +136,7 @@
         "from": "content",
         "to": "outsideclick",
         "label": "callback: (event: Event)",
-        "plainLabel": "old callback — no target access",
+        "plainLabel": "callback had no target",
         "kind": "call",
         "state": "before",
         "visibleUntil": 7
@@ -146,7 +146,7 @@
         "from": "content",
         "to": "outsideclick",
         "label": "callback: (event: Event & { target: T })",
-        "plainLabel": "new callback — target accessible",
+        "plainLabel": "callback gets target",
         "kind": "call",
         "state": "after",
         "visibleFrom": 7
@@ -163,14 +163,48 @@
       "say": "When the sidebar is open, buttons in the top-right corner overlap it, and tapping the hamburger button does not close the sidebar.",
       "focusNode": "sidebar",
       "tag": "fact",
-      "narration": "The editor has a floating sidebar on the right edge showing the element library. When the sidebar is open, all top-right toolbar buttons — including the hamburger icon — are drawn on top of it, obscuring part of the panel. Clicking those buttons also has no effect on the sidebar, so on mobile both the sidebar and the main menu end up open simultaneously.",
+      "narration": "The editor has a floating sidebar on the right edge showing the element library. When the sidebar is open, all top-right toolbar buttons \u2014 including the hamburger icon \u2014 are drawn on top of it, obscuring part of the panel. Clicking those buttons also has no effect on the sidebar, so on mobile both the sidebar and the main menu end up open simultaneously.",
       "visual": {
-        "type": "symptoms",
-        "items": [
-          "Top-right toolbar buttons appear above the open sidebar",
-          "Clicking the hamburger button does not close the sidebar",
-          "On mobile, the main menu and sidebar are open at the same time"
-        ]
+        "type": "shots",
+        "caption": "Open the library sidebar, then open the main menu.",
+        "before": {
+          "src": "before.png",
+          "highlights": [
+            {
+              "x": 0.01,
+              "y": 0.06,
+              "w": 0.26,
+              "h": 0.62,
+              "label": "Main menu opens"
+            },
+            {
+              "x": 0.77,
+              "y": 0.0,
+              "w": 0.23,
+              "h": 1.0,
+              "label": "Sidebar still covers the UI"
+            }
+          ]
+        },
+        "after": {
+          "src": "after.png",
+          "highlights": [
+            {
+              "x": 0.01,
+              "y": 0.06,
+              "w": 0.26,
+              "h": 0.62,
+              "label": "Main menu is clear"
+            },
+            {
+              "x": 0.78,
+              "y": 0.0,
+              "w": 0.2,
+              "h": 0.08,
+              "label": "Sidebar closed with the menu"
+            }
+          ]
+        }
       },
       "beats": [
         {
@@ -189,7 +223,7 @@
                 {
                   "kind": "focus",
                   "text": "  --zIndex-ui-library: 80;",
-                  "annotation": "Sidebar z-index — below --zIndex-ui-top (100), so toolbar renders above it.",
+                  "annotation": "Sidebar z-index \u2014 below --zIndex-ui-top (100), so toolbar renders above it.",
                   "annotationTag": "fact"
                 },
                 {
@@ -291,10 +325,10 @@
       "routeLabel": "Sidebar stays open",
       "title": "The hamburger tap was shielded from the sidebar's outside-click detector",
       "headline": "The hamburger button was invisible to the sidebar's close logic",
-      "say": "The sidebar listens for taps outside itself to close. But the hamburger button told that listener to ignore it — so tapping the button never closed the sidebar.",
+      "say": "The sidebar listens for taps outside itself to close. But the hamburger button told that listener to ignore it \u2014 so tapping the button never closed the sidebar.",
       "focusNode": "outsideclick",
       "tag": "fact",
-      "narration": "The sidebar closes itself on outside taps via the shared `useOutsideClick` hook. That hook has a blanket escape hatch: if the tapped element carries `data-prevent-outside-click` anywhere in its ancestor chain, the hook returns early. The dropdown trigger button — the hamburger — carried exactly that attribute, so the sidebar's close handler was never called when the user tapped it.",
+      "narration": "The sidebar closes itself on outside taps via the shared `useOutsideClick` hook. That hook has a blanket escape hatch: if the tapped element carries `data-prevent-outside-click` anywhere in its ancestor chain, the hook returns early. The dropdown trigger button \u2014 the hamburger \u2014 carried exactly that attribute, so the sidebar's close handler was never called when the user tapped it.",
       "beats": [
         {
           "kind": "current",
@@ -312,7 +346,7 @@
                 {
                   "kind": "focus",
                   "text": "      if (_event.target.closest(\"[data-prevent-outside-click]\")) {",
-                  "annotation": "This check is global — it silences every panel's outside-click handler, not just the dropdown's own.",
+                  "annotation": "This check is global \u2014 it silences every panel's outside-click handler, not just the dropdown's own.",
                   "annotationTag": "fact"
                 },
                 {
@@ -368,11 +402,11 @@
                 "label": "useOutsideClick (sidebar handler)"
               },
               {
-                "label": "target.closest('[data-prevent-outside-click]') → the button",
+                "label": "target.closest('[data-prevent-outside-click]') \u2192 the button",
                 "status": "bad"
               },
               {
-                "label": "return early — sidebar stays open",
+                "label": "return early \u2014 sidebar stays open",
                 "status": "bad"
               }
             ]
@@ -400,7 +434,7 @@
       "say": "The attribute existed for a reason: without it, clicking the trigger while the menu is open would fire the menu's own close handler on the same tap, making the button appear to do nothing.",
       "focusNode": "content",
       "tag": "inferred",
-      "narration": "The dropdown menu content has its own `useOutsideClick` registration. When the menu is open and the user taps the trigger, the content's handler fires because the trigger is outside the menu panel's ref. Without the global suppress attribute, `onClickOutside` fires and closes the menu — on the same pointer-down that the button's own click handler will use to toggle the menu open. The result is a toggle that immediately undoes itself. The attribute existed to prevent this.",
+      "narration": "The dropdown menu content has its own `useOutsideClick` registration. When the menu is open and the user taps the trigger, the content's handler fires because the trigger is outside the menu panel's ref. Without the global suppress attribute, `onClickOutside` fires and closes the menu \u2014 on the same pointer-down that the button's own click handler will use to toggle the menu open. The result is a toggle that immediately undoes itself. The attribute existed to prevent this.",
       "beats": [
         {
           "kind": "problem",
@@ -412,17 +446,17 @@
                 "label": "pointer-down on hamburger"
               },
               {
-                "label": "useOutsideClick (MenuContent fires — trigger is outside panel ref)",
+                "label": "useOutsideClick (MenuContent fires \u2014 trigger is outside panel ref)",
                 "status": "bad"
               },
               {
-                "label": "onClickOutside() → openMenu: null"
+                "label": "onClickOutside() \u2192 openMenu: null"
               },
               {
                 "label": "menu closes"
               },
               {
-                "label": "onClick fires → openMenu: canvas"
+                "label": "onClick fires \u2192 openMenu: canvas"
               },
               {
                 "label": "net result: menu appears unchanged",
@@ -450,15 +484,15 @@
       "title": "Wrap trigger and content together so the menu recognises its own trigger",
       "headline": "Trigger and menu panel get a shared wrapper",
       "say": "Rather than a global suppress flag, the trigger and the open panel are grouped in a shared container, so only the menu itself knows to ignore clicks on its own button.",
-      "check": "Open the main menu, then click the hamburger button again. The menu should close — not close and immediately reopen.",
+      "check": "Open the main menu, then click the hamburger button again. The menu should close \u2014 not close and immediately reopen.",
       "focusNode": "dropdown",
       "tag": "fact",
-      "narration": "The fix wraps the trigger button and the open menu panel in a single div with the class `dropdown-menu-container`, using `display: contents` so there is no layout impact. The menu's outside-click callback can now walk the DOM from its panel to that container and check whether the tap was inside it. If yes — meaning the user tapped the trigger — the menu's own `onClickOutside` is not called, and the button's click handler manages open state alone. Crucially, the sidebar's `useOutsideClick` has no such exception, so it still fires and closes the sidebar.",
+      "narration": "The fix wraps the trigger button and the open menu panel in a single div with the class `dropdown-menu-container`, using `display: contents` so there is no layout impact. The menu's outside-click callback can now walk the DOM from its panel to that container and check whether the tap was inside it. If yes \u2014 meaning the user tapped the trigger \u2014 the menu's own `onClickOutside` is not called, and the button's click handler manages open state alone. Crucially, the sidebar's `useOutsideClick` has no such exception, so it still fires and closes the sidebar.",
       "beats": [
         {
           "kind": "change",
           "heading": "What we change in DropdownMenu",
-          "text": "The fragment `<>…</>` is replaced with `<div className=\"dropdown-menu-container\" style={{ display: 'contents' }}>`, grouping trigger and content without affecting layout.",
+          "text": "The fragment `<>\u2026</>` is replaced with `<div className=\"dropdown-menu-container\" style={{ display: 'contents' }}>`, grouping trigger and content without affecting layout.",
           "code": [
             {
               "file": "packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx",
@@ -495,7 +529,7 @@
                 {
                   "kind": "added",
                   "text": "    >",
-                  "annotation": "`display: contents` means this div is a pure DOM grouping node — no box is generated, so flex/grid parents don't see it.",
+                  "annotation": "`display: contents` means this div is a pure DOM grouping node \u2014 no box is generated, so flex/grid parents don't see it.",
                   "annotationTag": "fact"
                 },
                 {
@@ -535,11 +569,11 @@
       "routeLabel": "Container-aware check",
       "title": "Menu content checks its container before calling onClickOutside",
       "headline": "Menu only closes for clicks truly outside its container",
-      "say": "The menu panel now walks up to its container and asks if the tap landed inside it — including on the trigger button — before deciding to close.",
+      "say": "The menu panel now walks up to its container and asks if the tap landed inside it \u2014 including on the trigger button \u2014 before deciding to close.",
       "check": "While the menu is open, clicking the trigger button should close the menu (button's own handler fires); clicking anywhere else outside should also close it.",
       "focusNode": "content",
       "tag": "fact",
-      "narration": "The `DropdownMenuContent` now receives the click event, walks up to the nearest `dropdown-menu-container` ancestor, and checks whether that container contains the click target. If it does — that is, if the tap was on the trigger — `onClickOutside` is not called. The button's own `onClick` toggle handler manages the state. If the tap is outside the container, `onClickOutside` fires as before. This replaces the global suppress attribute with a scoped, targeted check.",
+      "narration": "The `DropdownMenuContent` now receives the click event, walks up to the nearest `dropdown-menu-container` ancestor, and checks whether that container contains the click target. If it does \u2014 that is, if the tap was on the trigger \u2014 `onClickOutside` is not called. The button's own `onClick` toggle handler manages the state. If the tap is outside the container, `onClickOutside` fires as before. This replaces the global suppress attribute with a scoped, targeted check.",
       "beats": [
         {
           "kind": "current",
@@ -553,7 +587,7 @@
                 {
                   "kind": "focus",
                   "text": "  useOutsideClick(menuRef, () => {",
-                  "annotation": "No event parameter — the handler can't inspect what was clicked.",
+                  "annotation": "No event parameter \u2014 the handler can't inspect what was clicked.",
                   "annotationTag": "fact"
                 },
                 {
@@ -649,7 +683,7 @@
       "title": "The suppress-click attribute is removed from the trigger button",
       "headline": "Tap the menu button to close the sidebar",
       "say": "With the targeted container check protecting the menu, the global suppress flag on the trigger button is removed. The sidebar's close handler now fires when the button is tapped.",
-      "check": "Open the sidebar, then tap the hamburger trigger. The sidebar should close and the main menu should open — not both remain visible.",
+      "check": "Open the sidebar, then tap the hamburger trigger. The sidebar should close and the main menu should open \u2014 not both remain visible.",
       "focusNode": "trigger",
       "tag": "fact",
       "narration": "With the menu now guarding itself via the container check, the global `data-prevent-outside-click` attribute on the trigger is no longer needed. Removing it means the sidebar's `useOutsideClick` handler finally fires when the user taps the hamburger. The sequence is: pointer-down fires, the sidebar's handler runs and calls `closeLibrary`, then the button's click event fires and opens the main menu.",
@@ -657,7 +691,7 @@
         {
           "kind": "change",
           "heading": "What we change",
-          "text": "One attribute removed from the trigger button — the global suppress is gone.",
+          "text": "One attribute removed from the trigger button \u2014 the global suppress is gone.",
           "code": [
             {
               "file": "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx",
@@ -750,7 +784,7 @@
       "id": "q1",
       "stepId": "s6",
       "question": "The class `dropdown-menu-container` is also used on the inner Island and Stack.Col elements inside `DropdownMenuContent`. Could `menuRef.current.closest('.dropdown-menu-container')` find one of those inner elements instead of the new outer wrapper, making the trigger-click guard silently fail?",
-      "why": "In DropdownMenuContent.tsx the Island (line 87) and Stack.Col (line 84) both carry `className='dropdown-menu-container'`. Since `.closest()` walks upward from `menuRef.current`, it would hit the outer wrapper div first — but this depends on the DOM structure, and a future change moving the inner class name could break the guard silently.",
+      "why": "In DropdownMenuContent.tsx the Island (line 87) and Stack.Col (line 84) both carry `className='dropdown-menu-container'`. Since `.closest()` walks upward from `menuRef.current`, it would hit the outer wrapper div first \u2014 but this depends on the DOM structure, and a future change moving the inner class name could break the guard silently.",
       "tag": "inferred",
       "short": "Does `.closest` find an inner element instead of the outer wrapper?"
     },
@@ -758,7 +792,7 @@
       "id": "q2",
       "stepId": "s7",
       "question": "Other components that use `DropdownMenu.Trigger` (e.g. the extra-tools menu in `MobileToolBar`) previously inherited the `data-prevent-outside-click` protection. Do any of them now break because tapping their trigger incorrectly fires outside-click handlers on other open panels?",
-      "why": "The attribute was removed globally from `DropdownMenuTrigger`, so every `DropdownMenu` instance loses the suppress attribute — not just the main menu.",
+      "why": "The attribute was removed globally from `DropdownMenuTrigger`, so every `DropdownMenu` instance loses the suppress attribute \u2014 not just the main menu.",
       "tag": "inferred",
       "short": "Do other dropdown triggers break without the suppress attribute?"
     },
@@ -766,7 +800,7 @@
       "id": "q3",
       "stepId": "s2",
       "question": "The sidebar z-index is now 120, above `--zIndex-ui-top: 100` and the hardcoded `z-index: 100` on `layer-ui__wrapper__footer-right`. Are there panels or buttons that legitimately need to appear above the sidebar?",
-      "why": "`layer-ui__wrapper__footer-right` uses a hardcoded z-index of 100, and other UI like context menus (90) and style popups (100) are now all below the sidebar — are those interactions correct?",
+      "why": "`layer-ui__wrapper__footer-right` uses a hardcoded z-index of 100, and other UI like context menus (90) and style popups (100) are now all below the sidebar \u2014 are those interactions correct?",
       "tag": "inferred",
       "short": "Does anything at z-index 100 need to appear above the sidebar?"
     }
@@ -774,10 +808,10 @@
   "verification": {
     "status": "not_run",
     "scenario": [
-      "Open sidebar → observe that top-right toolbar buttons appear behind the sidebar panel",
-      "Open sidebar → tap hamburger button → sidebar closes and main menu opens",
-      "Open main menu (no sidebar) → click hamburger to close → menu closes without re-opening",
-      "On mobile: open sidebar → tap hamburger → only main menu is visible (sidebar gone)"
+      "Open sidebar \u2192 observe that top-right toolbar buttons appear behind the sidebar panel",
+      "Open sidebar \u2192 tap hamburger button \u2192 sidebar closes and main menu opens",
+      "Open main menu (no sidebar) \u2192 click hamburger to close \u2192 menu closes without re-opening",
+      "On mobile: open sidebar \u2192 tap hamburger \u2192 only main menu is visible (sidebar gone)"
     ]
   },
   "meta": {

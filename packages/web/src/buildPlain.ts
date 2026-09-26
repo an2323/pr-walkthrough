@@ -41,6 +41,9 @@ function stepVisual(step: Step): PlainVisual | undefined {
       after: v.after as [string, number, string?][],
     };
   }
+  if (v.type === 'shots') {
+    return { type: 'shots', before: v.before, after: v.after, caption: v.caption };
+  }
   return undefined;
 }
 

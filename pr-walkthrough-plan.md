@@ -527,7 +527,7 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ### Sub-Task 6e — Agent-verifier ("Try it in the app")
 
-**Status:** ↩ **back in scope** (Sep 26, user decision) — **deferred until the main items are done**: after ST6g, ST7, ST8, ST9; before ST11 (Railway). Was cut earlier the same day; that cut is reversed. Needs the user's go-ahead (and likely a stage-budget decision) before any paid run.
+**Status:** [-] **$0 scaffolding done** (Sep 26) — Playwright fallback at `packages/server/scripts/verify-shots.ts` (`pnpm --filter @pr-walkthrough/server verify-shots …`). Paid Bob verifier still needs go-ahead; wiring into live `POST /api/analyze` deferred until after ST8/9; before ST11 (Railway).
 
 **Intent:** This is part of the product, not decoration: when a PR is analysed, the system also starts the app at BASE and at HEAD, reproduces the scenario, and records before/after screenshots with the spot to look at highlighted. They land automatically in the first Problem step (the ST6g `shots` visual) — no manual screenshots per PR. **Ideally Bob does it.** First target: Excalidraw only (the user has confirmed local dev servers start and screenshots can be taken).
 
@@ -580,7 +580,7 @@ Wiring the verifier into the live analysis pipeline (`POST /api/analyze`) is che
 
 ### Sub-Task 6g — Before/after screenshots in the first step; map on demand
 
-**Status:** [ ] pending · **Must** · ~2.5 h · 0 Bobcoins · do before ST7 (narration) and ST9 (video)
+**Status:** [x] done (Sep 26) — screenshots taken from local BASE/HEAD; shots UI + map modal + label clamp shipped; #10295 step 1 uses `visual: shots`.
 
 **Intent:** The reviewer should *see* the bug before reading about it, and the start screen should only answer "what is this PR". The architecture map is an orientation aid, not a review step, so it moves out of the main flow.
 

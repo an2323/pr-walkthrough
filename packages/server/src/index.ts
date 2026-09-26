@@ -1,10 +1,13 @@
 // packages/server/src/index.ts — Express entry point
 import "./env.js"; // must stay first
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import apiRouter from "./api/routes.js";
 
 const app = express();
 const port = process.env.PORT ?? 3000;
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 // CORS — allow the Vite dev server (default port 5173) and any localhost origin.
 app.use((req, res, next) => {
@@ -22,6 +25,9 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Screenshots / static demo assets under data/ (same paths as VITE_STATIC build).
+app.use("/data", express.static(path.join(ROOT, "data"), { fallthrough: false, maxAge: "1h" }));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

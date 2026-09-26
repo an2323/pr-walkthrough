@@ -17,9 +17,10 @@ interface Props {
   flow: Step[];
   screenIndex: number; // -1 = start, 0..n-1 = steps, flow.length = summary
   onGo: (i: number) => void;
+  onOpenMap?: () => void;
 }
 
-export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo }: Props) {
+export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo, onOpenMap }: Props) {
   const pr = walkthrough.pr;
 
   const currentChapter =
@@ -33,7 +34,13 @@ export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo }: Props)
         <b>{pr.repo}</b>
         <span> #{pr.number} · {pr.title}</span>
       </div>
-      <nav className="v2chapters" aria-label="Progress">
+      <div className="v2top-right">
+        {onOpenMap && (
+          <button type="button" className="map-btn" onClick={onOpenMap}>
+            Map
+          </button>
+        )}
+        <nav className="v2chapters" aria-label="Progress">
         {Object.entries(CH).map(([ch, label]) => {
           const chSteps = flow.filter((s) => plain.steps[s.id]?.ch === ch);
           if (chSteps.length === 0) return null;
@@ -59,7 +66,8 @@ export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo }: Props)
             </div>
           );
         })}
-      </nav>
+        </nav>
+      </div>
     </header>
   );
 }

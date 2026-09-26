@@ -18,6 +18,7 @@ interface Props {
   verifiedItems: Record<number, boolean>;
   onGoToStep: (i: number) => void;
   onOpenDrawer: (stepId: string) => void;
+  onOpenMap?: () => void;
 }
 
 export function SummaryScreen({
@@ -30,6 +31,7 @@ export function SummaryScreen({
   verifiedItems,
   onGoToStep,
   onOpenDrawer,
+  onOpenMap,
 }: Props) {
   const withCheck = flow.filter((s) => plain.steps[s.id]?.check);
   const doneChecks = withCheck.filter((s) => checks[s.id]);
@@ -203,6 +205,15 @@ export function SummaryScreen({
 
       {minors.length === 0 && (walkthrough.skippedHunks ?? []).length === 0 && (
         <p className="note">Nothing else.</p>
+      )}
+
+      {onOpenMap && (
+        <p className="note">
+          <button type="button" className="link-btn" onClick={onOpenMap}>
+            How the pieces connect
+          </button>
+          {' — see what changed between before and after.'}
+        </p>
       )}
 
       <p className="note">

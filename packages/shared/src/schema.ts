@@ -112,6 +112,38 @@ export const VisualSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("try"),
   }),
+  z.object({
+    type: z.literal("shots"),
+    before: z.object({
+      src: z.string(),
+      highlights: z
+        .array(
+          z.object({
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            w: z.number().min(0).max(1),
+            h: z.number().min(0).max(1),
+            label: z.string().optional(),
+          })
+        )
+        .optional(),
+    }),
+    after: z.object({
+      src: z.string(),
+      highlights: z
+        .array(
+          z.object({
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            w: z.number().min(0).max(1),
+            h: z.number().min(0).max(1),
+            label: z.string().optional(),
+          })
+        )
+        .optional(),
+    }),
+    caption: z.string().optional(),
+  }),
 ]);
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { Fragment } from 'react';
 import type { Walkthrough, Step, GraphEdge } from '@pr-walkthrough/shared';
 import type { PlainVisual } from './v2types';
 import { MapSvg, MapLegend } from './MapSvg';
+import { ShotsVisual } from './ShotsVisual';
 
 interface Props {
   visual: PlainVisual;
@@ -111,6 +112,20 @@ export function VisualBlock({
         />
         <MapLegend />
       </div>
+    );
+  }
+
+  if (visual.type === 'shots') {
+    const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
+    return (
+      <ShotsVisual
+        before={visual.before}
+        after={visual.after}
+        caption={visual.caption}
+        owner={owner}
+        repo={repo}
+        number={walkthrough.pr.number}
+      />
     );
   }
 

@@ -185,6 +185,55 @@ html, body { height: 100%; }
 .lg.faint { border-color: var(--faint); border-top-style: dashed; }
 .lg.good { border-color: var(--good); }
 
+/* ---- Before/after screenshots (ST6g) ---- */
+.shots { display: flex; flex-direction: column; gap: 12px; }
+.shots-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.shots-one, .shots-toggle { display: none; }
+.shot-frame { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.shot-cap { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.shot-cap--bad { color: var(--bad); }
+.shot-cap--good { color: var(--good); }
+.shot-img-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--raised); }
+.shot-img { display: block; width: 100%; height: auto; vertical-align: top; }
+.shot-hl {
+  position: absolute; border: 2px solid; border-radius: 6px;
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--ink) 18%, transparent);
+  pointer-events: none; animation: shot-in .45s ease-out both;
+}
+.shot-hl--bad { border-color: var(--bad); }
+.shot-hl--good { border-color: var(--good); }
+.shot-hl-label {
+  position: absolute; left: 0; bottom: calc(100% + 4px);
+  font: 600 11px/1.3 var(--sans); padding: 3px 7px; border-radius: 4px;
+  white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  color: #fff;
+}
+.shot-hl--bad .shot-hl-label { background: var(--bad); }
+.shot-hl--good .shot-hl-label { background: var(--good); }
+@keyframes shot-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+.shots-toggle { gap: 0; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--paper); align-self: start; }
+.shots-toggle button { border: 0; background: transparent; padding: 4px 14px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+.shots-toggle button.on { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+/* ---- Map modal (ST6g) ---- */
+.map-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; }
+.map-layer > .scrim { position: absolute; inset: 0; border: 0; background: rgba(0,0,0,.35); cursor: pointer; }
+.map-modal {
+  position: relative; z-index: 1; width: min(920px, 100%); max-height: min(90vh, 800px);
+  background: var(--panel); border-radius: 14px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; border: 1px solid var(--line); overflow: hidden;
+}
+.map-modal-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.map-modal-h h3 { margin: 0; font-size: 16px; }
+.map-modal-body { padding: 16px 20px 20px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.v2top-right { display: flex; align-items: center; gap: 14px; flex: none; }
+.map-btn {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+  padding: 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--muted); cursor: pointer;
+}
+.map-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 /* ---- Summary screen ---- */
 .sum-list { display: flex; flex-direction: column; gap: 8px; }
 .sum-item { display: flex; gap: 10px; align-items: baseline; font-size: 15px; }
@@ -212,6 +261,7 @@ html, body { height: 100%; }
 @media (max-width: 720px) {
   .v2top { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 16px; }
   .v2chapters { justify-content: space-between; }
+  .v2top-right { justify-content: space-between; width: 100%; }
   .v2stage { padding: 16px 16px 28px; }
   .v2h1 { font-size: 24px; }
   .v2say { font-size: 16.5px; }
@@ -220,6 +270,10 @@ html, body { height: 100%; }
   .layers .mid { transform: rotate(90deg); justify-self: center; }
   .v2bar { padding-inline: 16px; }
   .listen .t { display: none; }
+  .shots-pair { display: none; }
+  .shots-one, .shots-toggle { display: flex; }
+  .shot-hl { box-shadow: none; background: color-mix(in srgb, var(--bad) 8%, transparent); }
+  .shot-hl--good { background: color-mix(in srgb, var(--good) 8%, transparent); }
 }
 
 @media (prefers-reduced-motion: reduce) {

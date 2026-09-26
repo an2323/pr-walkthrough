@@ -24,3 +24,9 @@ export function audioUrl(owner: string, repo: string, number: number, stepId: st
 export function recordingUrl(owner: string, repo: string, number: number): string {
   return `/data/events/${owner}/${repo}/${number}.ndjson`;
 }
+
+/** Before/after screenshot under data/shots (served as /data/... in both static and API builds). */
+export function shotUrl(owner: string, repo: string, number: number, src: string): string {
+  const safe = src.replace(/^\/+/, '').replace(/\.\./g, '');
+  return `/data/shots/${owner}/${repo}/${number}/${safe}`;
+}

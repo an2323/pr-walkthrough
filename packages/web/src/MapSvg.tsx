@@ -29,7 +29,8 @@ export function MapSvg({ graph, edges, focusNode, allNodes = false, edgesPlain =
   const cols = [...new Set(nodes.map((n) => n.layout?.col ?? 0))].sort((a, b) => a - b);
   const rows = [...new Set(nodes.map((n) => n.layout?.row ?? 0))].sort((a, b) => a - b);
 
-  const NW = 176, NH = 50, GX = 150, GY = 46, P = 6;
+  const NW = 176, NH = 50, GX = 180, GY = 52, P = 8;
+  const MAX_LABEL = Math.max(48, GX - 16);
 
   const pos: Record<string, { x: number; y: number }> = {};
   nodes.forEach((n) => {
@@ -48,6 +49,14 @@ export function MapSvg({ graph, edges, focusNode, allNodes = false, edgesPlain =
     const dx = bx - ax, dy = by - ay;
     const t = Math.min(Math.abs(NW / 2 / (dx || 1e-9)), Math.abs(NH / 2 / (dy || 1e-9)));
     return [ax + dx * t, ay + dy * t, bx - dx * t, by - dy * t];
+  }
+
+  function fitLabel(raw: string): { shown: string; full: string; width: number } {
+    const full = raw;
+    const charW = 6.2;
+    const maxChars = Math.max(8, Math.floor((MAX_LABEL - 12) / charW));
+    const shown = full.length > maxChars ? `${full.slice(0, Math.max(1, maxChars - 1))}…` : full;
+    return { shown, full, width: Math.min(MAX_LABEL, shown.length * charW + 12) };
   }
 
   const markerColors = ['bad', 'good', 'faint', 'muted'];
@@ -85,10 +94,10 @@ export function MapSvg({ graph, edges, focusNode, allNodes = false, edgesPlain =
         const c = tone(e);
         const lbl = e.plainLabel ?? (edgesPlain[e.label ?? ''] ?? e.label ?? '');
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-        const w = lbl.length * 6.4 + 12;
+        const fitted = lbl ? fitLabel(lbl) : null;
         return (
           <g key={e.id}>
-            <title>{e.label ?? ''}</title>
+            <title>{e.label ?? lbl}</title>
             <line
               x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={`var(--${c})`}
@@ -96,11 +105,11 @@ export function MapSvg({ graph, edges, focusNode, allNodes = false, edgesPlain =
               strokeDasharray={e.state === 'before' ? '5 4' : undefined}
               markerEnd={`url(#mk-${c})`}
             />
-            {lbl && (
+            {fitted && (
               <>
                 <rect
-                  x={mx - w / 2} y={my - 10}
-                  width={w} height={20} rx={4}
+                  x={mx - fitted.width / 2} y={my - 10}
+                  width={fitted.width} height={20} rx={4}
                   fill="var(--panel)"
                 />
                 <text
@@ -109,7 +118,8 @@ export function MapSvg({ graph, edges, focusNode, allNodes = false, edgesPlain =
                   fontSize={11.5}
                   fill={`var(--${c === 'faint' ? 'muted' : c})`}
                 >
-                  {lbl}
+                  <title>{fitted.full}</title>
+                  {fitted.shown}
                 </text>
               </>
             )}

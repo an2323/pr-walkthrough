@@ -28,7 +28,13 @@ export type PlainVisual =
   | { type: 'symptoms'; items: string[] }
   | { type: 'map'; caption?: string }
   | { type: 'layers'; before: [string, number, string?][]; after: [string, number, string?][] }
-  | { type: 'try' };
+  | { type: 'try' }
+  | {
+      type: 'shots';
+      before: { src: string; highlights?: { x: number; y: number; w: number; h: number; label?: string }[] };
+      after: { src: string; highlights?: { x: number; y: number; w: number; h: number; label?: string }[] };
+      caption?: string;
+    };
 
 export interface PlainData {
   title: string;

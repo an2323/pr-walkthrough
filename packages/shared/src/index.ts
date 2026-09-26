@@ -21,6 +21,9 @@ export type {
   OpenQuestion,
   Coverage,
   Verification,
+  Visual,
+  ShotHighlight,
+  ShotSide,
 } from "./walkthrough.js";
 
 // Zod schemas (for runtime validation)

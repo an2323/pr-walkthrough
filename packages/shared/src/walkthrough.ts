@@ -38,13 +38,29 @@ export interface PlainLayer {
   fix: string;
 }
 
+/** Highlight box on a before/after screenshot; coordinates are 0..1 of image size. */
+export interface ShotHighlight {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label?: string;
+}
+
+export interface ShotSide {
+  /** Path relative to data/shots/{owner}/{repo}/{number}/, e.g. "before.png". */
+  src: string;
+  highlights?: ShotHighlight[];
+}
+
 /** Visual types for step screens. */
 export type Visual =
   | { type: "flow"; rows: [string, string][][] }
   | { type: "symptoms"; items: string[] }
   | { type: "map"; caption?: string }
   | { type: "layers"; before: [string, number, string?][]; after: [string, number, string?][] }
-  | { type: "try" };
+  | { type: "try" }
+  | { type: "shots"; before: ShotSide; after: ShotSide; caption?: string };
 
 export interface Walkthrough {
   schemaVersion: 1;

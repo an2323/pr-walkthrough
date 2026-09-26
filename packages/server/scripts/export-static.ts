@@ -68,6 +68,13 @@ for (const spec of prs) {
     }
   }
   console.log(`${spec}: walkthrough ✓, recording ${existsSync(events) ? "✓" : "—"}, audio ${found}/${total} sentences`);
+
+  const shotsSrc = path.join(ROOT, "data/shots", owner, repo, String(number));
+  if (existsSync(shotsSrc)) {
+    await mkdir(path.join(outDir, "data/shots", owner, repo, String(number)), { recursive: true });
+    await cp(shotsSrc, path.join(outDir, "data/shots", owner, repo, String(number)), { recursive: true });
+    console.log(`  shots ✓`);
+  }
 }
 
 // SPA fallback for viewer routes; /data and /assets must 404 when missing (the landing

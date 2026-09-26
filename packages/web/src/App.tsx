@@ -13,6 +13,7 @@ import { ProgressScreen } from './ProgressScreen';
 import { SHOW_TRY_IT } from './features';
 import { ReviewProvider } from './review';
 import { audioUrl } from './staticMode';
+import { MapModal } from './MapModal';
 import './styles.css';
 import './v2.css';
 
@@ -43,6 +44,7 @@ export default function App() {
 
   // ---- Drawer state ----
   const [drawerStepId, setDrawerStepId] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
 
   // ---- Voice state ----
   const [isPlaying, setIsPlaying] = useState(false);
@@ -104,6 +106,8 @@ export default function App() {
       setVerifiedItems={setVerifiedItems}
       drawerStepId={drawerStepId}
       setDrawerStepId={setDrawerStepId}
+      mapOpen={mapOpen}
+      setMapOpen={setMapOpen}
       isPlaying={isPlaying}
       setIsPlaying={setIsPlaying}
       tokenRef={tokenRef}
@@ -133,6 +137,8 @@ interface InnerProps {
   setVerifiedItems: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
   drawerStepId: string | null;
   setDrawerStepId: (id: string | null) => void;
+  mapOpen: boolean;
+  setMapOpen: (v: boolean) => void;
   isPlaying: boolean;
   setIsPlaying: (v: boolean) => void;
   tokenRef: React.MutableRefObject<number>;
@@ -157,6 +163,8 @@ function AppInner({
   setVerifiedItems,
   drawerStepId,
   setDrawerStepId,
+  mapOpen,
+  setMapOpen,
   isPlaying,
   setIsPlaying,
   tokenRef,
@@ -275,11 +283,14 @@ function AppInner({
       else if (e.key === ' ') {
         e.preventDefault();
         if (isPlaying) { stopListen(); } else { listen(); }
-      } else if (e.key === 'Escape') setDrawerStepId(null);
+      } else if (e.key === 'Escape') {
+        setDrawerStepId(null);
+        setMapOpen(false);
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [go, isPlaying, listen, stopListen, setDrawerStepId]);
+  }, [go, isPlaying, listen, stopListen, setDrawerStepId, setMapOpen]);
 
   // Scroll stage to top on screen change
   const stageRef = useRef<HTMLElement>(null);
@@ -318,6 +329,7 @@ function AppInner({
         flow={flow}
         screenIndex={screenIndex}
         onGo={(i) => go(i)}
+        onOpenMap={() => setMapOpen(true)}
       />
 
       <main className="v2stage" ref={stageRef}>
@@ -328,6 +340,7 @@ function AppInner({
             flow={flow}
             onStart={() => go(0)}
             onListenAll={() => { go(0); listen(true); }}
+            onOpenMap={() => setMapOpen(true)}
           />
         )}
 
@@ -366,6 +379,7 @@ function AppInner({
             verifiedItems={verifiedItems}
             onGoToStep={(i) => go(i)}
             onOpenDrawer={(id) => setDrawerStepId(id)}
+            onOpenMap={() => setMapOpen(true)}
           />
         )}
       </main>
@@ -389,6 +403,14 @@ function AppInner({
             onClose={() => setDrawerStepId(null)}
           />
         </div>
+      )}
+
+      {mapOpen && (
+        <MapModal
+          walkthrough={walkthrough}
+          edgesPlain={plain.edges}
+          onClose={() => setMapOpen(false)}
+        />
       )}
     </div>
     </ReviewProvider>
