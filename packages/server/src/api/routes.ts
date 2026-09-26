@@ -131,18 +131,12 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
 
     const result = await validate(draft, input, workspace);
     if (!result.valid || !result.walkthrough) {
-      console.warn(`[analyze] validation errors for ${owner}/${repo}#${number}:`, result.errors);
-      // Still save what we have if the draft is usable (soft errors from coverage/verbatim).
-      // Only hard schema errors should block saving.
+      console.warn(`[analyze] validation failed for ${owner}/${repo}#${number}:`, result.errors);
+      res.status(422).json({ errors: result.errors });
+      return;
     }
 
-    const wt = result.walkthrough ?? {
-      ...draft,
-      hunks,
-      coverage: { totalHunks: hunks.length, explained: 0, skipped: 0, uncoveredHunkIds: hunks.map(h => h.id) },
-    };
-
-    await saveWalkthrough(wt);
+    await saveWalkthrough(result.walkthrough);
     const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${number}`;
     res.json({ walkthroughUrl });
   } catch (err) {

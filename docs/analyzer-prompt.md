@@ -45,6 +45,12 @@ Not allowed: editing files, installing packages, network access, running the app
    later replaced.
 5. Read changed or added tests to learn the intended behaviour — but do not explain
    or quote them in the walkthrough.
+6. For each behaviour you claim in a step ("this function now does X"), find the
+   actual code that produces that behaviour — even if it lives outside the diff.
+   Do not state a mechanism you have not verified in the source.
+7. For every deleted or replaced piece of code, search who called it, imported it,
+   or depended on it. Confirm whether the removal is safe or whether a caller now
+   has to change.
 
 ## How to structure the walkthrough
 
@@ -133,6 +139,32 @@ Describe 4–8 nodes (files or modules involved) and the edges between them (pro
 calls, data flow). Mark edges the PR removes as `state: "before"` and edges it adds as
 `state: "after"`, and use `visibleFrom` / `visibleUntil` (1-based step numbers) so the
 graph evolves as the steps progress. Set `focusNode` on every step.
+
+## Plain-language layer (required)
+
+Every step must carry a short, plain-language summary used in the reviewer UI.
+Fill these fields on each step:
+
+- `headline` (≤ 10 words): one-sentence title for the step shown in the chapter list.
+  No identifiers. Write it like a newspaper headline: "Session count moved to shared
+  state" not "useSessionCount hook extracted to context".
+- `say` (1–3 sentences): the most important thing about this step in plain language.
+  What changed and why it matters. This is displayed as the main body text in the
+  plain layer, so it must stand alone without the code blocks.
+- `check` (optional, 1 sentence): the concrete thing a reviewer should verify —
+  an edge case, a boundary, a contract. Only include if there is a real question.
+- `minor` (optional, ≤ 8 words): a secondary observation or supporting note.
+
+For open questions, fill `short` (≤ 8 words): a one-line summary of the question.
+
+For graph edges, fill `plainLabel` (≤ 6 words) instead of or in addition to `label`
+when the technical label would be opaque to a non-author reviewer.
+
+On the root walkthrough object, fill `plain.summary` (2–4 sentences): the whole-PR
+plain-language summary shown on the start screen. Cover what was wrong, what was
+changed, and what to watch for.
+
+The golden example below shows these fields in use. Match their tone and length.
 
 ## Output
 
