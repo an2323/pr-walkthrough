@@ -317,33 +317,38 @@ export function findWalkthrough(envelope: unknown): Record<string, unknown> | un
   return undefined;
 }
 
+// Metadata fields every stream-json event carries — never part of the answer text.
+const EVENT_METADATA_KEYS = new Set(["type", "role", "timestamp", "id"]);
+
 /**
- * `--format stream-json` fallback: if the walkthrough JSON is split across
- * several NDJSON events' text fragments (so no single event's string field
- * contains the whole thing), concatenate every string value from every event
- * in order and scan the result for a balanced object that looks like a
- * Walkthrough — skipping unrelated JSON blobs (tool-call arguments, etc.)
- * that may appear earlier in the stream.
+ * `--format stream-json` fallback: the walkthrough JSON arrives split across
+ * many "message"/assistant events' `content` deltas (confirmed on a real run:
+ * a 31KB answer came as ~2490 small fragments). Reassemble it by
+ * concatenating each assistant event's non-metadata string field(s), in
+ * order, then scan the result for a balanced object that looks like a
+ * Walkthrough. Concatenating an event's OTHER fields too (`type`, `role`,
+ * `timestamp`) was an earlier bug here — that junk lands between every
+ * fragment and corrupts the JSON completely (confirmed: it produced ~4x the
+ * expected text length and no parseable object at all).
  */
 export function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | undefined {
   // Confirmed by a real stream-json run: a "message" event with role "user"
   // echoes the FULL prompt back — including the golden example, which itself
   // has "steps" and "graph" keys. Searching all events indiscriminately would
   // find that echoed few-shot example before ever reaching Bob's own answer.
-  // Assistant text also arrives as several partial-content deltas rather than
-  // one complete message, hence the concatenation fallback below.
   const assistantEvents = events.filter(
     (e) => !!e && typeof e === "object" && (e as Record<string, unknown>)["role"] === "assistant"
   );
   const direct = findWalkthrough(assistantEvents);
   if (direct) return direct;
-  let text = "";
-  const visit = (v: unknown): void => {
-    if (typeof v === "string") { text += v; return; }
-    if (Array.isArray(v)) { v.forEach(visit); return; }
-    if (v && typeof v === "object") Object.values(v as object).forEach(visit);
-  };
-  assistantEvents.forEach(visit);
+  const text = assistantEvents
+    .map((e) =>
+      Object.entries(e as Record<string, unknown>)
+        .filter(([k, v]) => !EVENT_METADATA_KEYS.has(k) && typeof v === "string")
+        .map(([, v]) => v as string)
+        .join("")
+    )
+    .join("");
   const found = extractJsonObject(text, isWalkthroughLike);
   return isWalkthroughLike(found) ? found : undefined;
 }

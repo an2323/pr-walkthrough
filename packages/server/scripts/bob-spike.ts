@@ -287,11 +287,14 @@ function findWalkthrough(envelope: unknown): Record<string, unknown> | undefined
   return undefined;
 }
 
+// Metadata fields every stream-json event carries — never part of the answer text.
+const EVENT_METADATA_KEYS = new Set(["type", "role", "timestamp", "id"]);
+
 /**
- * `--format stream-json` fallback: if the walkthrough JSON is split across
- * several NDJSON events' text fragments, concatenate every string value from
- * every event in order and scan the result for a balanced object that looks
- * like a Walkthrough — see bob-shell.ts's twin for the full rationale.
+ * `--format stream-json` fallback — see bob-shell.ts's twin for the full
+ * rationale, including the bug this fixes: concatenating an event's OTHER
+ * fields (`type`/`role`/`timestamp`) along with its `content` used to land
+ * junk between every delta and corrupt the JSON completely.
  */
 function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | undefined {
   // Confirmed by a real stream-json run: a "message" event with role "user"
@@ -303,13 +306,14 @@ function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | u
   );
   const direct = findWalkthrough(assistantEvents);
   if (direct) return direct;
-  let text = "";
-  const visit = (v: unknown): void => {
-    if (typeof v === "string") { text += v; return; }
-    if (Array.isArray(v)) { v.forEach(visit); return; }
-    if (v && typeof v === "object") Object.values(v as object).forEach(visit);
-  };
-  assistantEvents.forEach(visit);
+  const text = assistantEvents
+    .map((e) =>
+      Object.entries(e as Record<string, unknown>)
+        .filter(([k, v]) => !EVENT_METADATA_KEYS.has(k) && typeof v === "string")
+        .map(([, v]) => v as string)
+        .join("")
+    )
+    .join("");
   const found = extractJsonObject(text, isWalkthroughLike);
   return isWalkthroughLike(found) ? found : undefined;
 }
