@@ -193,7 +193,8 @@
         "kind": "props",
         "state": "before",
         "problem": true,
-        "visibleUntil": 9
+        "visibleUntil": 9,
+        "plainLabel": "passes the editor down"
       },
       {
         "id": "e2",
@@ -203,7 +204,8 @@
         "kind": "props",
         "state": "before",
         "problem": true,
-        "visibleUntil": 9
+        "visibleUntil": 9,
+        "plainLabel": "passes the editor down"
       },
       {
         "id": "e3",
@@ -212,7 +214,8 @@
         "label": "setEditor",
         "kind": "data",
         "state": "unchanged",
-        "visibleUntil": 6
+        "visibleUntil": 6,
+        "plainLabel": "stores the editor"
       },
       {
         "id": "e4",
@@ -221,7 +224,8 @@
         "label": "setEditor + setTotalChanges",
         "kind": "data",
         "state": "after",
-        "visibleFrom": 7
+        "visibleFrom": 7,
+        "plainLabel": "stores editor + count"
       },
       {
         "id": "e5",
@@ -229,7 +233,8 @@
         "to": "diff",
         "label": "new Diff(...)",
         "kind": "call",
-        "state": "unchanged"
+        "state": "unchanged",
+        "plainLabel": "creates"
       },
       {
         "id": "e6",
@@ -238,7 +243,8 @@
         "label": "useDocumentContext",
         "kind": "data",
         "state": "after",
-        "visibleFrom": 10
+        "visibleFrom": 10,
+        "plainLabel": "reads editor + count"
       }
     ]
   },
@@ -327,7 +333,16 @@
           "type": "code",
           "ref": "app/scenes/Document/components/ChangesNavigation.tsx (base)"
         }
-      ]
+      ],
+      "headline": "The change counter is missing or stuck",
+      "say": "When you open an older version, the header should say how many changes there are and let you step through them.",
+      "visual": {
+        "type": "symptoms",
+        "items": [
+          "The counter doesn’t appear when the page loads",
+          "When it does, it stays on “N changes” instead of “2 of N”"
+        ]
+      }
     },
     {
       "id": "s2",
@@ -446,7 +461,43 @@
           "type": "diff",
           "ref": "app/scenes/Document/components/ChangesNavigation.tsx#1"
         }
-      ]
+      ],
+      "headline": "Two parts read the same link differently",
+      "say": "For a link ending in “?changes”, the text shows highlights, but the counter decides changes are off.",
+      "check": "Both now ask “is the flag there?”. Should a flag with no value turn changes on?",
+      "visual": {
+        "type": "flow",
+        "rows": [
+          [
+            [
+              "Link ends in ?changes",
+              ""
+            ],
+            [
+              "Counter: “no value, so off”",
+              "bad"
+            ],
+            [
+              "Hidden",
+              "bad"
+            ]
+          ],
+          [
+            [
+              "Link ends in ?changes",
+              ""
+            ],
+            [
+              "Viewer: “flag is there, so on”",
+              "good"
+            ],
+            [
+              "Highlights shown",
+              "good"
+            ]
+          ]
+        ]
+      }
     },
     {
       "id": "s3",
@@ -509,7 +560,13 @@
           "type": "code",
           "ref": "app/scenes/Document/components/Document.tsx, app/scenes/Document/components/Header.tsx (base)"
         }
-      ]
+      ],
+      "headline": "The header hears about the editor by chance",
+      "say": "The editor is passed down through a handle that never announces changes. The header only notices it when it redraws for some other reason.",
+      "visual": {
+        "type": "map",
+        "caption": "The editor travels down through two components, and nobody is told when it changes."
+      }
     },
     {
       "id": "s4",
@@ -631,7 +688,42 @@
           "type": "inference",
           "ref": "stuck mechanism"
         }
-      ]
+      ],
+      "headline": "The editor arrives late, then gets rebuilt",
+      "say": "On the first draw there is no editor yet. Later it is rebuilt from scratch, and the header keeps looking at the old one.",
+      "visual": {
+        "type": "flow",
+        "rows": [
+          [
+            [
+              "First draw",
+              ""
+            ],
+            [
+              "No editor yet",
+              "bad"
+            ],
+            [
+              "Counter hidden",
+              "bad"
+            ]
+          ],
+          [
+            [
+              "Editor rebuilt",
+              ""
+            ],
+            [
+              "Header sees the old one",
+              "bad"
+            ],
+            [
+              "Stuck on “N changes”",
+              "bad"
+            ]
+          ]
+        ]
+      }
     },
     {
       "id": "s5",
@@ -682,7 +774,10 @@
           "type": "diff",
           "ref": "app/components/DocumentContext.tsx#1"
         }
-      ]
+      ],
+      "headline": "The shared editor slot now announces changes",
+      "say": "The editor was already kept in a shared place for the document. Now anything that reads it redraws when the editor appears or is replaced.",
+      "check": "Everything reading this slot now redraws when the editor changes. Anything expensive among them?"
     },
     {
       "id": "s6",
@@ -809,7 +904,29 @@
           "type": "code_comment",
           "ref": "app/scenes/Document/components/RevisionViewer.tsx: \"so the indicator can render before the editor ... finished mounting\""
         }
-      ]
+      ],
+      "headline": "Decision: counting doesn’t need the editor",
+      "say": "The number depends only on the two versions being compared. So the counting moves into a function that works without any editor.",
+      "check": "The counting is moved, not rewritten. Does the diff confirm the logic is identical?",
+      "visual": {
+        "type": "flow",
+        "rows": [
+          [
+            [
+              "Two versions",
+              ""
+            ],
+            [
+              "Their difference",
+              ""
+            ],
+            [
+              "Number of changes",
+              "good"
+            ]
+          ]
+        ]
+      }
     },
     {
       "id": "s7",
@@ -948,7 +1065,33 @@
           "type": "diff",
           "ref": "app/scenes/Document/components/RevisionViewer.tsx#2"
         }
-      ]
+      ],
+      "headline": "Count right where the difference is made",
+      "say": "The viewer already works out the difference to highlight it. Now it also takes the count from there and puts it in the shared state.",
+      "check": "When highlights are off the count is 0. Is that the right value to publish?",
+      "visual": {
+        "type": "flow",
+        "rows": [
+          [
+            [
+              "Difference worked out",
+              ""
+            ],
+            [
+              "Count taken",
+              ""
+            ],
+            [
+              "Shared state",
+              "good"
+            ],
+            [
+              "Header updates",
+              "good"
+            ]
+          ]
+        ]
+      }
     },
     {
       "id": "s8",
@@ -1017,7 +1160,13 @@
           "type": "diff",
           "ref": "app/components/DocumentContext.tsx#2"
         }
-      ]
+      ],
+      "headline": "The viewer and the header share one number",
+      "say": "They aren’t connected directly, so the number travels through the shared document state, the same place that already holds the editor.",
+      "visual": {
+        "type": "map",
+        "caption": "The count now goes from the viewer into shared state, and the header reads it from there."
+      }
     },
     {
       "id": "s9",
@@ -1097,7 +1246,35 @@
           "type": "commit_message",
           "ref": "Reset changes count only on unmount to avoid flicker"
         }
-      ]
+      ],
+      "headline": "Detour: resetting the count made it blink",
+      "say": "A first version reset the count to zero on every update, so switching versions flashed a 0. Now it resets only when you leave history.",
+      "check": "Can the old count linger if you jump to another document without leaving history?",
+      "visual": {
+        "type": "flow",
+        "rows": [
+          [
+            [
+              "Tried first: reset on every update",
+              "old"
+            ],
+            [
+              "Counter flashes 0",
+              "bad"
+            ]
+          ],
+          [
+            [
+              "Now: reset when leaving history",
+              ""
+            ],
+            [
+              "No flash",
+              "good"
+            ]
+          ]
+        ]
+      }
     },
     {
       "id": "s10",
@@ -1191,7 +1368,10 @@
           "type": "commit_message",
           "ref": "Disable change nav buttons until Diff extension is available"
         }
-      ]
+      ],
+      "headline": "The header reads the shared number",
+      "say": "The number now shows at once. The next and previous buttons stay disabled until the editor is ready, so they never appear and do nothing.",
+      "check": "Buttons are disabled until the editor loads. Is that clear enough to the user?"
     },
     {
       "id": "s11",
@@ -1252,7 +1432,12 @@
           "type": "inference",
           "ref": "derived from the steps above"
         }
-      ]
+      ],
+      "headline": "Try it in the app",
+      "say": "Four short scenarios, one for each decision.",
+      "visual": {
+        "type": "try"
+      }
     }
   ],
   "skippedHunks": [
@@ -1279,14 +1464,16 @@
       "stepId": "s4",
       "question": "After the editor remounts, does the current-change index reset, so the label shows \"N changes\" until the user clicks next? Is that intended?",
       "why": "The index lives on the Diff instance, which is recreated on every remount.",
-      "tag": "inferred"
+      "tag": "inferred",
+      "short": "After the editor is rebuilt, does the position reset to “N changes” until you click next?"
     },
     {
       "id": "q2",
       "stepId": "s7",
       "question": "While comparison data is still loading, what count is published — 0, or a count against the wrong base?",
       "why": "totalChanges is computed from comparisonData, which may be undefined on the first render.",
-      "tag": "inferred"
+      "tag": "inferred",
+      "short": "While the older version is still loading, what count is shown: 0, or one against the wrong version?"
     }
   ],
   "verification": {
@@ -1308,5 +1495,10 @@
     "explained": 9,
     "skipped": 4,
     "uncoveredHunkIds": []
+  },
+  "plain": {
+    "title": "The history counter shows up at once and keeps counting",
+    "problem": "In document history, the change counter often doesn’t appear, and when it does it gets stuck on “N changes”.",
+    "fix": "Count the changes where the comparison is already made, and hand the number to the header directly."
   }
 }

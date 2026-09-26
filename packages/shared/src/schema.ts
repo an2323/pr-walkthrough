@@ -76,6 +76,45 @@ export const SkippedHunkSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Plain-language layer
+// ---------------------------------------------------------------------------
+
+export const PlainLayerSchema = z.object({
+  title: z.string(),
+  problem: z.string(),
+  fix: z.string(),
+});
+
+// ---------------------------------------------------------------------------
+// Visual types (step screen visuals in v2 viewer)
+// ---------------------------------------------------------------------------
+
+const FlowRowItemSchema = z.tuple([z.string(), z.string()]);
+
+export const VisualSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("flow"),
+    rows: z.array(z.array(FlowRowItemSchema)),
+  }),
+  z.object({
+    type: z.literal("symptoms"),
+    items: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("map"),
+    caption: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("layers"),
+    before: z.array(z.tuple([z.string(), z.number()]).or(z.tuple([z.string(), z.number(), z.string()]))),
+    after: z.array(z.tuple([z.string(), z.number()]).or(z.tuple([z.string(), z.number(), z.string()]))),
+  }),
+  z.object({
+    type: z.literal("try"),
+  }),
+]);
+
+// ---------------------------------------------------------------------------
 // Graph
 // ---------------------------------------------------------------------------
 
@@ -94,6 +133,8 @@ export const GraphEdgeSchema = z.object({
   from: z.string(),
   to: z.string(),
   label: z.string().optional(),
+  /** Plain-language version of the label for the map; identifier goes to tooltip. */
+  plainLabel: z.string().optional(),
   kind: z.enum(["props", "call", "data", "event", "import"]),
   state: z.enum(["before", "after", "unchanged"]),
   problem: z.boolean().optional(),
@@ -159,6 +200,16 @@ export const StepSchema = z.object({
   kind: StepKindSchema,
   routeLabel: z.string(),
   title: z.string(),
+  /** ≤ 9 words, no identifiers — h1 in v2 viewer. Fallback: routeLabel. */
+  headline: z.string().optional(),
+  /** One plain sentence, no identifiers. Fallback: first sentence of narration. */
+  say: z.string().optional(),
+  /** One concrete thing for the reviewer to verify — shown as a checkbox card. */
+  check: z.string().optional(),
+  /** When true, step is omitted from the main flow; listed in summary only. */
+  minor: z.boolean().optional(),
+  /** Visual to show on this step screen. */
+  visual: VisualSchema.optional(),
   focusNode: z.string(),
   tag: SourceTagSchema,
   isDeadEnd: z.boolean().optional(),
@@ -180,6 +231,8 @@ export const OpenQuestionSchema = z.object({
   question: z.string(),
   why: z.string(),
   tag: SourceTagSchema,
+  /** One-line plain version shown on the step screen. Fallback: question. */
+  short: z.string().optional(),
 });
 
 export const CoverageSchema = z.object({
@@ -208,6 +261,8 @@ export const WalkthroughSchema = z.object({
     problem: z.string(),
     solution: z.string(),
   }),
+  /** Plain-language overlay used by the v2 viewer. */
+  plain: PlainLayerSchema.optional(),
   hunks: z.array(HunkSchema),
   graph: GraphSchema,
   steps: z.array(StepSchema),

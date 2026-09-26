@@ -27,6 +27,8 @@ export type {
 export {
   SourceTagSchema,
   StepKindSchema,
+  PlainLayerSchema,
+  VisualSchema,
   PullRequestMetaSchema,
   HunkSchema,
   SkippedHunkSchema,

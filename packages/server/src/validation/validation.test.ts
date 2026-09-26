@@ -242,3 +242,68 @@ describe("validate — coverage failure", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. Plain-layer fields — schema accepts and preserves them
+// ---------------------------------------------------------------------------
+
+describe("WalkthroughSchema — plain-layer fields", () => {
+  it("accepts a walkthrough with plain, headline, say, check, minor, visual, plainLabel, short", () => {
+    // Build a minimal walkthrough-like object augmented with all plain-layer fields.
+    // We test the schema directly (no verbatim/coverage check needed).
+    const withPlain = {
+      ...goldenDraft,
+      plain: {
+        title: "The history counter shows up at once",
+        problem: "The counter was missing or stuck.",
+        fix: "Count where the comparison is made.",
+      },
+      steps: goldenDraft.steps.map((s, i) => ({
+        ...s,
+        headline: i === 0 ? "The change counter is missing or stuck" : undefined,
+        say: i === 0 ? "When you open an older version the header should show changes." : undefined,
+        check: i === 0 ? "Both now use has(). Should a flag with no value turn changes on?" : undefined,
+        minor: i === 8 ? true : undefined,
+        visual:
+          i === 0
+            ? { type: "symptoms" as const, items: ["Counter doesn't appear", "Counter stays stuck"] }
+            : undefined,
+      })),
+      graph: {
+        ...goldenDraft.graph,
+        edges: goldenDraft.graph.edges.map((e, i) =>
+          i === 0 ? { ...e, plainLabel: "passes the editor down" } : e
+        ),
+      },
+      openQuestions: goldenDraft.openQuestions.map((q, i) =>
+        i === 0 ? { ...q, short: "Does the position reset after editor rebuild?" } : q
+      ),
+    };
+
+    const result = validateSchema(withPlain);
+    expect(result.valid, result.errors.join("\n")).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("preserves plain-layer fields after parsing (no silent stripping)", async () => {
+    const { WalkthroughSchema } = await import("@pr-walkthrough/shared");
+    const withPlain = {
+      ...goldenDraft,
+      hunks: [], // schema requires hunks
+      plain: { title: "Short title", problem: "A problem.", fix: "A fix." },
+      steps: goldenDraft.steps.map((s, i) =>
+        i === 0 ? { ...s, headline: "Short headline", say: "One sentence.", check: "One check.", minor: false } : s
+      ),
+    };
+
+    const parsed = WalkthroughSchema.safeParse(withPlain);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.plain?.title).toBe("Short title");
+    expect(parsed.data.steps[0].headline).toBe("Short headline");
+    expect(parsed.data.steps[0].say).toBe("One sentence.");
+    expect(parsed.data.steps[0].check).toBe("One check.");
+    expect(parsed.data.steps[0].minor).toBe(false);
+  });
+});
