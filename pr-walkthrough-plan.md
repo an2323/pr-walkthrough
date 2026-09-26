@@ -579,7 +579,23 @@ ANALYZER=cached pnpm dev   # starts both server and web
 
 ### Sub-Task 10 — Analyzer quality iteration
 
-**Status:** [-] in progress — structure is already right (verified below); this pass targets specific, evidenced wording gaps in the plain-language layer. **Bobcoin budget for this ST: ≤ $10** (stage-2 total cap is $20; ~$5.74 already spent on ST5a/Row A–C — see `docs/cost-log-stage2.md`).
+**Status:** [-] in progress — **2 of 2 allowed prompt-edit iterations done on #10295, converged.** #8340 cross-check run intentionally paused (not a technical blocker — budget/priorities call, see below). **Bobcoin budget for this ST: ≤ $10**, of which **~$4.46 spent** (2 iterations: $1.929 + $2.529); stage-2 total cap is $20, ~$10.20 spent overall — see `docs/cost-log-stage2.md`.
+
+**Iteration results on #10295** (each is `valid: true, errorCount: 0` immediately, no repair needed):
+
+| | Before ST10 | Iter. 1 ($1.93) | Iter. 2 ($2.53) |
+|---|---|---|---|
+| `identifier-in-say` | 3 | 1 | 0 |
+| `missing-check` | 2 | 0 | 0 |
+| `headline-too-long` | 2 | 1 | 1 (10 words, one over) |
+| `say-too-long` | 1 | 4 (regressed) | 0 |
+| **Total warnings** | **8** | **6** | **1** |
+
+Iteration 1 fixed the three prompt/schema/checker number mismatches (headline word limit, say sentence count, the nonexistent `plain.summary` field) — see the `analyzer-prompt.md` commit. That alone improved 3 of 4 categories but regressed `say-too-long` (a 3-sentence habit, including on the `minor` step that should have skipped `say` detail). Iteration 2 added a hard "count your sentences" instruction with a bad/good rewrite of the actual offending step — fixed it to 0 without reintroducing the other regressions. Content re-checked against `docs/rubrics/10295.md` after iteration 2: still correctly names the attribute removal as the decision (not "cleanup"), the wrapper as solving a separate problem, and the type-narrowing step is `minor: true` with no elaborate `say`. Promoted to `data/walkthroughs/excalidraw/excalidraw/10295.json` (schema-valid, renders correctly).
+
+**Remaining for this ST, each needs the user's go-ahead to spend before running:**
+- Confirm the same prompt on #8340 (~$1–2) — does the improvement generalize, or was #10295-specific.
+- `headline-too-long`'s single remaining case (10 vs. 9 words) is minor; not worth a 3rd prompt iteration per the loop's own 2-iteration cap — accept it or fix opportunistically alongside the #8340 check.
 
 **What is already done — do not re-litigate these:**
 - Core-logic-only stepping (`docs/output-contract.md`, `docs/analyzer-prompt.md` "Explain the core logic only") is implemented and evidenced: #8340's 339 hunks (272 mechanical) correctly narrowed to 8 non-minor steps; #10295's earlier bloated 10-step run (see `docs/rubrics/10295.md`) is fixed — the fresh run scores 5/5.
