@@ -308,7 +308,7 @@ pnpm --filter @pr-walkthrough/server test          # all Vitest tests pass
 
 ### Sub-Task 5 — Analyzer interface + CachedAnalyzer + Bob Shell analyzer
 
-**Status:** [-] in progress
+**Status:** [x] done
 
 **Intent:** Build the analyzer abstraction with two concrete implementations: `CachedAnalyzer` for zero-cost demo playback, and `BobShellAnalyzer` for live generation. Invocation design is in "Bob Shell Analyzer Design"; the working prototype is `packages/server/scripts/bob-spike.ts` — port it, do not re-invent it.
 
@@ -380,7 +380,7 @@ Every run writes `data/runs/<stamp>-<mode>/` (prompt, raw stdout/stderr, summary
 
 ### Sub-Task 6 — GitHub adapter + job orchestration
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Connect the pipeline to GitHub: accept a manual trigger via HTTP, fetch PR metadata, and optionally handle webhooks.
 
@@ -420,7 +420,7 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 
 ### Sub-Task 6a — Viewer v2: low-cognitive-load UX
 
-**Status:** [ ] pending — design agreed with the user on Sep 26
+**Status:** [x] done
 
 **Intent:** Replace the "everything on one screen" viewer with the agreed UX. Reference implementation (single HTML file, both demo PRs, open it in a browser): [`docs/prototypes/walkthrough-ux-v2.html`](docs/prototypes/walkthrough-ux-v2.html). Port its structure and behaviour to React; keep the current colour tokens (palette is a later step).
 
@@ -461,7 +461,7 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ### Sub-Task 6b — Narration audio (ElevenLabs, backend-only)
 
-**Status:** [ ] pending — key and voice are in `.env` (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`); TTS call verified on Sep 26
+**Status:** [x] done
 
 **Intent:** Replace robotic Web Speech with good narration for the demo, without exposing the key or depending on the network during the demo.
 
@@ -591,7 +591,9 @@ ANALYZER=cached pnpm dev   # starts both server and web
 1. For every behaviour the PR title/description claims, find and quote the code that produces it; if no hunk does, it is outside the diff — locate it.
 2. For removed code (attributes, guards, handlers), find who relied on it and what now fires differently.
 
-**Acceptance checklist for #10295 (quality metric):** a step quotes `Sidebar.tsx` `useOutsideClick` → `closeLibrary()`; attribute removal is presented as the decision, not cleanup; no factual error in narration. Budget: ≤ 2 re-runs (~$3 each), then #10013.
+3. Core logic only (added to `docs/analyzer-prompt.md` on Sep 26, not yet measured): mechanical/supporting hunks (imports, renames, compile-only type tweaks, fixtures) go to `skippedHunks` with a reason or are folded into the step they support. Tests are never explained: test hunks always go to `skippedHunks` with reason "tests" (the reviewer reads them on GitHub); Bob may still read them for intent. Viewer: skipped test hunks link to the file in GitHub "Files changed". On #10295, s9 (type tweak in `useOutsideClick`) should fold into s7 or be skipped. Viewer: present skipped hunks as "not explained by design" with reasons, not as a warning.
+
+**Acceptance checklist for #10295 (quality metric):** a step quotes `Sidebar.tsx` `useOutsideClick` → `closeLibrary()`; attribute removal is presented as the decision, not cleanup; no factual error in narration. No step is dedicated to a mechanical edit. Budget: ≤ 2 re-runs (~$3 each), then #10013.
 
 ---
 

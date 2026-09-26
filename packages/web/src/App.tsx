@@ -1,160 +1,396 @@
-import { useState, useCallback, useRef } from 'react';
-import type { GraphNode } from '@pr-walkthrough/shared';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Step } from '@pr-walkthrough/shared';
 import { useWalkthrough } from './useWalkthrough';
-import { TopBar } from './TopBar';
-import { RouteRail } from './RouteRail';
-import { GraphView } from './GraphView';
-import { StepView } from './StepView';
-import { StepNav } from './StepNav';
-import { QuestionsPanel } from './QuestionsPanel';
-import { CoveragePanel } from './CoveragePanel';
+import { buildPlainData } from './buildPlain';
+import { TopBarV2 } from './TopBarV2';
+import { BottomBarV2 } from './BottomBarV2';
+import { StartScreen } from './StartScreen';
+import { StepScreen } from './StepScreen';
+import { SummaryScreen } from './SummaryScreen';
+import { Drawer } from './Drawer';
 import './styles.css';
-import './App.css';
-import './PanelStyles.css';
+import './v2.css';
 
-const hasApi = typeof window !== 'undefined' && 'speechSynthesis' in window;
+// -----------------------------------------------------------------
+// Voice helpers
+// -----------------------------------------------------------------
+const synth = typeof window !== 'undefined' && 'speechSynthesis' in window
+  ? window.speechSynthesis
+  : null;
+
+/** Split narration into sentences — mirrors the server's splitSentences(). */
+function splitSentences(text: string): string[] {
+  const parts = text.split(/(?<=[.?!])\s+/);
+  return parts.map(s => s.trim()).filter(s => s.length > 0);
+}
+
+/** Build the audio URL for a single sentence. */
+function audioUrl(owner: string, repo: string, number: number, stepId: string, sentenceIndex: number): string {
+  return `/api/audio/${owner}/${repo}/${number}/${stepId}/${sentenceIndex}.mp3`;
+}
 
 export default function App() {
-  const state = useWalkthrough();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [playAll, setPlayAll] = useState(false);
+  const walkthroughState = useWalkthrough();
 
-  // Keep stable refs to avoid stale closures in speech callbacks
-  const playAllRef = useRef(playAll);
-  playAllRef.current = playAll;
-  const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
+  // ---- Screen state ----
+  // -1 = start screen, 0..flow.length-1 = step screens, flow.length = summary
+  const [screenIndex, setScreenIndex] = useState(-1);
 
-  const stepsRef = useRef(state.status === 'ok' ? state.data.steps : []);
-  if (state.status === 'ok') stepsRef.current = state.data.steps;
+  // ---- Check / ask / verify state ----
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [asks, setAsks] = useState<Record<string, boolean>>({});
+  const [verifiedItems, setVerifiedItems] = useState<Record<number, boolean>>({});
 
-  const langRef = useRef('en');
-  if (state.status === 'ok') langRef.current = state.data.meta?.language ?? 'en';
+  // ---- Drawer state ----
+  const [drawerStepId, setDrawerStepId] = useState<string | null>(null);
 
-  // Core speak function — always uses current refs
-  const speakNarration = useCallback((text: string, chain: boolean) => {
-    if (!hasApi) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find((v) => v.lang.startsWith(langRef.current));
-    if (voice) u.voice = voice;
-    u.rate = 1.02;
-    u.onend = () => {
-      if (!chain && !playAllRef.current) return;
-      const steps = stepsRef.current;
-      const next = activeIndexRef.current + 1;
-      if (next < steps.length) {
-        setTimeout(() => {
-          activeIndexRef.current = next;
-          setActiveIndex(next);
-          speakNarration(steps[next].narration, true);
-        }, 700);
-      }
-    };
-    window.speechSynthesis.speak(u);
-  }, []);
+  // ---- Voice state ----
+  const [isPlaying, setIsPlaying] = useState(false);
+  const tokenRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const cancelSpeech = useCallback(() => {
-    if (hasApi) window.speechSynthesis.cancel();
-  }, []);
-
-  // Navigate to a step, optionally chaining speech
-  const navigate = useCallback(
-    (index: number, chain = false) => {
-      const steps = stepsRef.current;
-      if (index < 0 || index >= steps.length) return;
-      cancelSpeech();
-      activeIndexRef.current = index;
-      setActiveIndex(index);
-      if (chain || playAllRef.current) {
-        setTimeout(() => speakNarration(steps[index].narration, true), 50);
-      }
-    },
-    [cancelSpeech, speakNarration]
-  );
-
-  const handlePlayAllChange = useCallback(
-    (checked: boolean) => {
-      playAllRef.current = checked;
-      setPlayAll(checked);
-      if (!checked) {
-        cancelSpeech();
-      } else {
-        const steps = stepsRef.current;
-        if (steps.length > 0) {
-          setTimeout(() => speakNarration(steps[activeIndexRef.current].narration, true), 50);
-        }
-      }
-    },
-    [cancelSpeech, speakNarration]
-  );
-
-  if (state.status === 'idle') {
+  // ---- Derived data ----
+  if (walkthroughState.status === 'idle') {
     return (
       <div style={{ padding: 40 }}>
         <p>
-          Add <code>?local=/outline-13673.walkthrough.json</code> to the URL to load a walkthrough.
+          Add <code>?local=/outline-13673.walkthrough.json</code> to the URL, or navigate to{' '}
+          <code>/owner/repo/number</code>.
         </p>
         <p>
-          Example:{' '}
-          <a href="/?local=/outline-13673.walkthrough.json">
-            /?local=/outline-13673.walkthrough.json
-          </a>
+          Examples:
         </p>
+        <ul>
+          <li><a href="/?local=/outline-13673.walkthrough.json">/?local=/outline-13673.walkthrough.json</a></li>
+          <li><a href="/excalidraw/excalidraw/10295">/excalidraw/excalidraw/10295</a></li>
+        </ul>
       </div>
     );
   }
 
-  if (state.status === 'loading') {
+  if (walkthroughState.status === 'loading') {
     return <div style={{ padding: 40 }}>Loading…</div>;
   }
 
-  if (state.status === 'error') {
+  if (walkthroughState.status === 'error') {
     return (
-      <div style={{ padding: 40, color: 'var(--danger)' }}>Error: {state.message}</div>
+      <div style={{ padding: 40, color: 'var(--bad)' }}>
+        Error: {walkthroughState.message}
+      </div>
     );
   }
 
-  const { data } = state;
-  const { steps, graph, openQuestions, hunks, skippedHunks } = data;
-  const nodeById = Object.fromEntries(
-    graph.nodes.map((n) => [n.id, n])
-  ) as Record<string, GraphNode>;
-  const step = steps[activeIndex];
+  const { data: walkthrough } = walkthroughState;
+  const plain = buildPlainData(walkthrough);
+
+  // flow = non-minor steps only
+  const flow: Step[] = walkthrough.steps.filter((s) => !plain.steps[s.id]?.minor);
+  const minors: Step[] = walkthrough.steps.filter((s) => !!plain.steps[s.id]?.minor);
+
+  const END = flow.length; // summary screen index
 
   return (
-    <>
-      <TopBar data={data} />
-      <div className="wrap">
-        <RouteRail
-          steps={steps}
-          nodeById={nodeById}
-          activeIndex={activeIndex}
-          onSelect={(j) => navigate(j)}
-        />
-        <main>
-          <GraphView graph={graph} steps={steps} activeIndex={activeIndex} />
-          <StepView
-            step={step}
-            stepNumber={activeIndex + 1}
-            openQuestions={openQuestions}
-            onSpeak={() => speakNarration(step.narration, false)}
+    <AppInner
+      walkthroughState={walkthroughState}
+      plain={plain}
+      flow={flow}
+      minors={minors}
+      screenIndex={screenIndex}
+      setScreenIndex={setScreenIndex}
+      checks={checks}
+      setChecks={setChecks}
+      asks={asks}
+      setAsks={setAsks}
+      verifiedItems={verifiedItems}
+      setVerifiedItems={setVerifiedItems}
+      drawerStepId={drawerStepId}
+      setDrawerStepId={setDrawerStepId}
+      isPlaying={isPlaying}
+      setIsPlaying={setIsPlaying}
+      tokenRef={tokenRef}
+      timerRef={timerRef}
+      audioRef={audioRef}
+      synth={synth}
+      END={END}
+    />
+  );
+}
+
+// -----------------------------------------------------------------
+// Inner component — receives all derived state so hooks run unconditionally
+// -----------------------------------------------------------------
+interface InnerProps {
+  walkthroughState: { status: 'ok'; data: import('@pr-walkthrough/shared').Walkthrough };
+  plain: ReturnType<typeof buildPlainData>;
+  flow: Step[];
+  minors: Step[];
+  screenIndex: number;
+  setScreenIndex: (i: number) => void;
+  checks: Record<string, boolean>;
+  setChecks: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  asks: Record<string, boolean>;
+  setAsks: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  verifiedItems: Record<number, boolean>;
+  setVerifiedItems: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
+  drawerStepId: string | null;
+  setDrawerStepId: (id: string | null) => void;
+  isPlaying: boolean;
+  setIsPlaying: (v: boolean) => void;
+  tokenRef: React.MutableRefObject<number>;
+  timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  synth: SpeechSynthesis | null;
+  END: number;
+}
+
+function AppInner({
+  walkthroughState,
+  plain,
+  flow,
+  minors,
+  screenIndex,
+  setScreenIndex,
+  checks,
+  setChecks,
+  asks,
+  setAsks,
+  verifiedItems,
+  setVerifiedItems,
+  drawerStepId,
+  setDrawerStepId,
+  isPlaying,
+  setIsPlaying,
+  tokenRef,
+  timerRef,
+  audioRef,
+  synth,
+  END,
+}: InnerProps) {
+  const walkthrough = walkthroughState.data;
+
+  const screenIndexRef = useRef(screenIndex);
+  screenIndexRef.current = screenIndex;
+
+  const stopListen = useCallback(() => {
+    tokenRef.current++;
+    setIsPlaying(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    try {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    } catch {}
+    try { synth?.cancel(); } catch {}
+  }, [synth, audioRef, setIsPlaying, tokenRef, timerRef]);
+
+  const go = useCallback((i: number, keepAudio = false) => {
+    const clamped = Math.max(-1, Math.min(END, i));
+    if (!keepAudio) stopListen();
+    screenIndexRef.current = clamped;
+    setScreenIndex(clamped);
+  }, [END, stopListen, setScreenIndex]);
+
+  const listen = useCallback((all = false) => {
+    let startIdx = screenIndexRef.current;
+    if (startIdx < 0 || startIdx >= END) {
+      startIdx = 0;
+      screenIndexRef.current = 0;
+      setScreenIndex(0);
+    }
+    setIsPlaying(true);
+    const t = ++tokenRef.current;
+
+    // Play a single sentence via <audio> API; returns a Promise that resolves when done.
+    const playSentenceAudio = (url: string): Promise<void> =>
+      new Promise((resolve) => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => { audioRef.current = null; resolve(); };
+        audio.onerror = () => { audioRef.current = null; resolve(); }; // resolve so caller falls back
+        audio.play().catch(() => { audioRef.current = null; resolve(); });
+      });
+
+    // Speak a sentence via Web Speech (fallback).
+    const speakFallback = (text: string, lang: string): Promise<void> =>
+      new Promise((resolve) => {
+        if (!synth) {
+          timerRef.current = setTimeout(resolve, text.split(/\s+/).length * 400);
+          return;
+        }
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = lang;
+        u.onend = () => resolve();
+        u.onerror = () => { timerRef.current = setTimeout(resolve, 2500); };
+        synth.speak(u);
+      });
+
+    const speakStep = async (idx: number) => {
+      if (t !== tokenRef.current) return;
+      const step = flow[idx];
+      if (!step) { setIsPlaying(false); return; }
+
+      const lang = walkthrough.meta?.language ?? 'en';
+      const [ownerStr, repoStr] = (walkthrough.pr.repo ?? '/').split('/');
+      const prNumber = walkthrough.pr.number;
+      const sentences = splitSentences(step.narration ?? '');
+
+      for (let i = 0; i < sentences.length; i++) {
+        if (t !== tokenRef.current) return;
+        const url = audioUrl(ownerStr, repoStr, prNumber, step.id, i);
+        // Try the server audio first; on 503/error fall back to Web Speech.
+        let usedApi = false;
+        try {
+          const probe = await fetch(url, { method: 'HEAD' });
+          if (probe.ok || probe.status !== 503) {
+            await playSentenceAudio(url);
+            usedApi = true;
+          }
+        } catch {
+          // network error — fall through to Web Speech
+        }
+        if (!usedApi) {
+          await speakFallback(sentences[i], lang);
+        }
+      }
+
+      if (t !== tokenRef.current) return;
+      if (all && idx < END - 1) {
+        const next = idx + 1;
+        screenIndexRef.current = next;
+        setScreenIndex(next);
+        timerRef.current = setTimeout(() => { void speakStep(next); }, 500);
+      } else {
+        setIsPlaying(false);
+      }
+    };
+
+    void speakStep(startIdx);
+  }, [flow, END, synth, audioRef, setIsPlaying, setScreenIndex, tokenRef, timerRef, walkthrough.meta, walkthrough.pr]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as Element;
+      if (target.closest('input, textarea') || e.metaKey || e.ctrlKey) return;
+      if (e.key === 'ArrowRight') go(screenIndexRef.current + 1);
+      else if (e.key === 'ArrowLeft') go(screenIndexRef.current - 1);
+      else if (e.key === ' ') {
+        e.preventDefault();
+        if (isPlaying) { stopListen(); } else { listen(); }
+      } else if (e.key === 'Escape') setDrawerStepId(null);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [go, isPlaying, listen, stopListen, setDrawerStepId]);
+
+  // Scroll stage to top on screen change
+  const stageRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (stageRef.current) stageRef.current.scrollTop = 0;
+  }, [screenIndex]);
+
+  // Handle next/back
+  const handleNext = () => {
+    if (screenIndex >= END) go(-1); // summary → start
+    else go(screenIndex + 1);
+  };
+  const handleBack = () => go(screenIndex - 1);
+  const handleListen = () => {
+    if (isPlaying) { stopListen(); }
+    else { listen(screenIndex < 0 || screenIndex >= END); }
+  };
+
+  // Drawer step
+  const drawerStep = drawerStepId
+    ? walkthrough.steps.find((s) => s.id === drawerStepId)
+    : null;
+  const drawerQuestion = drawerStep
+    ? walkthrough.openQuestions.find((q) => q.stepId === drawerStep.id)
+    : undefined;
+
+  // Current step screen data
+  const currentStep = screenIndex >= 0 && screenIndex < END ? flow[screenIndex] : null;
+
+  return (
+    <div className="v2app">
+      <TopBarV2
+        walkthrough={walkthrough}
+        plain={plain}
+        flow={flow}
+        screenIndex={screenIndex}
+        onGo={(i) => go(i)}
+      />
+
+      <main className="v2stage" ref={stageRef}>
+        {screenIndex < 0 && (
+          <StartScreen
+            walkthrough={walkthrough}
+            plain={plain}
+            flow={flow}
+            onStart={() => go(0)}
+            onListenAll={() => { go(0); listen(true); }}
           />
-          <StepNav
-            activeIndex={activeIndex}
-            total={steps.length}
-            playAll={playAll}
-            onPrev={() => navigate(activeIndex - 1)}
-            onNext={() => navigate(activeIndex + 1)}
-            onPlayAllChange={handlePlayAllChange}
+        )}
+
+        {currentStep && (() => {
+          const p = plain.steps[currentStep.id];
+          const chSteps = flow.filter((s) => plain.steps[s.id]?.ch === p?.ch);
+          const stepInChapter = chSteps.indexOf(currentStep) + 1;
+          return (
+            <StepScreen
+              key={currentStep.id}
+              step={currentStep}
+              stepIndex={screenIndex + 1}
+              stepInChapter={stepInChapter}
+              chapterTotal={chSteps.length}
+              walkthrough={walkthrough}
+              plain={plain}
+              checked={!!checks[currentStep.id]}
+              onCheck={(v) => setChecks((prev) => ({ ...prev, [currentStep.id]: v }))}
+              asked={!!asks[currentStep.id]}
+              onAsk={() => setAsks((prev) => ({ ...prev, [currentStep.id]: !prev[currentStep.id] }))}
+              verifiedItems={verifiedItems}
+              onVerify={(k, v) => setVerifiedItems((prev) => ({ ...prev, [k]: v }))}
+              onOpenDrawer={() => setDrawerStepId(currentStep.id)}
+            />
+          );
+        })()}
+
+        {screenIndex >= END && (
+          <SummaryScreen
+            walkthrough={walkthrough}
+            plain={plain}
+            flow={flow}
+            minors={minors}
+            checks={checks}
+            asks={asks}
+            verifiedItems={verifiedItems}
+            onGoToStep={(i) => go(i)}
+            onOpenDrawer={(id) => setDrawerStepId(id)}
           />
-          <div className="lower">
-            <QuestionsPanel questions={openQuestions} steps={steps} />
-            <CoveragePanel hunks={hunks} skippedHunks={skippedHunks} steps={steps} />
-          </div>
-        </main>
-      </div>
-    </>
+        )}
+      </main>
+
+      <BottomBarV2
+        screenIndex={screenIndex}
+        total={END}
+        isPlaying={isPlaying}
+        onBack={handleBack}
+        onNext={handleNext}
+        onListen={handleListen}
+      />
+
+      {/* Layer: drawer + scrim */}
+      {drawerStepId && drawerStep && (
+        <div id="layer">
+          <Drawer
+            step={drawerStep}
+            walkthrough={walkthrough}
+            question={drawerQuestion}
+            onClose={() => setDrawerStepId(null)}
+          />
+        </div>
+      )}
+    </div>
   );
 }

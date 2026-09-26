@@ -43,7 +43,8 @@ Not allowed: editing files, installing packages, network access, running the app
 3. Find where the data involved is born, where it is stored, and who consumes it.
 4. Use commit titles to reconstruct the author's path, including attempts that were
    later replaced.
-5. Look at changed or added tests: they often state the intended behaviour.
+5. Read changed or added tests to learn the intended behaviour — but do not explain
+   or quote them in the walkthrough.
 
 ## How to structure the walkthrough
 
@@ -52,6 +53,19 @@ Not allowed: editing files, installing packages, network access, running the app
   where the data lives → key decision → changes → dead ends / rejected
   alternatives → verification. Revisiting a file in a later step is expected.
 - One step = one decision or one question. 5–12 steps total.
+- Explain the core logic only. A step must earn its place: it shows a decision, a
+  cause, or a mechanism a reviewer needs to judge the PR. Do NOT give a step to
+  mechanical or supporting edits — imports and exports (incl. re-exports and index/
+  barrel files), renames, type tweaks that only make the new code compile, new
+  constants or variables that merely hold a value, formatting, lockfiles and
+  generated files. Put those in `skippedHunks` with a short reason.
+  Judge by role, not by kind: if a changed value, import or config line IS the fix
+  (e.g. a z-index or a flag that changes behaviour), it is core logic and gets a step.
+- Never explain tests. Hunks in test files (unit, integration, e2e, snapshots, test
+  fixtures and helpers) always go to `skippedHunks` with reason "tests". Never quote
+  test code in a step. You may still READ tests to understand the intended behaviour.
+- When a supporting edit matters for one sentence, mention it inside the step it
+  supports (and list its hunk id there) instead of giving it its own step.
 - Each step has up to three beats, in this order:
   - `current`: how the code works now. Quote BASE code around the change,
     including the other place that uses the same value, if relevant.
@@ -102,7 +116,9 @@ so instead of inventing a symptom.
 
 Every hunk id must appear in at least one step's `hunkIds` or in `skippedHunks` with a
 short reason (e.g. "removed unused import"). The backend flags anything else as
-unexplained.
+unexplained. Skipping is not a failure: the reviewer sees the skipped list with
+reasons, so a short route through the core logic beats a long route through
+every hunk.
 
 ## Open questions
 

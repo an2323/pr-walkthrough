@@ -44,19 +44,21 @@ export interface RepoWorkspace {
 /**
  * Prepare a local git workspace for the given repo/SHAs.
  *
- * - If the repo has not been cloned yet, clones it.
- * - If it already exists, runs `git fetch --quiet`.
+ * - If the repo has not been cloned yet, clones it (blobless: --filter=blob:none --no-checkout).
+ * - Fetches `pull/{prNumber}/head` and `baseSha` explicitly so fork PRs work.
  * - Checks out `headSha` as a detached HEAD.
  *
  * @param repoUrl  Full clone URL, e.g. "https://github.com/outline/outline"
  * @param headSha  The SHA of the PR head commit.
  * @param baseSha  The SHA of the PR base commit.
+ * @param prNumber The PR number — used to fetch the fork head ref.
  * @param cacheDir Optional override for the cache directory root.
  */
 export async function prepareWorkspace(
   repoUrl: string,
   headSha: string,
   baseSha: string,
+  prNumber: number,
   cacheDir?: string
 ): Promise<RepoWorkspace> {
   const root = cacheDir ?? DEFAULT_CACHE_DIR;
@@ -67,18 +69,24 @@ export async function prepareWorkspace(
   const repoName = urlParts.slice(-2).join("__");
   const repoPath = path.join(root, repoName);
 
-  if (existsSync(path.join(repoPath, ".git"))) {
-    // Already cloned — fetch latest objects quietly
-    await git(repoPath, ["fetch", "--quiet", "--no-tags"]);
-  } else {
-    // Clone into the cache directory (bare clone not used so we can read files)
-    await execFileAsync("git", ["clone", "--quiet", repoUrl, repoPath], {
-      maxBuffer: 64 * 1024 * 1024,
-    });
+  if (!existsSync(path.join(repoPath, ".git"))) {
+    // Blobless clone: fast for large repos; --no-checkout avoids materialising
+    // the working tree twice (we check out headSha immediately after).
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(root, { recursive: true });
+    await execFileAsync(
+      "git",
+      ["clone", "--quiet", "--filter=blob:none", "--no-checkout", repoUrl, repoPath],
+      { maxBuffer: 64 * 1024 * 1024 }
+    );
   }
 
+  // Fork PR heads are not on any upstream branch — fetch via refs/pull/N/head.
+  // Also fetch baseSha explicitly so it is available for `git diff` and `git show`.
+  await git(repoPath, ["fetch", "--quiet", "origin", `pull/${prNumber}/head`, baseSha]);
+
   // Detach HEAD at headSha so the working tree reflects the PR head
-  await git(repoPath, ["checkout", "--detach", "--quiet", headSha]);
+  await git(repoPath, ["checkout", "--detach", "--quiet", "--force", headSha]);
 
   const workspace: RepoWorkspace = {
     repoPath,

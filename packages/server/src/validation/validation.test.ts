@@ -70,7 +70,7 @@ beforeAll(async () => {
   const baseSha = stdout.trim();
 
   // Prepare the real workspace (repo is already cloned).
-  workspace = await prepareWorkspace(REPO_URL, HEAD_SHA, baseSha, CACHE_DIR);
+  workspace = await prepareWorkspace(REPO_URL, HEAD_SHA, baseSha, 13673, CACHE_DIR);
 
   input = {
     repoPath: REPO_PATH,

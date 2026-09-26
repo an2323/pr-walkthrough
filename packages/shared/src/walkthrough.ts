@@ -31,6 +31,21 @@ export type StepKind =
   | "open_question" // something the reviewer should ask/check
   | "verification"; // how the fix is (or would be) proven
 
+/** Plain-language layer — analyzer fills these; viewer falls back gracefully when absent. */
+export interface PlainLayer {
+  title: string;
+  problem: string;
+  fix: string;
+}
+
+/** Visual types for step screens. */
+export type Visual =
+  | { type: "flow"; rows: [string, string][][] }
+  | { type: "symptoms"; items: string[] }
+  | { type: "map"; caption?: string }
+  | { type: "layers"; before: [string, number, string?][]; after: [string, number, string?][] }
+  | { type: "try" };
+
 export interface Walkthrough {
   schemaVersion: 1;
   pr: PullRequestMeta;
@@ -40,6 +55,8 @@ export interface Walkthrough {
     /** One or two sentences, plain language: the core idea of the fix. */
     solution: string;
   };
+  /** Plain-language overlay. When present, the v2 viewer uses it; otherwise falls back. */
+  plain?: PlainLayer;
   /** Parsed by the BACKEND from the diff, never invented by the analyzer. */
   hunks: Hunk[];
   graph: Graph;
@@ -119,6 +136,8 @@ export interface GraphEdge {
   from: string;
   to: string;
   label?: string;
+  /** Plain-language version of the label, shown on the map; identifier goes to tooltip. */
+  plainLabel?: string;
   kind: "props" | "call" | "data" | "event" | "import";
   /** "before" = removed by the PR, "after" = introduced by the PR, "unchanged" = context. */
   state: "before" | "after" | "unchanged";
@@ -140,6 +159,16 @@ export interface Step {
   routeLabel: string;
   /** Full step title, one line. */
   title: string;
+  /** ≤ 9 words, no identifiers — shown as h1 in v2 viewer. Fallback: routeLabel. */
+  headline?: string;
+  /** One plain sentence shown under the headline — no identifiers. Fallback: first sentence of narration. */
+  say?: string;
+  /** One concrete thing for the reviewer to verify. When present, shown as a checkbox card. */
+  check?: string;
+  /** When true, step is omitted from the main flow and listed in the summary only. */
+  minor?: boolean;
+  /** Visual to show on this step screen. */
+  visual?: Visual;
   /** Graph node this step is "standing on". Consecutive steps on different nodes draw a hop. */
   focusNode: string;
   tag: SourceTag;
@@ -218,6 +247,8 @@ export interface OpenQuestion {
   id: string;
   stepId: string;
   question: string; // phrased as a reviewer would ask the author
+  /** Short one-line plain version of the question for the step screen. Fallback: question. */
+  short?: string;
   why: string; // what in the code made the analyzer ask
   tag: SourceTag; // usually "inferred"
 }
