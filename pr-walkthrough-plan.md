@@ -577,23 +577,36 @@ ANALYZER=cached pnpm dev   # starts both server and web
 
 ---
 
-### Sub-Task 10 — Analyzer quality iteration (LAST, after ST6–ST9 work end-to-end)
+### Sub-Task 10 — Analyzer quality iteration
 
-**Status:** [ ] pending — deliberately deferred: build UI + backend on the current valid output first.
+**Status:** [-] in progress — structure is already right (verified below); this pass targets specific, evidenced wording gaps in the plain-language layer. **Bobcoin budget for this ST: ≤ $10** (stage-2 total cap is $20; ~$5.74 already spent on ST5a/Row A–C — see `docs/cost-log-stage2.md`).
 
-**Intent:** Structure of Bob's output is already right; the gap is depth of the causal explanation. Iterate the prompt only once the product works end-to-end.
+**What is already done — do not re-litigate these:**
+- Core-logic-only stepping (`docs/output-contract.md`, `docs/analyzer-prompt.md` "Explain the core logic only") is implemented and evidenced: #8340's 339 hunks (272 mechanical) correctly narrowed to 8 non-minor steps; #10295's earlier bloated 10-step run (see `docs/rubrics/10295.md`) is fixed — the fresh run scores 5/5.
+- Subagents (`docs/analyzer-prompt.md` "Using sub-agents for search") work and are used: #10295 used 2, #8340 used 4.
+- The plain-language layer is structurally complete on both promoted results — `plain`, `headline`, `say`, `check` (where applicable), `minor`, `visual`, `plainLabel` (6/6 and 8/8 edges), `short` (3/3 questions) are all present. **The gap is wording quality, not field presence** — see below.
+- `packages/server/src/validation/quality.ts` (`checkQuality`) already catches every gap listed below automatically, for $0 (run via `spike revalidate`, no Bob call). Use it as the loop's feedback, not manual reading.
 
-**Known gap (from ST5a on #10295):** the PR's key mechanism lives outside the diff — `Sidebar.tsx` closes the floating sidebar via its own `useOutsideClick` → `closeLibrary()`, and the hook skips targets with `[data-prevent-outside-click]`. Removing that attribute from the menu trigger IS the fix; the `.dropdown-menu-container` wrapper only stops the menu from closing itself. Bob's s8 called the removal "redundant" (tagged `fact`), s5 narration misplaces the close logic, and `Sidebar.tsx` is never quoted. Open question 1 (inner `.dropdown-menu-container`) is a false alarm — those elements are below `menuRef`, not ancestors.
+**Evidenced gaps — from `checkQuality` on the two real, promoted results (`data/walkthroughs/excalidraw/excalidraw/{10295,8340}.json`):**
 
-**Also in ST10:** make the analyzer fill the ST6a plain-language fields (`plain`, `headline`, `say`, `check`, `minor`, `visual`, `plainLabel`, `short`). The hand-written plain text for both demo PRs inside `docs/prototypes/walkthrough-ux-v2.html` (`PLAINS` object) is the target style — use it as the few-shot example.
+| Warning | #10295 | #8340 | Fix in the prompt |
+|---|---|---|---|
+| `identifier-in-say` | 3 | 7 | `say` still contains backtick-quoted identifiers (e.g. `` `useOutsideClick` ``, `` `informMutation` ``). Add an explicit rule: `say` describes intent only, the way you'd say it out loud to a non-technical teammate — no backticks, no identifiers, no file names, ever. If you can't phrase it without one, the sentence is at the wrong level of detail. |
+| `missing-check` | 2 | 3 | Several `change`/`decision` steps have no `check` at all. Add: every non-minor `change`/`decision` step MUST have a `check` — one concrete, verifiable thing (a value, a boundary, an interaction) the reviewer can go test. If nothing new needs verifying, the step is probably `minor` or the wrong kind. |
+| `headline-too-long` | 2 | 2 | Headlines run to 10–11 words. Add: ≤ 9 words is a hard limit, not a target — if you can't fit it, you're describing the mechanism instead of the point; simplify or split. |
+| `say-too-long` | 1 | 0 | One `say` ran to 3 sentences. Reinforce the existing "one or two short sentences" rule with a concrete bad/good pair in the prompt. |
 
-**Prompt changes to try:**
-1. For every behaviour the PR title/description claims, find and quote the code that produces it; if no hunk does, it is outside the diff — locate it.
-2. For removed code (attributes, guards, handlers), find who relied on it and what now fires differently.
+**New finding from #9403's first `full` run (independent of the extraction bug — see Row C in git log), worth fixing prospectively:** the analyzer's own verbatim quoting was imprecise in ~6 steps (paraphrased variable names, e.g. quoting `newElements: clonedElements` where the real code reads `newElements: duplicatedElements`) — plausibly copied from a subagent's paraphrased summary rather than re-read from the file. Add a rule: **when quoting code, re-read the exact current file content immediately before writing the quote — never rely on memory, a prior mental summary, or a subagent's prose paraphrase as the literal source.** A subagent's report is a pointer to re-read yourself, not a quotable source.
 
-3. Core logic only (added to `docs/analyzer-prompt.md` on Sep 26, not yet measured): mechanical/supporting hunks (imports, renames, compile-only type tweaks, fixtures) go to `skippedHunks` with a reason or are folded into the step they support. Tests are never explained: test hunks always go to `skippedHunks` with reason "tests" (the reviewer reads them on GitHub); Bob may still read them for intent. Viewer: skipped test hunks link to the file in GitHub "Files changed". On #10295, s9 (type tweak in `useOutsideClick`) should fold into s7 or be skipped. Viewer: present skipped hunks as "not explained by design" with reasons, not as a warning.
+**Loop (budget-conscious, using the free checker between paid runs):**
+1. Edit `docs/analyzer-prompt.md` with the rules above (batch all four — one prompt edit, not four).
+2. One `full` run on #10295 (smallest, ~$2). `pnpm --filter @pr-walkthrough/server spike full` writes `walkthrough.json`; check it with `spike revalidate` (free) — `checkQuality`'s warning list is the pass/fail signal, not a manual read.
+3. If warnings on #10295 drop to ~0, re-run `full` on #8340 (~$1–2) to confirm the fix generalizes; only re-run #9403 if time/budget allow (see below — it needs the extraction fix too, not just a prompt fix).
+4. Stop after 2 prompt-edit iterations regardless of outcome — diminishing returns past that for a hackathon deadline.
 
-**Acceptance checklist for #10295 (quality metric):** a step quotes `Sidebar.tsx` `useOutsideClick` → `closeLibrary()`; attribute removal is presented as the decision, not cleanup; no factual error in narration. No step is dedicated to a mechanical edit. Budget: ≤ 2 re-runs (~$3 each), then #10013.
+**Acceptance:** `checkQuality` on a fresh #10295 and #8340 run returns 0 `identifier-in-say`, 0 `missing-check` (on non-minor change/decision steps), 0 `headline-too-long`. `say-too-long` and the verbatim-precision rule are best-effort (no automated check for the latter — spot-read one or two quoted blocks against the real file).
+
+**Separate from this ST — do not conflate:** #9403 is blocked on a bug in *our own* `findWalkthroughInEvents` (stream-json reconstruction corrupts on its ~40KB repaired response; see `docs/cost-log-stage2.md`, 2026-09-26 16:04 row), not on Bob's output quality — Bob's repaired answer was correct. Track re-attempting #9403 as its own item once that extractor bug is root-caused; it is not part of this ST's acceptance criteria.
 
 ---
 

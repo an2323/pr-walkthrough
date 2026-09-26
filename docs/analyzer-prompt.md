@@ -106,6 +106,11 @@ Use it for the *searches* in the list above, not for deciding what they mean:
 
 - Quoted lines must be VERBATIM from BASE (`removed`, `context`, `focus`) or HEAD
   (`added`, `context`, `focus`). The backend rejects non-matching lines.
+- **Read the exact current file content immediately before writing a quote.** Never
+  quote from memory, from your own earlier summary of the file, or from a sub-agent's
+  prose report — a sub-agent's findings are a pointer to re-read yourself, not a
+  quotable source. Paraphrasing a variable name or reordering a line (even if it
+  "reads the same") fails the verbatim check.
 - Use `elided` lines (`…` or `… short description …`) to skip irrelevant code.
 - If you show code that exists in no revision (e.g. an intermediate version implied
   by a commit title), set `reconstructed: true` on the block and tag the step or
@@ -163,27 +168,40 @@ graph evolves as the steps progress. Set `focusNode` on every step.
 
 ## Plain-language layer (required)
 
-Every step must carry a short, plain-language summary used in the reviewer UI.
+Every step must carry a short, plain-language summary used in the reviewer UI. A
+human will read `headline` and `say` WITHOUT the code, on their own — they must
+stand alone and never contain an identifier, a file name, a function name, or
+anything in backticks. If you can't state the point without one, you're describing
+the mechanism instead of the point — simplify or say what it accomplishes instead.
+Bad: "Removed `data-prevent-outside-click` from the trigger." Good: "Clicking the
+menu button now counts as clicking outside the sidebar."
+
 Fill these fields on each step:
 
-- `headline` (≤ 10 words): one-sentence title for the step shown in the chapter list.
-  No identifiers. Write it like a newspaper headline: "Session count moved to shared
+- `headline` (≤ 9 words, hard limit): one-sentence title for the step shown in the
+  chapter list. Write it like a newspaper headline: "Session count moved to shared
   state" not "useSessionCount hook extracted to context".
-- `say` (1–3 sentences): the most important thing about this step in plain language.
-  What changed and why it matters. This is displayed as the main body text in the
-  plain layer, so it must stand alone without the code blocks.
-- `check` (optional, 1 sentence): the concrete thing a reviewer should verify —
-  an edge case, a boundary, a contract. Only include if there is a real question.
-- `minor` (optional, ≤ 8 words): a secondary observation or supporting note.
+- `say` (1–2 short sentences, never 3+): the most important thing about this step in
+  plain language. What changed and why it matters. This is displayed as the main
+  body text in the plain layer, so it must stand alone without the code blocks.
+- `check` (1 sentence): **required** on every non-minor `change` or `decision` step —
+  one concrete, verifiable thing a reviewer can go test (a value, a boundary, an
+  interaction). If you genuinely can't name one, the step is probably `minor` or the
+  wrong kind, not a `change`/`decision` missing a `check`. Optional on other kinds.
+- `minor: true` on a step that exists only for completeness (a supporting one-liner
+  with no real decision) — it will be listed in the summary, not shown as its own
+  screen. Prefer this, or folding the hunk into another step, over giving a
+  mechanical edit its own full step.
 
 For open questions, fill `short` (≤ 8 words): a one-line summary of the question.
 
 For graph edges, fill `plainLabel` (≤ 6 words) instead of or in addition to `label`
 when the technical label would be opaque to a non-author reviewer.
 
-On the root walkthrough object, fill `plain.summary` (2–4 sentences): the whole-PR
-plain-language summary shown on the start screen. Cover what was wrong, what was
-changed, and what to watch for.
+On the root walkthrough object, fill `plain: { title, problem, fix }` (see the type
+below) — the whole-PR plain-language summary shown on the start screen, same no-
+identifiers rule as `headline`/`say`. Cover what was wrong, what was changed, and
+what to watch for.
 
 The golden example below shows these fields in use. Match their tone and length.
 
