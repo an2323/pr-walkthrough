@@ -261,6 +261,20 @@ export const StepSchema = z.object({
   skipped: z.array(z.string()).optional(),
   notes: z.array(z.string()).optional(),
   sources: z.array(SourceRefSchema),
+  /** Backend-computed (ST12) — never set by the analyzer. */
+  evidence: z
+    .discriminatedUnion("source", [
+      z.object({
+        source: z.literal("ablation"),
+        verdict: z.enum(["needed", "fixes-alone", "no-effect", "not-separable"]),
+      }),
+      z.object({
+        source: z.literal("critic"),
+        verdict: z.enum(["supported", "unsupported", "contradicted"]),
+        note: z.string().optional(),
+      }),
+    ])
+    .optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -284,12 +298,25 @@ export const CoverageSchema = z.object({
   uncoveredHunkIds: z.array(z.string()),
 });
 
+export const AblationRunSchema = z.object({
+  unitIds: z.array(z.string()),
+  mode: z.enum(["alone", "all-but-one"]),
+  verdict: z.enum(["fixed", "bug", "broken"]),
+  detail: z.string().optional(),
+});
+
+export const AblationSchema = z.object({
+  units: z.array(z.string()),
+  runs: z.array(AblationRunSchema),
+});
+
 export const VerificationSchema = z.object({
   status: z.enum(["not_run", "passed", "failed"]),
   scenario: z.array(z.string()),
   baseVideoUrl: z.string().optional(),
   headVideoUrl: z.string().optional(),
   testOutput: z.string().optional(),
+  ablation: AblationSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------

@@ -250,6 +250,8 @@ export interface Step {
   /** Extra remarks shown in muted text (e.g. why something is inferred). */
   notes?: string[];
   sources: SourceRef[];
+  /** Backend-computed (ST12), never set by the analyzer — see `StepEvidence`. */
+  evidence?: StepEvidence;
 }
 
 export interface Beat {
@@ -342,4 +344,41 @@ export interface Verification {
   baseVideoUrl?: string;
   headVideoUrl?: string;
   testOutput?: string;
+  /**
+   * ST12 evidence loop: which of the PR's hunks the fix actually needs,
+   * measured by re-running the verifier's own repro script against BASE
+   * with different subsets of the diff applied — not inferred from reading
+   * the code. Absent when the PR has no working repro script (no app
+   * recipe, or the script didn't reproduce true-on-BASE/false-on-HEAD).
+   */
+  ablation?: Ablation;
 }
+
+/** One hunk-level unit tested by the ablation runner (verify/ablation.ts). */
+export interface AblationRun {
+  /** Hunk ids applied to a fresh BASE checkout for this run. */
+  unitIds: string[];
+  mode: "alone" | "all-but-one";
+  /** "broken" = the app didn't build/start/respond with this subset applied — itself a finding. */
+  verdict: "fixed" | "bug" | "broken";
+  detail?: string;
+}
+
+export interface Ablation {
+  /** The logic hunks considered (excludes mechanical/skippedHunks); capped, see verify/ablation.ts. */
+  units: string[];
+  runs: AblationRun[];
+}
+
+/**
+ * Evidence-based check of a step's own claim (ST12), attached by the backend
+ * after the analyzer runs — never set by the analyzer itself:
+ *  - "ablation": this step's hunk(s) were re-run against the repro script in
+ *    isolation and in "all but this one" (see `Ablation` above).
+ *  - "critic": a separate read-only Bob pass reviewed the step's claims
+ *    against the code (mechanism / counterfactual / importance), for PRs or
+ *    steps ablation can't reach (no app recipe, non-visual change).
+ */
+export type StepEvidence =
+  | { source: "ablation"; verdict: "needed" | "fixes-alone" | "no-effect" | "not-separable" }
+  | { source: "critic"; verdict: "supported" | "unsupported" | "contradicted"; note?: string };

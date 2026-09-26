@@ -26,6 +26,9 @@ export type {
   ShotSide,
   Shots,
   WalkthroughPart,
+  Ablation,
+  AblationRun,
+  StepEvidence,
 } from "./walkthrough.js";
 
 // Zod schemas (for runtime validation)
@@ -51,6 +54,8 @@ export {
   OpenQuestionSchema,
   CoverageSchema,
   VerificationSchema,
+  AblationSchema,
+  AblationRunSchema,
   WalkthroughSchema,
 } from "./schema.js";
 
