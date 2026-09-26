@@ -17,6 +17,8 @@ export interface PlainStep {
   check?: string;
   /** Minor step — listed in summary only. */
   minor?: boolean;
+  /** Dropped from the flow and from the summary (e.g. empty symptom already covered on the start screen). */
+  skip?: boolean;
   /** Detour (dead-end). */
   detour?: boolean;
   /** Visual spec. */

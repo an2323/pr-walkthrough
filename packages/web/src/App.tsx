@@ -84,9 +84,14 @@ export default function App() {
 
   // flow = non-minor steps only (and no "Try it" chapter while it's switched off)
   const flow: Step[] = walkthrough.steps.filter(
-    (s) => !plain.steps[s.id]?.minor && (SHOW_TRY_IT || plain.steps[s.id]?.ch !== 'check')
+    (s) =>
+      !plain.steps[s.id]?.skip &&
+      !plain.steps[s.id]?.minor &&
+      (SHOW_TRY_IT || plain.steps[s.id]?.ch !== 'check')
   );
-  const minors: Step[] = walkthrough.steps.filter((s) => !!plain.steps[s.id]?.minor);
+  const minors: Step[] = walkthrough.steps.filter(
+    (s) => !!plain.steps[s.id]?.minor && !plain.steps[s.id]?.skip
+  );
 
   const END = flow.length; // summary screen index
 

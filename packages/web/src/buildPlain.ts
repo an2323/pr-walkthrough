@@ -59,6 +59,13 @@ function stepVisual(step: Step): PlainVisual | undefined {
   return undefined;
 }
 
+/** A symptom that only restates the start-screen problem (no picture, no code) is not its own screen. */
+function isEmptySymptom(step: Step, visual: PlainVisual | undefined): boolean {
+  if (step.kind !== 'symptom') return false;
+  if (visual) return false;
+  return !step.beats.some((b) => (b.code ?? []).length > 0);
+}
+
 export function buildPlainData(w: Walkthrough): PlainData {
   // If the walkthrough has a plain overlay already, use it
   const plain = w.plain;
@@ -72,10 +79,12 @@ export function buildPlainData(w: Walkthrough): PlainData {
     const ch = stepChapter(step, w.steps);
     const head = step.headline ?? step.routeLabel;
     const say = step.say ?? firstSentence(step.narration);
-    const minor = step.minor ?? false;
     const detour = step.isDeadEnd ?? step.kind === 'dead_end';
     const visual = stepVisual(step);
     const check = step.check;
+    // Covered by start screen (problem text ± shots) — list nowhere, not even as a minor.
+    const skip = isEmptySymptom(step, visual);
+    const minor = skip ? true : (step.minor ?? false);
 
     steps[step.id] = {
       ch,
@@ -83,6 +92,7 @@ export function buildPlainData(w: Walkthrough): PlainData {
       say,
       check,
       minor,
+      skip: skip || undefined,
       detour: detour || undefined,
       visual,
     };

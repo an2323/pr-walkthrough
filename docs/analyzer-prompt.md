@@ -229,8 +229,9 @@ Leave it out when:
 - it would only restate `say` in boxes;
 - the code block already shows the point (a line removed, a wrapper added, a
   condition changed in one place);
-- the symptoms are already clear from `say` — use `symptoms` only when there are
-  several distinct symptoms worth scanning.
+- the symptoms are already clear from `say` / `plain.problem` — then skip a
+  `symptom` step entirely (or mark it `minor`) rather than making a screen with
+  only one sentence and no visual. The start screen already shows the problem.
 
 Labels follow the same no-identifiers rule as `headline`/`say` (plain words, ≤ 6
 words per label). Types:

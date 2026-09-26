@@ -213,7 +213,8 @@
           "type": "code",
           "ref": "packages/excalidraw/css/styles.scss (base) and Sidebar.scss z-index usage"
         }
-      ]
+      ],
+      "minor": true
     },
     {
       "id": "s2",
