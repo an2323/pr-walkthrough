@@ -109,8 +109,8 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       }
     }
 
-    if (!step.minor && !step.visual && step.kind !== "verification" && step.kind !== "change") {
-      warn("missing-visual", `Step ${step.id} (${step.kind}) has no \`visual\` — the reviewer gets a wall of text.`, step.id);
+    if (!step.minor && !step.visual && step.beats.some((b) => (b.traces ?? []).length > 0)) {
+      warn("traces-without-visual", `Step ${step.id} has event traces but no \`visual\` — the reviewer sees the raw trace instead of a plain-words flow.`, step.id);
     }
 
     const hasCode = step.beats.some((b) => (b.code ?? []).length > 0);

@@ -105,14 +105,16 @@ describe("checkQuality", () => {
     expect(checkQuality(w).map((x) => x.code)).toContain("say-too-long");
   });
 
-  it("flags a non-minor decision/cause/constraint step with no visual", () => {
-    const w = makeWalkthrough({ steps: [makeStep({ kind: "decision" })] });
-    expect(checkQuality(w).map((x) => x.code)).toContain("missing-visual");
+  it("does not ask for a visual on a plain step", () => {
+    const w = makeWalkthrough({ steps: [makeStep({ kind: "decision" }), makeStep({ id: "s2", kind: "cause" })], coverage: undefined });
+    expect(checkQuality(w)).toEqual([]);
   });
 
-  it("does not require a visual on a change step or a minor step", () => {
-    const w = makeWalkthrough({ steps: [makeStep({ kind: "change" }), makeStep({ id: "s2", kind: "cause", minor: true })] });
-    expect(checkQuality(w).map((x) => x.code)).not.toContain("missing-visual");
+  it("flags a step with traces but no visual", () => {
+    const beats = [{ kind: "problem" as const, heading: "h", text: "t", traces: [[{ label: "a" }, { label: "b", status: "bad" as const }]],
+      code: [{ file: "a.ts", revision: "base" as const, lines: [{ kind: "focus" as const, text: "x" }] }] }];
+    expect(checkQuality(makeWalkthrough({ steps: [makeStep({ kind: "cause", beats })] })).map((x) => x.code)).toContain("traces-without-visual");
+    expect(checkQuality(makeWalkthrough({ steps: [makeStep({ kind: "cause", beats, visual: { type: "flow", rows: [] } })] })).map((x) => x.code)).not.toContain("traces-without-visual");
   });
 
   it("flags a non-symptom step that quotes no code", () => {

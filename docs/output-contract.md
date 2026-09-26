@@ -53,9 +53,10 @@ a reviewer under time pressure, so:
 - `step.check` — no longer produced (Sep 26): the viewer hides "Your check" cards
   (`SHOW_CHECKS = false`); a reviewer reading a PR shouldn't be sent to click around
   the app.
-- `step.visual` — required on every non-minor step except `change` steps whose point
-  is the edit itself; `symptoms` for the first step, `layers` for order/priority
-  values, `flow` for chains of events (see analyzer-prompt.md → Visuals).
+- `step.visual` — optional, only where it explains something `say` + code don't: a
+  relation between values in different places (`layers`), a chain of events across
+  several places (`flow`), a non-obvious constraint. No quota — a PR may have none or
+  several (see analyzer-prompt.md → Visuals).
 - Every non-minor step except `symptom`/`verification` quotes code; a `constraint`/
   `cause` step quotes the BASE code that makes it true.
 - `step.minor` — true for a step that exists only for completeness (a supporting
@@ -112,8 +113,8 @@ count, for the step-budget check):
   `step.headline`, or `step.say`.
 - `step.headline` longer than 9 words.
 - `step.say` with more than two sentences.
-- A non-minor step with no `visual` (`change` and `verification` exempt) —
-  `missing-visual`.
+- A step with event `traces` but no `visual` — `traces-without-visual` (the analyzer
+  judged the chain important but gave the reviewer no plain-words picture of it).
 - A non-minor step quoting no code (`symptom` and `verification` exempt) —
   `step-without-code`.
 - Step count outside the size-based budget above.

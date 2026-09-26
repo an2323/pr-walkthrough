@@ -164,13 +164,6 @@
       "focusNode": "sidebar",
       "tag": "fact",
       "narration": "The editor has a floating sidebar on the right edge showing the element library. When the sidebar is open, all top-right toolbar buttons — including the hamburger icon — are drawn on top of it, obscuring part of the panel. Clicking those buttons also has no effect on the sidebar, so on mobile both the sidebar and the main menu end up open simultaneously.",
-      "visual": {
-        "type": "symptoms",
-        "items": [
-          "Top-right toolbar buttons are drawn over the open sidebar",
-          "Tapping the menu button does not close the sidebar"
-        ]
-      },
       "beats": [
         {
           "kind": "current",
@@ -632,36 +625,7 @@
           "type": "diff",
           "ref": "packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx#1"
         }
-      ],
-      "visual": {
-        "type": "flow",
-        "rows": [
-          [
-            [
-              "Before: menu button",
-              ""
-            ],
-            [
-              "menu panel",
-              ""
-            ],
-            [
-              "no shared parent",
-              "bad"
-            ]
-          ],
-          [
-            [
-              "After: menu button + menu panel",
-              ""
-            ],
-            [
-              "inside one wrapper",
-              "good"
-            ]
-          ]
-        ]
-      }
+      ]
     },
     {
       "id": "s6",
@@ -774,40 +738,7 @@
           "type": "diff",
           "ref": "packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx#1"
         }
-      ],
-      "visual": {
-        "type": "flow",
-        "rows": [
-          [
-            [
-              "Tap on the menu button",
-              ""
-            ],
-            [
-              "Inside the wrapper",
-              "good"
-            ],
-            [
-              "Menu does not close itself",
-              "good"
-            ]
-          ],
-          [
-            [
-              "Tap anywhere else",
-              ""
-            ],
-            [
-              "Outside the wrapper",
-              ""
-            ],
-            [
-              "Menu closes, as before",
-              "good"
-            ]
-          ]
-        ]
-      }
+      ]
     },
     {
       "id": "s7",
@@ -865,30 +796,7 @@
           "type": "diff",
           "ref": "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1"
         }
-      ],
-      "visual": {
-        "type": "flow",
-        "rows": [
-          [
-            [
-              "Tap the menu button",
-              ""
-            ],
-            [
-              "Sidebar hears a tap outside",
-              "good"
-            ],
-            [
-              "Sidebar closes",
-              "good"
-            ],
-            [
-              "Menu opens",
-              "good"
-            ]
-          ]
-        ]
-      }
+      ]
     },
     {
       "id": "s8",

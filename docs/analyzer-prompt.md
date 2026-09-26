@@ -210,18 +210,33 @@ what to watch for.
 
 The golden example below shows these fields in use. Match their tone and length.
 
-## Visuals (required)
+## Visuals (only where they explain something)
 
-Every non-minor step gets exactly one `visual` — the picture the reviewer looks at
-while reading `say`. The only exception is a `change` step whose point is the edit
-itself (the code is its picture); but when a change is about values, order or a chain
-of events (a z-index, a priority, who handles a click), it still gets a `layers` or
-`flow` visual. Labels follow the same no-identifiers rule as `headline`/`say`
-(plain words, ≤ 6 words per label). Pick the type by what the step is about:
+A `visual` is optional. Add one to a step only when a reviewer would understand the
+step clearly faster with the picture than with `say` + the code. There is no quota:
+a small or obvious PR may have no visuals at all, a PR with a subtle mechanism may
+have several. The golden example is visual-heavy because that PR is a long reasoning
+chain — do not copy its count.
 
-- `symptoms` — the first step: 1–3 things the user sees go wrong, as a user would
-  describe them.
-- `layers` — anything about order or priority: z-index / stacking, middleware or
+Add a visual when the point of the step is:
+- a relation between values that no single code block shows (two numbers in
+  different places compared, an order or priority between several items);
+- a chain of events across several places where the bug hides (a click and which
+  handlers see it, a value passing through functions, a race between two updates);
+- a non-obvious interaction or constraint that is hard to see in the code alone.
+
+Leave it out when:
+- it would only restate `say` in boxes;
+- the code block already shows the point (a line removed, a wrapper added, a
+  condition changed in one place);
+- the symptoms are already clear from `say` — use `symptoms` only when there are
+  several distinct symptoms worth scanning.
+
+Labels follow the same no-identifiers rule as `headline`/`say` (plain words, ≤ 6
+words per label). Types:
+
+- `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them.
+- `layers` — order or priority: z-index / stacking, middleware or
   plugin order, precedence of config sources. `before` and `after` are lists of
   `[label, value, cls?]`, top of the list = wins / drawn last. Values are the REAL
   values from the code (e.g. `["Sidebar", 80, "bad"]` → `["Sidebar", 120, "hl"]`),
@@ -231,13 +246,13 @@ of events (a z-index, a priority, who handles a click), it still gets a `layers`
   through functions, a request through layers. `rows` is 1–2 rows of 2–4
   `[label, cls]` nodes; `cls` is `"bad"` (the wrong outcome), `"good"` (the fixed
   outcome), `"old"` (a path the PR removes) or `""`. For a before/after contrast use
-  two rows ("Before: …", "After: …"). Prefer this for `cause`, `constraint` and
-  `decision` steps.
+  two rows ("Before: …", "After: …").
 - `map` — only when the step is about how modules are wired together; it shows the
   graph at this step. At most 1 in 4 steps.
 
-If a beat already has `traces`, the `flow` visual should tell the same story in plain
-words (traces are the precise version, the visual is the one a reviewer reads).
+If you give a beat `traces`, you judged the chain important — then also give the step
+a `flow` visual telling the same story in plain words (the viewer shows the visual;
+traces are the precise version behind "How the analysis got here").
 
 ## Every step is tied to code
 
