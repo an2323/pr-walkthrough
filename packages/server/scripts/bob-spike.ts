@@ -166,11 +166,18 @@ interface BobRun {
 }
 
 /** Best-effort summary over an unverified event stream — see bob-shell.ts's twin. */
+/**
+ * Confirmed against a real stream-json run: a sub-agent spawn appears as
+ * `{"tool_name":"spawn_subagent", "parameters":{"name":"explore", ...}}` —
+ * one such event per spawn, followed by its own `tool_result` event. There is
+ * no persistent per-subagent id in the stream, so this counts spawns, not
+ * distinct agents (fine: each `spawn_subagent` call is one sub-agent run).
+ */
 function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents"> {
   let taskId: string | undefined;
   let sessionCost = 0;
   let toolCalls = 0;
-  const subagentIds = new Set<string>();
+  let subagents = 0;
   const visit = (v: unknown): void => {
     if (Array.isArray(v)) { v.forEach(visit); return; }
     if (!v || typeof v !== "object") return;
@@ -178,14 +185,11 @@ function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCos
     if (typeof o["task_id"] === "string" && !taskId) taskId = o["task_id"] as string;
     if (typeof o["session_costs"] === "number") sessionCost = Math.max(sessionCost, o["session_costs"] as number);
     if (typeof o["tool_calls"] === "number") toolCalls = Math.max(toolCalls, o["tool_calls"] as number);
-    for (const key of ["subagentId", "subagent_id"]) {
-      const val = o[key];
-      if (typeof val === "string") subagentIds.add(val);
-    }
+    if (o["tool_name"] === "spawn_subagent") subagents++;
     Object.values(o).forEach(visit);
   };
   events.forEach(visit);
-  return { taskId, sessionCost, toolCalls, subagents: subagentIds.size };
+  return { taskId, sessionCost, toolCalls, subagents };
 }
 
 /**
@@ -290,7 +294,14 @@ function findWalkthrough(envelope: unknown): Record<string, unknown> | undefined
  * like a Walkthrough — see bob-shell.ts's twin for the full rationale.
  */
 function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | undefined {
-  const direct = findWalkthrough(events);
+  // Confirmed by a real stream-json run: a "message" event with role "user"
+  // echoes the FULL prompt back — including the golden example, which itself
+  // has "steps" and "graph" keys. Searching all events indiscriminately would
+  // find that echoed few-shot example before ever reaching Bob's own answer.
+  const assistantEvents = events.filter(
+    (e) => !!e && typeof e === "object" && (e as Record<string, unknown>)["role"] === "assistant"
+  );
+  const direct = findWalkthrough(assistantEvents);
   if (direct) return direct;
   let text = "";
   const visit = (v: unknown): void => {
@@ -298,7 +309,7 @@ function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | u
     if (Array.isArray(v)) { v.forEach(visit); return; }
     if (v && typeof v === "object") Object.values(v as object).forEach(visit);
   };
-  events.forEach(visit);
+  assistantEvents.forEach(visit);
   const found = extractJsonObject(text, isWalkthroughLike);
   return isWalkthroughLike(found) ? found : undefined;
 }
