@@ -23,6 +23,7 @@ import { parseHunks, type Hunk, type PullRequestMeta } from "@pr-walkthrough/sha
 import type { AnalyzerInput, WalkthroughDraft } from "../src/analyzer/interface.js";
 import type { RepoWorkspace } from "../src/git/workspace.js";
 import { validate } from "../src/validation/index.js";
+import { fetchPRMeta } from "../src/github/client.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,23 +34,10 @@ if (existsSync(path.join(ROOT, ".env"))) process.loadEnvFile(path.join(ROOT, ".e
 const CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const MODE_SLUG = "pr-walkthrough";
 
-// excalidraw/excalidraw#10295 — "fix: close floating sidebar on main menu open"
-const PR: PullRequestMeta = {
-  repo: "excalidraw/excalidraw",
-  number: 10295,
-  title: "fix: close floating sidebar on main menu open",
-  url: "https://github.com/excalidraw/excalidraw/pull/10295",
-  author: "",
-  baseSha: "95ddc663392d94cd22a17a982dde5060849038de",
-  headSha: "67926be60b32cd8e429f507c730597c91cdefe17",
-  filesChanged: 5,
-  additions: 19,
-  deletions: 7,
-  commitTitles: [],
-  body:
-    "- move sidebar above top layer UI (especially top-right) so that buttons aren't above the sidebar when open\n" +
-    "- close sidebar (when not docked) when opening main menu. This is necessary otherwise the previous change would make the main menu below the sidebar on mobile.",
-};
+// Which PR to analyse: PR=owner/repo#number (default: excalidraw/excalidraw#10295).
+// Metadata is fetched from GitHub; set GITHUB_TOKEN to avoid the anonymous rate limit.
+const PR_REF = process.env.PR ?? "excalidraw/excalidraw#10295";
+let PR: PullRequestMeta;
 
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd, maxBuffer: 64 * 1024 * 1024 });
@@ -61,7 +49,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
  * upstream branch, so they must be fetched via refs/pull/N/head.
  */
 async function prepareCheckout(): Promise<string> {
-  const repoPath = path.join(CACHE_DIR, "excalidraw__excalidraw");
+  const repoPath = path.join(CACHE_DIR, PR.repo.replace("/", "__"));
   if (!existsSync(path.join(repoPath, ".git"))) {
     await mkdir(CACHE_DIR, { recursive: true });
     await execFileAsync("git", [
@@ -267,7 +255,12 @@ async function main(): Promise<void> {
   if (!["prepare", "smoke", "readonly", "full", "revalidate"].includes(mode)) throw new Error(`unknown mode ${mode}`);
   if (!["prepare", "revalidate"].includes(mode) && !process.env.BOB_API_KEY) throw new Error("BOB_API_KEY is not set");
 
-  const runDir = path.join(ROOT, "data/runs", `${new Date().toISOString().replace(/[:.]/g, "-")}-${mode}`);
+  const m = /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(PR_REF);
+  if (!m) throw new Error(`PR must look like owner/repo#123, got ${PR_REF}`);
+  PR = await fetchPRMeta(m[1], m[2], Number(m[3]));
+  console.log(`• ${PR.repo}#${PR.number} — ${PR.title} (+${PR.additions} −${PR.deletions}, ${PR.filesChanged} files)`);
+
+  const runDir = path.join(ROOT, "data/runs", `${new Date().toISOString().replace(/[:.]/g, "-")}-${PR.repo.split("/")[1]}-${PR.number}-${mode}`);
   await mkdir(runDir, { recursive: true });
 
   console.log("• preparing checkout", CACHE_DIR);
