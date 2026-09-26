@@ -1,0 +1,41 @@
+{
+  "caption": "Open the library sidebar, then open the main menu.",
+  "before": {
+    "src": "before.png",
+    "highlights": [
+      {
+        "x": 0.0125,
+        "y": 0.08,
+        "w": 0.182568359375,
+        "h": 0.8175,
+        "label": "Main menu opened"
+      },
+      {
+        "x": 0.7703125,
+        "y": 0,
+        "w": 0.2296875,
+        "h": 1,
+        "label": "Sidebar is still open"
+      }
+    ]
+  },
+  "after": {
+    "src": "after.png",
+    "highlights": [
+      {
+        "x": 0.0125,
+        "y": 0.08,
+        "w": 0.182568359375,
+        "h": 0.8175,
+        "label": "Main menu opened"
+      },
+      {
+        "x": 0.75,
+        "y": 0,
+        "w": 0.25,
+        "h": 0.8,
+        "label": "Sidebar closed by itself"
+      }
+    ]
+  }
+}

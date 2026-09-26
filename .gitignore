@@ -9,4 +9,6 @@ dist/
 .vercel
 # per-run analyzer artifacts (prompts, raw Bob output)
 data/runs/
+# Bob Shell custom modes written by local spikes / analyzer into checkouts
+.bob/
 .env*
