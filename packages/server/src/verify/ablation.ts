@@ -39,14 +39,26 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout;
 }
 
-/** Run `repro.cjs <url>`, parsing its last stdout line as `{"bugPresent": boolean, ...}`. */
-async function runRepro(reproPath: string, url: string, cwd: string): Promise<{ bugPresent: boolean } | { error: string }> {
+export interface ReproResult {
+  bugPresent: boolean;
+  measure?: unknown;
+  highlights?: unknown[];
+}
+
+/**
+ * Run `repro.cjs <url> [pngPath]` (the ST12-C contract — see bob-verifier.ts,
+ * which authors and first confirms this script) and parse its last stdout
+ * line. Used both to confirm the script against BASE/HEAD and, by the
+ * ablation runner, to test it against many disposable partial-patch builds.
+ */
+export async function runRepro(reproPath: string, url: string, cwd: string, pngPath?: string): Promise<ReproResult | { error: string }> {
   try {
-    const { stdout } = await execFileAsync("node", [reproPath, url], { cwd, timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
+    const args = pngPath ? [reproPath, url, pngPath] : [reproPath, url];
+    const { stdout } = await execFileAsync("node", args, { cwd, timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
     const lastLine = stdout.trim().split("\n").pop() ?? "";
-    const parsed = JSON.parse(lastLine) as { bugPresent: unknown };
+    const parsed = JSON.parse(lastLine) as { bugPresent: unknown; measure?: unknown; highlights?: unknown };
     if (typeof parsed.bugPresent !== "boolean") return { error: "repro.cjs did not print {bugPresent: boolean}" };
-    return { bugPresent: parsed.bugPresent };
+    return { bugPresent: parsed.bugPresent, measure: parsed.measure, highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [] };
   } catch (err) {
     return { error: err instanceof Error ? err.message.slice(0, 300) : String(err) };
   }

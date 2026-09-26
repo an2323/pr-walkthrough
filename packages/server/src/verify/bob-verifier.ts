@@ -1,17 +1,28 @@
 /**
- * bob-verifier.ts — ST6e: Bob reproduces a PR's user-visible change in the
- * running app and takes one screenshot at BASE and one at HEAD, with the
- * spot to look at boxed.
+ * bob-verifier.ts — ST6e/ST12-C: Bob reproduces a PR's user-visible change in
+ * the running app and writes ONE reusable script that PROVES it, instead of
+ * a one-off screenshot script whose claims we'd have to take on faith.
  *
  * Division of labour:
  *  - The backend installs and starts the app at BASE and HEAD (recipes.ts,
  *    app-servers.ts) and always stops it again — Bob never manages servers.
  *  - Bob (custom mode `pr-verifier`: read + edit + execute) reads the
- *    walkthrough and the changed source, decides the scenario, writes and runs
- *    a Playwright script, and returns screenshots + highlight boxes. It may
+ *    walkthrough and the changed source, decides the scenario, and writes
+ *    `.walkthrough/verify/repro.cjs <url> [pngPath]` — a script that runs the
+ *    scenario against WHATEVER url it's given and prints one JSON line
+ *    `{"bugPresent": boolean, "measure": {...}, "highlights": [...]}`. It may
  *    decline ("skip") when the change isn't visible in a screenshot.
- *  - The backend validates the result, pairs the boxes (highlights.ts), draws
- *    them into the images and sets `walkthrough.shots`.
+ *  - The backend does NOT trust Bob's own claim that the script works: it
+ *    re-runs repro.cjs ITSELF against base.url and head.url and requires
+ *    `bugPresent: true` on BASE, `false` on HEAD — this is the repro
+ *    contract (ST12-C). Only a confirmed script is trusted for anything
+ *    downstream: the before/after screenshots here, and later the ablation
+ *    runner (verify/ablation.ts), which reuses this exact same script
+ *    against many disposable BASE-plus-partial-patch checkouts, at $0,
+ *    without involving Bob again.
+ *  - The confirmed repro.cjs (+ its pw.cjs helper) is persisted to
+ *    data/verify/{owner}/{repo}/{number}/ — committed, not a throwaway
+ *    build artifact: it's the evidence itself, reviewable like the shots.
  *
  * Safety: Bob's workspace is the PR's HEAD worktree in the throwaway clone
  * cache (never this repo); it may write only under `.walkthrough/verify/`;
@@ -38,6 +49,7 @@ import { annotateShot } from "../shots/annotate.js";
 import { ensureInstalled, scrubbedEnv, startApp, type AppServer } from "./app-servers.js";
 import { normalizeHighlights } from "./highlights.js";
 import { recipeFor, type AppRecipe } from "./recipes.js";
+import { runRepro } from "./ablation.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
@@ -55,7 +67,7 @@ export interface VerifyOptions {
 }
 
 export type VerifyResult =
-  | { status: "ok"; shots: Shots; costUsd: number }
+  | { status: "ok"; shots: Shots; costUsd: number; reproPath: string }
   | { status: "skipped"; reason: string; costUsd: number };
 
 /** Does this repo have a way to start its app at all? (cheap pre-check, no side effects) */
@@ -72,8 +84,11 @@ function buildPrompt(wt: Walkthrough, recipe: AppRecipe, baseUrl: string, headUr
     .join("\n");
   const scenario = (wt.verification?.scenario ?? []).map((l) => `- ${l}`).join("\n") || "(none)";
   const { width, height } = recipe.viewport;
-  return `You are checking a pull request by reproducing its user-visible change in the running app,
-taking one screenshot BEFORE the PR (BASE) and one AFTER it (HEAD), with the spot to look at boxed.
+  return `You are checking a pull request by writing a script that PROVES its user-visible change is
+real: one script, run against a URL you're given, that reports whether the bug is present there.
+The backend will re-run your finished script itself against BASE and HEAD before trusting it, and
+again, later, against other partial versions of the fix — so it must genuinely work standalone, not
+just print what you expect.
 
 ## The app is ALREADY RUNNING — do not install, start or stop any server
 - BASE (before the PR): ${baseUrl}
@@ -96,39 +111,40 @@ ${scenario}
 ${recipe.hints}
 
 ## Your job
-1. Pick ONE short scenario (at most 6 UI actions) that makes the difference visible. Start with a
-   ${width}×${height} viewport; if the change is about small screens, overflow or layout limits, use
-   the viewport where it shows (e.g. 390×844 phone, or a shorter window) — same viewport for BASE
-   and HEAD. Read the changed source to find reliable selectors — do not guess.
-2. If the change is not visible in a screenshot (performance, internal refactor, types, tests,
-   build config), do not force it: write \`{"skip": "<one sentence why>"}\` to
-   \`.walkthrough/verify/result.json\`, print it and stop.
-3. Write ONE CommonJS Playwright script \`.walkthrough/verify/shoot.cjs\`. A tested helper is
+1. Pick ONE short scenario (at most 6 UI actions) that makes the difference visible, and a concrete,
+   measurable signal for "the bug is present" (an element's bounding box overflowing the viewport, a
+   z-order via \`document.elementFromPoint\`, a class/attribute, visible text — not "it looks wrong").
+   Start with a ${width}×${height} viewport; if the change is about small screens, overflow or layout
+   limits, use the viewport where it shows (e.g. 390×844 phone) — the SAME viewport regardless of
+   which url you're given. Read the changed source for reliable selectors — do not guess.
+2. If the change has no such signal (performance, internal refactor, types, tests, build config), do
+   not force it: write \`{"skip": "<one sentence why>"}\` to \`.walkthrough/verify/skip.json\`, print
+   it, and stop — do not write repro.cjs.
+3. Write ONE CommonJS script \`.walkthrough/verify/repro.cjs\`, run as \`node repro.cjs <url> [pngPath]\`
+   (argv[2] = the app url to check, argv[3] = optional screenshot path). A tested Playwright helper is
    already there — use it, do not look for browsers or Playwright yourself:
    \`const { launch } = require("./pw.cjs"); const browser = await launch();\`
-   For BASE and then HEAD: open a page with your viewport, go to the URL, run the scenario (≤ 30 s per
-   action), save the full viewport to \`.walkthrough/verify/before.png\` / \`after.png\`, and measure
-   \`getBoundingClientRect()\` of the 1–3 elements that show the difference, as fractions of the
-   viewport. Also assert in the script that the problem is present on BASE and gone on HEAD
-   (visibility, \`document.elementFromPoint\` for stacking, text) and print what you found.
-4. Run it: \`node .walkthrough/verify/shoot.cjs\`. If it fails or the assertions don't show the
-   difference, fix it and retry — at most 3 runs of any script in total (probes included). Your
-   budget is small: if the difference still isn't visible after that, write a skip result saying
-   what you tried instead of exploring further.
-5. Write \`.walkthrough/verify/result.json\`:
-   {"caption": "<what you did, plain words, ≤ 12 words>", "viewport": {"width": 0, "height": 0},
-    "before": {"file": "before.png", "highlights": [{"x":0,"y":0,"w":0,"h":0,"label":"…","pair":"…"}]},
-    "after":  {"file": "after.png",  "highlights": [ … ]}}
-   - 1–3 boxes per side, fractions 0..1 of the image. Labels: plain words, ≤ 5 words, no code names.
-     BEFORE labels say what is wrong, AFTER labels say what is fixed.
-   - Boxes marking the SAME spot on both sides (same element or area) get the same "pair" id
-     (e.g. "sidebar"); the backend then draws them the same size.
+   The script must, for THAT ONE url:
+   - open a page at your chosen viewport, go to the url, run the scenario (≤ 30 s per action);
+   - measure your chosen signal and decide \`bugPresent\` (boolean) from it — not from which url string
+     was passed in; the same logic must work no matter which build is actually running there;
+   - if argv[3] is given, save a screenshot there, and also compute 1–3 highlight boxes (the element(s)
+     that show the difference), as fractions of the viewport: \`{x,y,w,h,label,pair?}\`. A label should
+     say what is wrong when \`bugPresent\` and what is fixed when not. Boxes marking the SAME spot get
+     the same "pair" id (e.g. "sidebar") — the backend then draws them the same size on both images;
+   - print EXACTLY ONE line of JSON and nothing else on your last line of output:
+     \`{"bugPresent": true, "measure": {...whatever numbers you used...}, "highlights": [...]}\`
+     (\`highlights\` can be \`[]\` when no pngPath was given, or when no clear box applies).
+4. Test it yourself: run it against BOTH ${baseUrl} and ${headUrl}. It must print \`bugPresent: true\`
+   for BASE and \`bugPresent: false\` for HEAD. If not, fix the script and retry — at most 3 runs of any
+   script in total (probes included). Your budget is small: if you still can't get a reliable true/false
+   split after that, write the skip file instead of continuing to explore.
 
 ## Rules
 - Write files ONLY under \`.walkthrough/verify/\` — not \`/tmp\`, not anywhere else. Never edit the
   repository's source.
 - Do not install packages. No network access except the two app URLs above.
-- Final answer: print the content of result.json only.
+- Final answer: print repro.cjs's own last JSON line from your BASE test run (or the skip JSON).
 `;
 }
 
@@ -201,12 +217,6 @@ async function assertBrowserWorks(): Promise<void> {
   }
 }
 
-/** Resolve a file Bob named, refusing anything outside the verify dir. */
-function insideDir(dir: string, name: unknown): string | undefined {
-  if (typeof name !== "string") return undefined;
-  const p = path.resolve(dir, name);
-  return p.startsWith(dir + path.sep) && p.endsWith(".png") && existsSync(p) ? p : undefined;
-}
 
 export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
   const { walkthrough: wt, outDir, onStage, onEvent } = opts;
@@ -264,16 +274,35 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     const run = await runBobVerifier(prompt, headWt, maxCost, runDir, onEvent);
     costUsd = run.sessionCost;
 
-    let result: Record<string, unknown> | undefined;
+    let skip: string | undefined;
     try {
-      result = JSON.parse(await readFile(path.join(verifyDir, "result.json"), "utf-8"));
+      const skipJson = JSON.parse(await readFile(path.join(verifyDir, "skip.json"), "utf-8")) as { skip?: string };
+      skip = typeof skipJson.skip === "string" ? skipJson.skip : "skip.json present but malformed";
     } catch {
-      /* handled below */
+      /* no skip.json — proceed to confirm repro.cjs */
     }
-    const skip = typeof result?.skip === "string" ? result.skip : undefined;
-    const beforeRaw = insideDir(verifyDir, (result?.before as Record<string, unknown> | undefined)?.file);
-    const afterRaw = insideDir(verifyDir, (result?.after as Record<string, unknown> | undefined)?.file);
-    const ok = !skip && !!beforeRaw && !!afterRaw;
+
+    const reproPath = path.join(verifyDir, "repro.cjs");
+    let confirmError: string | undefined;
+    let beforeResult, afterResult;
+    if (!skip) {
+      if (!existsSync(reproPath)) {
+        confirmError = run.errorMessage ?? "Bob did not write repro.cjs";
+      } else {
+        // The repro contract (ST12-C): don't trust Bob's own claim that the script
+        // works — run it ourselves against BASE and HEAD and require the exact
+        // signal the ablation runner will later rely on.
+        [beforeResult, afterResult] = await Promise.all([
+          runRepro(reproPath, base.url, verifyDir, path.join(outDir, "before.png")),
+          runRepro(reproPath, head.url, verifyDir, path.join(outDir, "after.png")),
+        ]);
+        if ("error" in beforeResult) confirmError = `repro.cjs failed on BASE: ${beforeResult.error}`;
+        else if ("error" in afterResult) confirmError = `repro.cjs failed on HEAD: ${afterResult.error}`;
+        else if (!beforeResult.bugPresent) confirmError = "repro.cjs says the bug is already absent on BASE — not trusted";
+        else if (afterResult.bugPresent) confirmError = "repro.cjs still says the bug is present on HEAD — not trusted";
+      }
+    }
+    const ok = !skip && !confirmError;
 
     await recordSpend({
       pr: wt.pr.repo + "#" + wt.pr.number,
@@ -285,33 +314,34 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       subagents: 0,
       repairs: 0,
       valid: ok,
-      notes: skip ? `skipped: ${skip}` : ok ? "screenshots taken" : run.errorMessage ?? "no usable result.json",
+      notes: skip ? `skipped: ${skip}` : ok ? "repro confirmed true@BASE/false@HEAD, screenshots taken" : confirmError,
     });
 
     if (skip) return { status: "skipped", reason: skip, costUsd };
-    if (!ok) return { status: "skipped", reason: run.errorMessage ?? "Bob returned no usable screenshots", costUsd };
+    if (!ok || !beforeResult || !afterResult || "error" in beforeResult || "error" in afterResult) {
+      return { status: "skipped", reason: confirmError ?? "repro.cjs not confirmed", costUsd };
+    }
 
-    const before = result!.before as Record<string, unknown>;
-    const after = result!.after as Record<string, unknown>;
-    const hl = normalizeHighlights(
-      Array.isArray(before.highlights) ? before.highlights : [],
-      Array.isArray(after.highlights) ? after.highlights : []
-    );
+    const hl = normalizeHighlights(beforeResult.highlights ?? [], afterResult.highlights ?? []);
     await mkdir(outDir, { recursive: true });
-    await copyFile(beforeRaw!, path.join(outDir, "before.png"));
-    await copyFile(afterRaw!, path.join(outDir, "after.png"));
     await annotateShot(path.join(outDir, "before.png"), path.join(outDir, "before-annotated.png"), hl.before, "bad");
     await annotateShot(path.join(outDir, "after.png"), path.join(outDir, "after-annotated.png"), hl.after, "good");
 
-    const caption = typeof result!.caption === "string" ? result!.caption.slice(0, 120) : undefined;
+    // Persist the CONFIRMED script (not a throwaway build artifact — the ablation
+    // runner reuses it verbatim, at $0, against disposable partial-patch checkouts).
+    const persistDir = path.join(ROOT, "data/verify", owner, repo, String(wt.pr.number));
+    await mkdir(persistDir, { recursive: true });
+    await copyFile(reproPath, path.join(persistDir, "repro.cjs"));
+    await copyFile(path.join(verifyDir, "pw.cjs"), path.join(persistDir, "pw.cjs"));
+
     const shots: Shots = {
       before: { src: "before-annotated.png", raw: "before.png", highlights: hl.before },
       after: { src: "after-annotated.png", raw: "after.png", highlights: hl.after },
-      ...(caption ? { caption } : {}),
+      ...(wt.plain?.title ? { caption: wt.plain.title.slice(0, 120) } : {}),
       by: "bob-verifier",
       run: { costUsd: run.sessionCost, durationMs: run.ms, toolCalls: run.toolCalls },
     };
-    return { status: "ok", shots, costUsd };
+    return { status: "ok", shots, costUsd, reproPath: path.join(persistDir, "repro.cjs") };
   } finally {
     await Promise.all(servers.map((s) => s.stop()));
     if (previousMode !== undefined) await writeFile(modePath, previousMode).catch(() => {});

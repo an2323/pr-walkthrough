@@ -19,6 +19,8 @@ import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
 import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
+import { runAblation, verdictForStep } from "../verify/ablation.js";
+import { recipeFor } from "../verify/recipes.js";
 import { validate, checkQuality } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 
@@ -156,6 +158,37 @@ export async function runAnalyzeJob(
           result.walkthrough.shots = vr.shots;
           await saveWalkthrough(result.walkthrough);
           emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Screenshots taken by Bob" });
+
+          // ST12-D: now that the repro script is CONFIRMED (true@BASE, false@HEAD —
+          // see bob-verifier.ts), measure which hunks the fix actually needs instead
+          // of trusting the analyzer's own account of it. $0, no Bob involved.
+          if (process.env.VERIFY_ABLATION !== "0") {
+            const recipe = recipeFor(owner, repo);
+            if (recipe && result.walkthrough.pr.baseSha) {
+              emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Testing which changes fix the bug" });
+              try {
+                const ablation = await runAblation({
+                  mainPath: path.join(GIT_CACHE_DIR, `${owner}__${repo}`),
+                  baseSha: result.walkthrough.pr.baseSha,
+                  diff,
+                  hunks: result.walkthrough.hunks,
+                  skippedHunks: result.walkthrough.skippedHunks,
+                  recipe,
+                  reproPath: vr.reproPath,
+                  onProgress: (msg) => emit({ kind: "stage", t: elapsed(), stage: "shots", label: msg }),
+                });
+                result.walkthrough.verification = { ...result.walkthrough.verification, status: "passed", scenario: result.walkthrough.verification?.scenario ?? [], ablation };
+                for (const step of result.walkthrough.steps) {
+                  const verdict = verdictForStep(ablation, step.hunkIds);
+                  if (verdict) step.evidence = { source: "ablation", verdict };
+                }
+                await saveWalkthrough(result.walkthrough);
+                emit({ kind: "stage", t: elapsed(), stage: "shots", label: `Measured ${ablation.units.length} change(s) against the running app` });
+              } catch (err) {
+                console.warn("[analyze-pipeline] ablation failed:", err instanceof Error ? err.message : err);
+              }
+            }
+          }
         } else {
           emit({ kind: "stage", t: elapsed(), stage: "shots", label: `Screenshots skipped: ${vr.reason}` });
         }
