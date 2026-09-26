@@ -427,7 +427,7 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 - One screen = one idea: plain-language headline, one sentence, ONE visual, one reviewer action. No identifiers in prose — identifiers live only inside code.
 - Route = three chapters (Problem → Fix → Try it) shown as dots in the top bar; no left step list.
 - Code shows changed lines ±3 context; the rest folds into "⋯ N more lines" that expands in place; "open file ↗" links to GitHub at the right sha. When a step has a visual AND code, the code is behind "Show the code change".
-- The map (graph) appears ONLY on the start screen (Before/After toggle) and on steps whose visual is `map`. Edge labels in plain words, identifier in the tooltip. Only nodes touched by the shown edges.
+- The map (graph) appears ONLY on the start screen (Before/After toggle) and on steps whose visual is `map`. Edge labels in plain words, identifier in the tooltip. Only nodes touched by the shown edges. **Superseded by ST6g:** the map leaves the start screen and becomes on-demand (button on every screen + link in the summary).
 - "How the analysis got here" opens a side drawer with the full analysis (beats, annotations, sources, notes, full question). This is where technical depth lives.
 - Source marker only when not a fact: "from the commit history" / "our reading of the code" / "not run yet". Dead ends = "Detour" with a struck-through old path.
 - Voice is one button in the bottom bar; the screen text stays short, narration is richer. "Listen instead" on the start screen plays the whole route.
@@ -533,7 +533,7 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 **Why cut:** the before/after is context for the viewer of the demo video, not part of the product. Two screenshots taken by hand (excalidraw at BASE and HEAD with the sidebar open; the same at mobile width with the menu open, ~30–40 min) give most of the effect. The agent would also push the stage budget past $20.
 
-**Instead:** the two manual screenshots go into the video/README (ST9). The "Try it in the app" chapter and the "Tried N of M scenarios" line are **hidden** in the viewer via `SHOW_TRY_IT = false` in `packages/web/src/features.ts` — flip it to bring the bare scenario checklist back unchanged.
+**Instead:** two manual screenshots (BASE / HEAD). **Updated Sep 26:** they are part of the product, not just the video — they become the visual of the first Problem step (see ST6g); the video and README reuse them. The "Try it in the app" chapter and the "Tried N of M scenarios" line are **hidden** in the viewer via `SHOW_TRY_IT = false` in `packages/web/src/features.ts` — flip it to bring the bare scenario checklist back unchanged.
 
 ---
 
@@ -555,6 +555,27 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 - Live analysis (ST6c) and GitHub posting (ST6d) are hidden in static mode — the video shows them.
 
 **✓ Verify:** the deployed URL renders #10295 and #8340 with audio, on desktop and at 400 px, with no requests to `/api/*`.
+
+---
+
+### Sub-Task 6g — Before/after screenshots in the first step; map on demand
+
+**Status:** [ ] pending · **Must** · ~2 h · 0 Bobcoins · do before ST7 (narration) and ST9 (video)
+
+**Intent:** The reviewer should *see* the bug before reading about it, and the start screen should only answer "what is this PR". The architecture map is an orientation aid, not a review step, so it moves out of the main flow.
+
+**Decisions (Sep 26):**
+- **Before/after screenshots → the first Problem step.** For #10295: excalidraw at BASE vs HEAD with the floating sidebar open (toolbar buttons over the sidebar vs under it); optionally the same at mobile width with the menu open. Taken by hand (ST6e is cut). They are the step's ONE visual (Before | After side by side on desktop, a toggle on mobile), replacing the current visual of that step. Captions in plain words.
+- **Schema:** optional `visual: { type: "shots"; before: string; after: string; caption?: string }` on a step (paths relative to `data/shots/{owner}/{repo}/{number}/`). Fallback: the step's existing visual. For the hackathon only #10295 gets shots, set by hand in the JSON — the analyzer does not produce them.
+- **Static demo:** `export-static` copies `data/shots/...` into `dist/data/shots/...`; re-deploy after (commands in ST6f).
+- **Start screen:** title, Problem / Fix, stats, Start / Listen — **no map**.
+- **Map on demand — both entry points:** (1) a "How the pieces connect" button available on every screen (top bar or the quiet row) that opens a modal / drawer with the Before/After map; (2) a link to the same modal on the "Your review" summary screen, as the payoff after the flow. Steps with `visual: map` keep their inline map.
+- **Fix label overlap in `MapSvg.tsx`:** edge labels are centred on the edge with an estimated width (`length * 6.4`), so long `plainLabel`s spill over the nodes when the gap between columns (150 px) is shorter than the label (see the #10295 "After" view). Fix: measure/clamp the label to the free gap and wrap to two lines or truncate with the full text in the tooltip; widen `GX` when labels are long; prompt rule (ST10 follow-up) — `plainLabel` ≤ ~24 chars. Shorten the #10295 labels by hand now.
+- **Consider a "Both" view** (problem path in red and the fix in green on one map) next to Before/After — for review, the change is easier to read in one picture than by toggling.
+
+**Assessment of the map as a review aid (Sep 26):** useful as orientation ("which modules does this touch, what was removed, what was added"), weak as a review tool. On #10295 it mixes two nearly independent fixes (stacking order on the left, outside-click handling on the right) with no link between the clusters; "After" alone hides the problem path; edge labels repeat implementation details that the steps already show with code. Without the steps' context it reads as boxes. Hence: keep it, but on demand, not as the hero of the start screen and not a required screen.
+
+**✓ Verify:** #10295 step 1 shows both screenshots (desktop side by side, mobile toggle, no horizontal scroll at 375 px); the start screen has no map; the map button opens the modal from any screen and from the summary, Esc closes it; no edge label overlaps a node on #10295 and #8340 (Before, After, Both); the static build serves the screenshots with no `/api/*` requests.
 
 ---
 
@@ -617,17 +638,35 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 **Expected Outcomes:**
 - `README.md` covers: problem statement, product overview, quick-start (clone + `pnpm install` + `pnpm dev`), env vars, demo mode instructions, Bob 2.0 features used, team, licence.
-- A short demo video. Structure: **before/after** (two manual screenshots of excalidraw #10295 at BASE and HEAD — replaces the cut ST6e) → **walkthrough** of #10295 with narration → **live analysis** progress screen (ST6c) → **comment lands in GitHub** (ST6d). Only Excalidraw PRs on screen.
+- A short demo video. Structure: **walkthrough** of #10295 opening on the first step with its before/after screenshots (ST6g) → the rest of the walkthrough with narration → the map modal → **live analysis** progress screen (ST6c) → **comment lands in GitHub** (ST6d). Only Excalidraw PRs on screen.
 - End-to-end smoke test: `pnpm dev` starts server + web; opening `http://localhost:5173/excalidraw/excalidraw/10295` renders the full walkthrough; the Vercel link (ST6f) does the same.
 
 **Todo List:**
 1. Complete `README.md` (incl. the Vercel link).
-2. Take the two before/after screenshots by hand.
+2. (Before/after screenshots are taken and wired into the viewer in ST6g.)
 3. Record the demo video in the structure above.
 4. Run end-to-end smoke test.
 5. Fix any final issues.
 6. Verify `bob_sessions/` is committed.
 7. Submit before Sep 27, 15:00 UTC.
+
+---
+
+### Sub-Task 11 — Live analysis for any PR, hosted on Railway (last step)
+
+**Status:** [ ] pending · **Could** · only once everything else is done and submitted-ready · spends Bobcoins per run
+
+**Intent:** Let anyone paste a PR URL on the public site and get a real Bob Shell analysis, not only the cached examples.
+
+**Why not Vercel:** the pipeline is a long-lived Node process — `bob run` takes minutes (10-min timeout), needs the `bob` CLI, `git` and a persistent clone cache (`GIT_CACHE_DIR`), and keeps jobs in memory for SSE. Vercel functions have short timeouts and no persistent disk, so Vercel stays the static demo (ST6f).
+
+**Design:**
+- Railway service from a Dockerfile: Node + `git` + the `bob` CLI, running `packages/server` with a volume mounted at `GIT_CACHE_DIR` and `data/`.
+- Env on Railway (never in the repo): `ANALYZER=bob`, `BOB_API_KEY`, `GITHUB_TOKEN` (read), `BOB_BUDGET_USD`, optionally `ELEVENLABS_*`, `GITHUB_TOKEN_WRITE` + demo vars.
+- Frontend: a non-static build pointed at the Railway API (API base URL env + CORS for the Vercel domain), or serve the viewer from Railway too.
+- Cost guards before going public: one paid job at a time (exists), a per-run `--max-cost`, a total cap, and an allowlist / size limit (e.g. public repos, ≤ N changed files) or a simple access code — an open "paste any PR" box would drain Bobcoins.
+
+**✓ Verify:** with the user's go-ahead for one paid run — paste a small public PR on the deployed site, watch the progress screen, land in a valid walkthrough; a second concurrent request gets 409; a PR over the size limit is refused before Bob starts.
 
 ---
 
@@ -689,7 +728,9 @@ Iteration 1 fixed the three prompt/schema/checker number mismatches (headline wo
 | Outline licence | Unverified — not deployed in the public demo (ST6f); private test data only |
 | LLM fallback if Bobcoins run out | ✂ Cut. `CachedAnalyzer` covers the demo; the stage-2 budget guard ($20) prevents running out mid-demo |
 | Narration language | English only |
-| Before/after for #10295 | Two screenshots taken by hand (BASE/HEAD) for the video and README; the agent-verifier (ST6e) is cut |
+| Before/after for #10295 | Two screenshots taken by hand (BASE/HEAD), shown as the visual of the first Problem step (ST6g) and reused in the video/README; the agent-verifier (ST6e) is cut |
+| Where the map lives | Off the start screen; on demand via a button on every screen + a link on the summary (ST6g) |
+| Live analysis of any PR in public | Railway backend, as the very last step (ST11); Vercel stays static |
 | Live GitHub webhook | ✂ Cut. ST6d posts comments via the REST API instead; a bot comment is a "should" |
 | Stage-2 Bobcoin cap | $20, unchanged ($10.20 spent as of Sep 26) |
 
@@ -840,12 +881,18 @@ ST6c  Live analysis: job queue + SSE progress screen   (replay at $0)
 ST6d  GitHub round-trip: line comments / questions → PR (needs fork + token from the user)
      │
      ▼
-ST6f  Public demo on Vercel (static, Excalidraw only)
+ST6f  Public demo on Vercel (static, Excalidraw only)   ✓ deployed
      │
      ▼
-ST7   Demo data   →   ST8 / ST9  screenshots, README, video, submit
+ST6g  Before/after screenshots in step 1; map on demand; label-overlap fix
+     │
+     ▼
+ST7   Demo data + narration   →   ST8 / ST9  screenshots, README, video, submit
+     │
+     ▼
+ST11  Live analysis for any PR on Railway (last, optional)
 
-ST6e  ✂ cut — two manual before/after screenshots instead
+ST6e  ✂ cut — two manual before/after screenshots instead (now in step 1, ST6g)
 Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #9403 retry
 ```
 
@@ -870,5 +917,7 @@ Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #94
 | M7.6 | ST6c: live analysis with SSE progress screen (replay works at $0) | 0 (one real run optional) |
 | M7.7 | ST6d: comment/question from the viewer appears on the demo fork's PR | 0 |
 | M7.8 | ST6f: public Vercel link renders the Excalidraw walkthroughs with audio | 0 |
+| M7.9 | ST6g: #10295 step 1 shows before/after screenshots; map opens on demand, no label overlap | 0 |
 | M8 | All demo PRs cached; full stack demo working | #8340 confirmation ~$1–2; #9403 retry if budget allows |
 | M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |
+| M10 | ST11: public live analysis on Railway (optional, after submission-ready) | per run, with the user's go-ahead |
