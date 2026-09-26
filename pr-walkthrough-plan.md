@@ -692,6 +692,109 @@ Wiring the verifier into the live analysis pipeline (`POST /api/analyze`) is che
 
 ---
 
+### Sub-Task 12 — Correct explanations: evidence loop (ablation), change markers, screenshot sizing
+
+**Status:** [ ] pending · **Must** (correctness of the explanation is the product) · ~5–6 h · ≤ ~$2 Bobcoins, each paid run with the user's go-ahead
+
+**Why (review of #10943, Sep 26 22:00 UTC).** The first unedited, fully automatic walkthrough
+(#10943, $0.70, 0 quality warnings, valid) reads well and quotes code correctly, but its causal
+explanation is partly wrong. Measured for $0 in the running app (280 px wide, BASE / BASE with only
+the SCSS hunk / HEAD):
+
+| | What Radix measures for the picker | Visible picker | Overflows? |
+|---|---|---|---|
+| BASE | **0×0** | 134..302 | yes |
+| BASE + only `position: absolute` removed | 168×71 (correct) | 134..302 | **still yes** (on phones it opens to the right, so Radix can't shift it sideways) |
+| HEAD | 168×71 | 106..274 | no |
+
+- s2: the real cause is that the absolutely positioned child gives Radix's element a **0×0 size**, so
+  it never sees an overflow — not "Radix moves the wrapper and the inner box escapes".
+- s3 ("removing `position: absolute` alone is not enough, because of the two layers") is false as
+  stated: that alone fixes the measurement.
+- s4 (DOM collapse) is presented as the fix; on its own it is cleanup + accessibility.
+- s5 (SCSS removal) is marked `minor` and narrated as "would target nothing" — wrong: the `picker`
+  class moved onto Radix's element, so the rule would make *that* element absolute again. It is
+  required for the fix.
+- s6 (mobile branch) is presented as a consequence; on phones it is a required part of the fix.
+- Code blocks don't show what changed: 15 of 16 highlighted lines are `focus` ("look here"),
+  whether the PR changed them or not; moved/added lines appear as plain context.
+- s3's SCSS block skips a line (`border: …`) without an `…` marker — reads as contiguous code. The
+  verbatim validator checks lines one by one and misses this.
+- The screenshots are 280×700 (no real phone is 280 px wide) and are upscaled ~2× to the column
+  width — blurry and several screens tall.
+
+Better prompts won't fix the core issue: the analyzer explains behaviour by *reading* code; for
+layout/CSS reading is misleading. The fix is evidence the system produces itself, not hints from us.
+
+**A. Change markers computed from the diff** ($0, ~40 min)
+- Backend (at validation, where the diff is known) sets `change: "added" | "removed"` on every quoted
+  line the PR added (HEAD blocks) or removed (BASE blocks); the analyzer's `focus` stays "look here".
+- Viewer: `+`/`−` gutter and green/red tint for changed lines, yellow only for `focus` on unchanged
+  lines, a block header like "after the change · 5 lines changed", and a one-line legend.
+- Validator: quoted lines that aren't contiguous in the file without an `elided` line between them →
+  error (so the reader never sees stitched-together code as one piece).
+
+**B. Screenshot sizing** ($0, ~30 min)
+- Never upscale: display at most the image's natural size, and at most ~55% of the viewport height.
+  Portrait pairs (phone shots) sit side by side; landscape pairs stay stacked. The lightbox is
+  unchanged (full size, already good).
+- Focus crop only when it helps: when the paired boxes cover < ~25% of a large (≥ 1000 px) image,
+  the backend also writes a crop = union of the boxes + generous padding, the same rectangle on
+  Before and After; the page shows the crop, the lightbox the full image. Never crop by default —
+  context ("where on the screen") matters.
+- Verifier prompt: real viewports (375×667 phone, 1280×800 desktop); anything else must be stated in
+  the caption and recorded in `shots.viewport`, and the page shows it ("on a 280-px-wide screen").
+
+**C. Repro contract** ($0 code; the verifier prompt changes)
+- The verifier writes `repro.cjs <url>` that reproduces the scenario and prints ONE JSON line
+  `{"bugPresent": boolean, "measure": {…}}`; `shoot.cjs` reuses it for the screenshots.
+- The backend runs `repro.cjs` itself on BASE (must be `true`) and HEAD (must be `false`). If not, the
+  repro is not trusted: no ablation, and the shots are labelled "not confirmed".
+
+**D. Ablation runner** ($0 per run, ~2 h)
+- Units = the logic hunks (mechanical/skipped hunks are always applied). Runs: each unit alone, and
+  all-but-one (≤ 2n, capped at 10).
+- Per run: a throwaway worktree at BASE, `git apply` of a patch built from `pr.diff` with only the
+  chosen hunks, `node_modules` cloned (`cp -c`), app started (scrubbed env), `repro.cjs`, stop.
+  Result: `fixed` | `bug` | `broken` (doesn't build/run — itself informative: a dependency).
+- Output `walkthrough.verification.ablation = { units, runs }` and a per-step verdict derived from it:
+  `needed` / `fixes-alone` / `no-effect` / `not-separable`.
+- **Known limitation:** hunk granularity. In #10943 the DOM collapse (s4) and the mobile branch (s6)
+  share one hunk (`IconPicker.tsx#3`), so v1 can't separate them — reported as `not-separable`.
+  v2: split a hunk into its separate change runs when they're divided by context lines.
+
+**E. Revision from evidence** (Bob `--resume` on the analysis task, cap $1, one round)
+- Only if the evidence contradicts the steps. The prompt gives the ablation table and per-step
+  verdicts, with the rule: *measured evidence overrides your reading of the code; rewrite only the
+  steps it contradicts; don't claim beyond the evidence.* Then validate + quality check again.
+- Deterministic checks afterwards: a `needed` unit's step can't be `minor`; a step presented as the
+  fix whose unit is `no-effect` → warning. Anything still contradicted stays tagged `inferred`,
+  with the evidence shown next to it.
+
+**F. Viewer**
+- Step badge: "verified in the running app — needed for the fix" / "— no effect on the bug alone".
+- The ablation table in "How the analysis got here".
+- Progress stages: "Testing which changes fix the bug", "Revising the explanation".
+
+**G. Pipeline** — analyze → validate → shots + repro → ablation → revision (if contradicted) →
+validate → save. `VERIFY_ABLATION=0` turns D–E off. Non-visual PRs (perf, refactors) skip D–E and
+keep honest `inferred` tags; ablation over the repo's own tests is a later step.
+
+**Order:** A → B → C → D → E → F → G. Cut line: if D isn't working by ~03:00 UTC, ship A + B, run
+C–E on #10943 from a script, and keep the pipeline wiring for after the submission.
+
+**Paid runs (each needs the user's go-ahead):** repro contract for #10943 — resume the verifier's
+session to add `repro.cjs` (~$0.3) or re-run it with the new prompt (~$1–2.6); revision ~$0.3–1.
+Total ≤ ~$2 of the ~$4 left.
+
+**✓ Verify on #10943:** every quoted line the PR changed shows `+`/`−`; no stitched code; screenshots
+not upscaled, phone pair side by side; repro says bug on BASE and not on HEAD; the ablation table
+shows the SCSS hunk alone does not fix it and SCSS + `tsx#3` does; after the revision s5 is not
+`minor` and is described as needed, the "two layers" claim in s3 is gone or corrected, s2 names the
+0×0 measurement, and s4/s6 are described consistently with the evidence.
+
+---
+
 ### Sub-Task 11 — Live analysis for any PR, hosted on Railway (last step)
 
 **Status:** [ ] pending · **Could** · only once everything else is done and submitted-ready · spends Bobcoins per run
