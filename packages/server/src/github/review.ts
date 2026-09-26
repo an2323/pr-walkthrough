@@ -11,18 +11,15 @@
  * general PR comment with a permalink.
  */
 
-import type { CodeLine, Walkthrough } from "@pr-walkthrough/shared";
+import type { Walkthrough } from "@pr-walkthrough/shared";
+import { sideOf, locateLine, type Side, type LineAnchor } from "../util/code-lines.js";
+
+export { sideOf, locateLine, type Side };
 
 const GITHUB_API = "https://api.github.com";
-const NEIGHBOURS = 5;
 
-export type Side = "LEFT" | "RIGHT";
-
-export interface CommentAnchor {
+export interface CommentAnchor extends LineAnchor {
   file: string;
-  revision: "base" | "head" | "diff";
-  lines: Pick<CodeLine, "kind" | "text">[];
-  index: number;
 }
 
 export interface ReviewTarget {
@@ -44,56 +41,6 @@ export interface PostedComment {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
-/** Which side of the diff a block line lives on. */
-export function sideOf(revision: CommentAnchor["revision"], kind: CodeLine["kind"]): Side {
-  if (revision === "base") return "LEFT";
-  if (revision === "head") return "RIGHT";
-  return kind === "removed" ? "LEFT" : "RIGHT";
-}
-
-/**
- * 1-based line number of `lines[index]` in `fileLines`, or null if the text isn't there.
- * Candidates are scored by how many same-side neighbours (up to NEIGHBOURS each way,
- * stopping at an elided line) also match; ties go to the first candidate.
- */
-export function locateLine(fileLines: string[], anchor: CommentAnchor): number | null {
-  const target = anchor.lines[anchor.index];
-  if (!target || target.kind === "elided") return null;
-  const side = sideOf(anchor.revision, target.kind);
-  const norm = (s: string) => s.trimEnd();
-  const file = fileLines.map(norm);
-
-  const sameSide = (l: Pick<CodeLine, "kind">) =>
-    l.kind === "elided" || sideOf(anchor.revision, l.kind) === side;
-  const collect = (from: number, step: 1 | -1): (string | null)[] => {
-    const out: (string | null)[] = [];
-    for (let i = from; i >= 0 && i < anchor.lines.length && out.length < NEIGHBOURS; i += step) {
-      const l = anchor.lines[i];
-      if (!sameSide(l)) continue;
-      if (l.kind === "elided") break;
-      out.push(norm(l.text));
-    }
-    return out;
-  };
-  const before = collect(anchor.index - 1, -1);
-  const after = collect(anchor.index + 1, 1);
-
-  const needle = norm(target.text);
-  let best: number | null = null;
-  let bestScore = -1;
-  for (let p = 0; p < file.length; p++) {
-    if (file[p] !== needle) continue;
-    let score = 0;
-    before.forEach((t, k) => { if (file[p - 1 - k] === t) score++; });
-    after.forEach((t, k) => { if (file[p + 1 + k] === t) score++; });
-    if (score > bestScore) {
-      best = p + 1;
-      bestScore = score;
-    }
-  }
-  return best;
-}
 
 /** Line numbers a review comment may target, per side, from a unified-diff `patch`. */
 export function commentableLines(patch: string): { LEFT: Set<number>; RIGHT: Set<number> } {

@@ -176,27 +176,33 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-bottom: 60;"
+                  "text": "  --zIndex-ui-bottom: 60;",
+                  "n": 15
                 },
                 {
                   "kind": "focus",
                   "text": "  --zIndex-ui-library: 80;",
                   "annotation": "Sidebar z-index — below --zIndex-ui-top (100), so toolbar renders above it.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 16,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-context-menu: 90;"
+                  "text": "  --zIndex-ui-context-menu: 90;",
+                  "n": 17
                 },
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-styles-popup: 100;"
+                  "text": "  --zIndex-ui-styles-popup: 100;",
+                  "n": 18
                 },
                 {
                   "kind": "focus",
                   "text": "  --zIndex-ui-top: 100;",
                   "annotation": "App-top-bar and all toolbar buttons use this value, placing them above the sidebar.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 19
                 }
               ]
             }
@@ -263,21 +269,25 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "      // clicking on a container that ignores outside clicks"
+                  "text": "      // clicking on a container that ignores outside clicks",
+                  "n": 70
                 },
                 {
                   "kind": "focus",
                   "text": "      if (_event.target.closest(\"[data-prevent-outside-click]\")) {",
                   "annotation": "This check is global — it silences every panel's outside-click handler, not just the dropdown's own.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 71
                 },
                 {
                   "kind": "context",
-                  "text": "        return;"
+                  "text": "        return;",
+                  "n": 72
                 },
                 {
                   "kind": "context",
-                  "text": "      }"
+                  "text": "      }",
+                  "n": 73
                 }
               ]
             },
@@ -287,25 +297,31 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  return ("
+                  "text": "  return (",
+                  "n": 25
                 },
                 {
                   "kind": "context",
-                  "text": "    <button"
+                  "text": "    <button",
+                  "n": 26
                 },
                 {
                   "kind": "focus",
                   "text": "      data-prevent-outside-click",
                   "annotation": "This attribute causes the sidebar (and every other panel) to ignore pointer-down events on the hamburger button.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 27,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      className={classNames}"
+                  "text": "      className={classNames}",
+                  "n": 28
                 },
                 {
                   "kind": "context",
-                  "text": "      onClick={onToggle}"
+                  "text": "      onClick={onToggle}",
+                  "n": 29
                 }
               ]
             }
@@ -394,15 +410,20 @@
                   "kind": "focus",
                   "text": "  useOutsideClick(menuRef, () => {",
                   "annotation": "The button is not inside menuRef, so a tap on it counts as “outside”.",
-                  "annotationTag": "inferred"
+                  "annotationTag": "inferred",
+                  "n": 37,
+                  "change": "removed"
                 },
                 {
                   "kind": "focus",
-                  "text": "    callbacksRef.onClickOutside?.();"
+                  "text": "    callbacksRef.onClickOutside?.();",
+                  "n": 38,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "  });"
+                  "text": "  });",
+                  "n": 39
                 }
               ]
             }
@@ -495,29 +516,37 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-bottom: 60;"
+                  "text": "  --zIndex-ui-bottom: 60;",
+                  "n": 15
                 },
                 {
                   "kind": "removed",
-                  "text": "  --zIndex-ui-library: 80;"
+                  "text": "  --zIndex-ui-library: 80;",
+                  "n": 16,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-context-menu: 90;"
+                  "text": "  --zIndex-ui-context-menu: 90;",
+                  "n": 16
                 },
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-styles-popup: 100;"
+                  "text": "  --zIndex-ui-styles-popup: 100;",
+                  "n": 17
                 },
                 {
                   "kind": "context",
-                  "text": "  --zIndex-ui-top: 100;"
+                  "text": "  --zIndex-ui-top: 100;",
+                  "n": 18
                 },
                 {
                   "kind": "added",
                   "text": "  --zIndex-ui-library: 120;",
                   "annotation": "120 > 100: the sidebar now renders above the top-right toolbar in the same stacking context.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 19,
+                  "change": "added"
                 }
               ]
             }
@@ -590,53 +619,75 @@
               "lines": [
                 {
                   "kind": "removed",
-                  "text": "    <>"
+                  "text": "    <>",
+                  "n": 38,
+                  "change": "removed"
                 },
                 {
                   "kind": "added",
-                  "text": "    <div"
+                  "text": "    <div",
+                  "n": 38,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "      className=\"dropdown-menu-container\""
+                  "text": "      className=\"dropdown-menu-container\"",
+                  "n": 39,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "      style={{"
+                  "text": "      style={{",
+                  "n": 40,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "        // remove this div from box layout"
+                  "text": "        // remove this div from box layout",
+                  "n": 41,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "        display: \"contents\","
+                  "text": "        display: \"contents\",",
+                  "n": 42,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "      }}"
+                  "text": "      }}",
+                  "n": 43,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
                   "text": "    >",
                   "annotation": "`display: contents` means this div is a pure DOM grouping node — no box is generated, so flex/grid parents don't see it.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 44,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      {MenuTriggerComp}"
+                  "text": "      {MenuTriggerComp}",
+                  "n": 45
                 },
                 {
                   "kind": "context",
-                  "text": "      {open && MenuContentCompWithPlacement}"
+                  "text": "      {open && MenuContentCompWithPlacement}",
+                  "n": 46
                 },
                 {
                   "kind": "removed",
-                  "text": "    </>"
+                  "text": "    </>",
+                  "n": 41,
+                  "change": "removed"
                 },
                 {
                   "kind": "added",
-                  "text": "    </div>"
+                  "text": "    </div>",
+                  "n": 47,
+                  "change": "added"
                 }
               ]
             }
@@ -678,15 +729,20 @@
                   "kind": "focus",
                   "text": "  useOutsideClick(menuRef, () => {",
                   "annotation": "No event parameter — the handler can't inspect what was clicked.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 37,
+                  "change": "removed"
                 },
                 {
                   "kind": "focus",
-                  "text": "    callbacksRef.onClickOutside?.();"
+                  "text": "    callbacksRef.onClickOutside?.();",
+                  "n": 38,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "  });"
+                  "text": "  });",
+                  "n": 39
                 }
               ]
             }
@@ -703,53 +759,76 @@
               "lines": [
                 {
                   "kind": "removed",
-                  "text": "  useOutsideClick(menuRef, () => {"
+                  "text": "  useOutsideClick(menuRef, () => {",
+                  "n": 37,
+                  "change": "removed"
                 },
                 {
                   "kind": "removed",
-                  "text": "    callbacksRef.onClickOutside?.();"
+                  "text": "    callbacksRef.onClickOutside?.();",
+                  "n": 38,
+                  "change": "removed"
                 },
                 {
                   "kind": "added",
-                  "text": "  useOutsideClick(menuRef, (event) => {"
+                  "text": "  useOutsideClick(menuRef, (event) => {",
+                  "n": 37,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "    // prevents closing if clicking on the trigger button"
+                  "text": "    // prevents closing if clicking on the trigger button",
+                  "n": 38,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "    if ("
+                  "text": "    if (",
+                  "n": 39,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "      !menuRef.current"
+                  "text": "      !menuRef.current",
+                  "n": 40,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "        ?.closest(\".dropdown-menu-container\")"
+                  "text": "        ?.closest(\".dropdown-menu-container\")",
+                  "n": 41,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
                   "text": "        ?.contains(event.target)",
                   "annotation": "If the click target is inside the container (e.g., the trigger), the `!` makes this false and `onClickOutside` is skipped. This replaces the global attribute check.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 42,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "    ) {"
+                  "text": "    ) {",
+                  "n": 43,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "      callbacksRef.onClickOutside?.();"
+                  "text": "      callbacksRef.onClickOutside?.();",
+                  "n": 44,
+                  "change": "added"
                 },
                 {
                   "kind": "added",
-                  "text": "    }"
+                  "text": "    }",
+                  "n": 45,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "  });"
+                  "text": "  });",
+                  "n": 46
                 }
               ]
             }
@@ -789,25 +868,31 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  return ("
+                  "text": "  return (",
+                  "n": 25
                 },
                 {
                   "kind": "context",
-                  "text": "    <button"
+                  "text": "    <button",
+                  "n": 26
                 },
                 {
                   "kind": "removed",
                   "text": "      data-prevent-outside-click",
                   "annotation": "Removing this lets the sidebar's useOutsideClick handler fire when the trigger is tapped, closing the sidebar.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 27,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      className={classNames}"
+                  "text": "      className={classNames}",
+                  "n": 27
                 },
                 {
                   "kind": "context",
-                  "text": "      onClick={onToggle}"
+                  "text": "      onClick={onToggle}",
+                  "n": 28
                 }
               ]
             }
@@ -846,11 +931,15 @@
               "lines": [
                 {
                   "kind": "removed",
-                  "text": "  callback: (event: Event) => void,"
+                  "text": "  callback: (event: Event) => void,",
+                  "n": 8,
+                  "change": "removed"
                 },
                 {
                   "kind": "added",
-                  "text": "  callback: (event: Event & { target: T }) => void,"
+                  "text": "  callback: (event: Event & { target: T }) => void,",
+                  "n": 8,
+                  "change": "added"
                 }
               ]
             }

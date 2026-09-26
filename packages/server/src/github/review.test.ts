@@ -41,8 +41,8 @@ describe("locateLine", () => {
   });
 
   it("returns null for missing or elided lines", () => {
-    expect(locateLine(file, { file: "f", revision: "head", lines: [{ kind: "focus", text: "zzz" }], index: 0 })).toBeNull();
-    expect(locateLine(file, { file: "f", revision: "head", lines: [{ kind: "elided", text: "…" }], index: 0 })).toBeNull();
+    expect(locateLine(file, { revision: "head", lines: [{ kind: "focus", text: "zzz" }], index: 0 })).toBeNull();
+    expect(locateLine(file, { revision: "head", lines: [{ kind: "elided", text: "…" }], index: 0 })).toBeNull();
   });
 });
 

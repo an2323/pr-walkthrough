@@ -201,6 +201,8 @@ export const CodeLineSchema = z.object({
   text: z.string(),
   annotation: z.string().optional(),
   annotationTag: SourceTagSchema.optional(),
+  n: z.number().int().positive().optional(),
+  change: z.enum(["added", "removed"]).optional(),
 });
 
 export const CodeBlockSchema = z.object({

@@ -164,61 +164,83 @@
                   "kind": "focus",
                   "text": "    <Popover.Content",
                   "annotation": "Radix tracks this element for collision avoidance — but it has no visual style.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 254
                 },
                 {
                   "kind": "context",
-                  "text": "      side={isMobile ? \"right\" : \"bottom\"}"
+                  "text": "      side={isMobile ? \"right\" : \"bottom\"}",
+                  "n": 255,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      align=\"start\""
+                  "text": "      align=\"start\"",
+                  "n": 256
                 },
                 {
                   "kind": "context",
-                  "text": "      sideOffset={isMobile ? 8 : 12}"
+                  "text": "      sideOffset={isMobile ? 8 : 12}",
+                  "n": 257,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}"
+                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}",
+                  "n": 258
                 },
                 {
                   "kind": "context",
-                  "text": "      onKeyDown={handleKeyDown}"
+                  "text": "      onKeyDown={handleKeyDown}",
+                  "n": 259
                 },
                 {
                   "kind": "context",
-                  "text": "      collisionBoundary={container ?? undefined}"
+                  "text": "      collisionBoundary={container ?? undefined}",
+                  "n": 260
                 },
                 {
                   "kind": "context",
-                  "text": "    >"
+                  "text": "    >",
+                  "n": 261
                 },
                 {
                   "kind": "focus",
                   "text": "      <div",
                   "annotation": "The visible popup surface: all visual appearance lives on this child div.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 262,
+                  "change": "removed"
                 },
                 {
                   "kind": "focus",
-                  "text": "        className={`picker`}"
+                  "text": "        className={`picker`}",
+                  "n": 263,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "        role=\"dialog\""
+                  "text": "        role=\"dialog\"",
+                  "n": 264,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "        aria-modal=\"true\""
+                  "text": "        aria-modal=\"true\"",
+                  "n": 265,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "        aria-label={label}"
+                  "text": "        aria-label={label}",
+                  "n": 266,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      >"
+                  "text": "      >",
+                  "n": 267,
+                  "change": "removed"
                 }
               ]
             }
@@ -236,33 +258,41 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  .picker {"
+                  "text": "  .picker {",
+                  "n": 5
                 },
                 {
                   "kind": "context",
-                  "text": "    padding: 0.5rem;"
+                  "text": "    padding: 0.5rem;",
+                  "n": 6
                 },
                 {
                   "kind": "context",
-                  "text": "    background: var(--popup-bg-color);"
+                  "text": "    background: var(--popup-bg-color);",
+                  "n": 7
                 },
                 {
                   "kind": "context",
-                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);"
+                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);",
+                  "n": 8
                 },
                 {
                   "kind": "context",
-                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                  "text": "    box-shadow: var(--shadow-island-stronger);",
+                  "n": 9
                 },
                 {
                   "kind": "context",
-                  "text": "    border-radius: 4px;"
+                  "text": "    border-radius: 4px;",
+                  "n": 10
                 },
                 {
                   "kind": "focus",
                   "text": "    position: absolute;",
                   "annotation": "The inner div positions itself absolutely, decoupling it from the Radix element that collision logic actually repositions.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 11,
+                  "change": "removed"
                 }
               ]
             }
@@ -303,29 +333,36 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  .picker {"
+                  "text": "  .picker {",
+                  "n": 5
                 },
                 {
                   "kind": "context",
-                  "text": "    padding: 0.5rem;"
+                  "text": "    padding: 0.5rem;",
+                  "n": 6
                 },
                 {
                   "kind": "context",
-                  "text": "    background: var(--popup-bg-color);"
+                  "text": "    background: var(--popup-bg-color);",
+                  "n": 7
                 },
                 {
                   "kind": "context",
-                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                  "text": "    box-shadow: var(--shadow-island-stronger);",
+                  "n": 9
                 },
                 {
                   "kind": "context",
-                  "text": "    border-radius: 4px;"
+                  "text": "    border-radius: 4px;",
+                  "n": 10
                 },
                 {
                   "kind": "focus",
                   "text": "    position: absolute;",
                   "annotation": "All popup visuals live here, on a div Radix does not track. Simply removing this line would leave the two-element mismatch in place.",
-                  "annotationTag": "inferred"
+                  "annotationTag": "inferred",
+                  "n": 11,
+                  "change": "removed"
                 }
               ]
             }
@@ -366,67 +403,90 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  return ("
+                  "text": "  return (",
+                  "n": 250
                 },
                 {
                   "kind": "focus",
                   "text": "    <Popover.Content",
                   "annotation": "The Radix element is now also the visual popup surface — collision avoidance acts on the correct box.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 251
                 },
                 {
                   "kind": "focus",
                   "text": "      className=\"picker\"",
                   "annotation": "`picker` class moved here from the deleted inner div, giving Radix the background, shadow, and padding directly.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 252,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      role=\"dialog\""
+                  "text": "      role=\"dialog\"",
+                  "n": 253,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      aria-modal=\"true\""
+                  "text": "      aria-modal=\"true\"",
+                  "n": 254,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      aria-label={label}"
+                  "text": "      aria-label={label}",
+                  "n": 255,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      side={\"bottom\"}"
+                  "text": "      side={\"bottom\"}",
+                  "n": 256,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      align=\"start\""
+                  "text": "      align=\"start\"",
+                  "n": 257
                 },
                 {
                   "kind": "context",
-                  "text": "      sideOffset={12}"
+                  "text": "      sideOffset={12}",
+                  "n": 258,
+                  "change": "added"
                 },
                 {
                   "kind": "focus",
-                  "text": "      alignOffset={12}"
+                  "text": "      alignOffset={12}",
+                  "n": 259,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}"
+                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}",
+                  "n": 260
                 },
                 {
                   "kind": "context",
-                  "text": "      onKeyDown={handleKeyDown}"
+                  "text": "      onKeyDown={handleKeyDown}",
+                  "n": 261
                 },
                 {
                   "kind": "context",
-                  "text": "      collisionBoundary={container ?? undefined}"
+                  "text": "      collisionBoundary={container ?? undefined}",
+                  "n": 262
                 },
                 {
                   "kind": "context",
-                  "text": "    >"
+                  "text": "    >",
+                  "n": 263
                 },
                 {
                   "kind": "focus",
-                  "text": "      <div className=\"picker-sections\">"
+                  "text": "      <div className=\"picker-sections\">",
+                  "n": 264,
+                  "change": "added"
                 }
               ]
             }
@@ -466,31 +526,39 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  .picker {"
+                  "text": "  .picker {",
+                  "n": 5
                 },
                 {
                   "kind": "context",
-                  "text": "    padding: 0.5rem;"
+                  "text": "    padding: 0.5rem;",
+                  "n": 6
                 },
                 {
                   "kind": "context",
-                  "text": "    background: var(--popup-bg-color);"
+                  "text": "    background: var(--popup-bg-color);",
+                  "n": 7
                 },
                 {
                   "kind": "context",
-                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);"
+                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);",
+                  "n": 8
                 },
                 {
                   "kind": "context",
-                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                  "text": "    box-shadow: var(--shadow-island-stronger);",
+                  "n": 9
                 },
                 {
                   "kind": "context",
-                  "text": "    border-radius: 4px;"
+                  "text": "    border-radius: 4px;",
+                  "n": 10
                 },
                 {
                   "kind": "removed",
-                  "text": "    position: absolute;"
+                  "text": "    position: absolute;",
+                  "n": 11,
+                  "change": "removed"
                 }
               ]
             }
@@ -531,7 +599,9 @@
                   "kind": "focus",
                   "text": "  const editorInterface = useEditorInterface();",
                   "annotation": "Only used to derive `isMobile`. Dropped along with the branch.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 82,
+                  "change": "removed"
                 },
                 {
                   "kind": "elided",
@@ -541,7 +611,9 @@
                   "kind": "focus",
                   "text": "  const isMobile = editorInterface.formFactor === \"phone\";",
                   "annotation": "Drives the conditional `side` and `sideOffset` below.",
-                  "annotationTag": "fact"
+                  "annotationTag": "fact",
+                  "n": 251,
+                  "change": "removed"
                 },
                 {
                   "kind": "elided",
@@ -549,15 +621,20 @@
                 },
                 {
                   "kind": "focus",
-                  "text": "      side={isMobile ? \"right\" : \"bottom\"}"
+                  "text": "      side={isMobile ? \"right\" : \"bottom\"}",
+                  "n": 255,
+                  "change": "removed"
                 },
                 {
                   "kind": "context",
-                  "text": "      align=\"start\""
+                  "text": "      align=\"start\"",
+                  "n": 256
                 },
                 {
                   "kind": "focus",
-                  "text": "      sideOffset={isMobile ? 8 : 12}"
+                  "text": "      sideOffset={isMobile ? 8 : 12}",
+                  "n": 257,
+                  "change": "removed"
                 }
               ]
             }
@@ -574,25 +651,32 @@
               "lines": [
                 {
                   "kind": "context",
-                  "text": "  return ("
+                  "text": "  return (",
+                  "n": 250
                 },
                 {
                   "kind": "context",
-                  "text": "    <Popover.Content"
+                  "text": "    <Popover.Content",
+                  "n": 251
                 },
                 {
                   "kind": "focus",
                   "text": "      side={\"bottom\"}",
                   "annotation": "Always opens downward; Radix's collision avoidance handles the rest on all screen sizes.",
-                  "annotationTag": "inferred"
+                  "annotationTag": "inferred",
+                  "n": 256,
+                  "change": "added"
                 },
                 {
                   "kind": "context",
-                  "text": "      align=\"start\""
+                  "text": "      align=\"start\"",
+                  "n": 257
                 },
                 {
                   "kind": "focus",
-                  "text": "      sideOffset={12}"
+                  "text": "      sideOffset={12}",
+                  "n": 258,
+                  "change": "added"
                 }
               ]
             }

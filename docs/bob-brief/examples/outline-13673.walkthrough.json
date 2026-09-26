@@ -305,6 +305,10 @@
                   "text": "  ) as Diff | undefined;"
                 },
                 {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
                   "kind": "focus",
                   "text": "  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"
                 },

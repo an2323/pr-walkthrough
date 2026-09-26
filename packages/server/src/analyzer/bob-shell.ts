@@ -404,13 +404,22 @@ export function findWalkthroughInEvents(events: unknown[]): Record<string, unkno
 export function normalizeDraft(draft: Record<string, unknown>): number {
   let fixed = 0;
   for (const step of (draft.steps as Record<string, unknown>[]) ?? []) {
-    const beats = (step.beats as { code?: { file: string; revision: string }[] }[]) ?? [];
+    const beats = (step.beats as { code?: { file: string; revision: string; lines?: Record<string, unknown>[] }[] }[]) ?? [];
     for (const beat of beats) {
       for (const block of beat.code ?? []) {
         if (block.file.startsWith(".walkthrough/base/")) {
           block.file = block.file.slice(".walkthrough/base/".length);
           block.revision = "base";
           fixed++;
+        }
+        // `n`/`change` are backend-computed (validation/line-numbers.ts) — never
+        // trust the analyzer's own guess if it produced one anyway.
+        for (const line of block.lines ?? []) {
+          if (line.n !== undefined || line.change !== undefined) {
+            delete line.n;
+            delete line.change;
+            fixed++;
+          }
         }
       }
     }

@@ -8,6 +8,7 @@ import type { RepoWorkspace } from "../git/workspace.js";
 import { validateSchema } from "./schema.js";
 import { checkVerbatim } from "./verbatim.js";
 import { computeCoverage } from "./coverage.js";
+import { annotateLines } from "./line-numbers.js";
 
 export interface ValidationResult {
   valid: boolean;
@@ -42,6 +43,16 @@ export async function validate(
   const verbatimResult = await checkVerbatim(draft, workspace);
   if (!verbatimResult.valid) {
     allErrors.push(...verbatimResult.errors);
+  }
+
+  // --- 2b. Line numbers, change markers, contiguity (only meaningful once verbatim
+  // passed — a line the verbatim check couldn't find can't be reliably located either,
+  // so its `n`/`change` would be noise on top of an already-failing draft). Mutates
+  // `draft`'s code blocks in place; the mutation is still visible in `walkthrough`
+  // below since the spread there is shallow.
+  if (verbatimResult.valid) {
+    const lineErrors = await annotateLines(draft, workspace, input.diff);
+    allErrors.push(...lineErrors);
   }
 
   // --- 3. Coverage ---

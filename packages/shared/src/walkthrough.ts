@@ -281,6 +281,19 @@ export interface CodeLine {
   /** Only on load-bearing lines. One sentence. Shown under the line as "↳ ...". */
   annotation?: string;
   annotationTag?: SourceTag;
+  /**
+   * 1-based line number in the revision this line is quoted from. Backend-computed
+   * (validation/line-numbers.ts) from the analyzer's verbatim text — never set by
+   * the analyzer itself. Absent on "elided" lines and on a "reconstructed" block.
+   */
+  n?: number;
+  /**
+   * Whether the PR actually added or removed this exact line, computed by the
+   * backend from the diff — independent of `kind`, which is the analyzer's own
+   * "look here" judgement and can disagree (e.g. a genuinely-changed line the
+   * analyzer only marked "focus"). Absent means the PR left this line alone.
+   */
+  change?: "added" | "removed";
 }
 
 export interface TraceStep {
