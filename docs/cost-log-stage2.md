@@ -1,6 +1,6 @@
 # Bob Shell cost log — Stage 2: quality iteration
 
-Hard cap for this stage: **$20**, tracked separately from the ST5a
+Hard cap for this stage: **$28** (raised from $20 by the user on Sep 26, ~22:20 UTC, for the evidence loop — ST12), tracked separately from the ST5a
 spike in `docs/cost-log.md`. Every row's "Actual cost" is summed and checked
 *before* each run starts (against the run's own `--max-cost`, the worst case) —
 a run that could push the total over the cap is refused rather than attempted.

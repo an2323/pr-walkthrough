@@ -694,7 +694,7 @@ Wiring the verifier into the live analysis pipeline (`POST /api/analyze`) is che
 
 ### Sub-Task 12 — Correct explanations: evidence loop (ablation), change markers, screenshot sizing
 
-**Status:** [ ] pending · **Must** (correctness of the explanation is the product) · ~5–6 h · ≤ ~$2 Bobcoins, each paid run with the user's go-ahead
+**Status:** [ ] pending · **Must** (correctness of the explanation is the product) · ~5–6 h · ≤ ~$5 Bobcoins, each paid run with the user's go-ahead. Stage cap raised from $20 to **$28** by the user (Sep 26); ~$15.97 spent. Execution plan with the viewer redesign merged in: `~/.claude/plans/bob-transient-pine.md`.
 
 **Why (review of #10943, Sep 26 22:00 UTC).** The first unedited, fully automatic walkthrough
 (#10943, $0.70, 0 quality warnings, valid) reads well and quotes code correctly, but its causal
@@ -776,6 +776,17 @@ layout/CSS reading is misleading. The fix is evidence the system produces itself
 - The ablation table in "How the analysis got here".
 - Progress stages: "Testing which changes fix the bug", "Revising the explanation".
 
+**D'. Fallback / complement — claim critic** (~1.5 h, ~$0.5–1 per PR). If ablation isn't producing a
+table on #10943 by ~01:30 UTC, this becomes the main mechanism. A separate read-only Bob pass
+(`pr-critic`, fresh session for an independent look) lists every claim per step and classifies it:
+mechanism (`supported` with file:line — including library code in `node_modules`, e.g. how Radix
+measures — / `unsupported` / `contradicted`), counterfactual ("X alone won't help" — `unsupported`
+without evidence), importance (a `minor` step whose change affects the fixed code — e.g. a CSS rule
+whose class moved to another element — is `contradicted`), and step↔hunk fit. Output
+`verification.review`; contradictions feed the same revision (E). Shown as "reviewed against the
+code", not "measured". Also the only check for non-visual PRs. Must flag #10943 s3 and s5, or its
+prompt is too weak to use.
+
 **G. Pipeline** — analyze → validate → shots + repro → ablation → revision (if contradicted) →
 validate → save. `VERIFY_ABLATION=0` turns D–E off. Non-visual PRs (perf, refactors) skip D–E and
 keep honest `inferred` tags; ablation over the repo's own tests is a later step.
@@ -785,7 +796,7 @@ C–E on #10943 from a script, and keep the pipeline wiring for after the submis
 
 **Paid runs (each needs the user's go-ahead):** repro contract for #10943 — resume the verifier's
 session to add `repro.cjs` (~$0.3) or re-run it with the new prompt (~$1–2.6); revision ~$0.3–1.
-Total ≤ ~$2 of the ~$4 left.
+Plus the critic (~$0.5–1). Total ≤ ~$5 of the ~$12 left under the $28 cap.
 
 **✓ Verify on #10943:** every quoted line the PR changed shows `+`/`−`; no stitched code; screenshots
 not upscaled, phone pair side by side; repro says bug on BASE and not on HEAD; the ablation table

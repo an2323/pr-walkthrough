@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 export const COST_LOG_PATH = path.join(ROOT, "docs/cost-log-stage2.md");
-export const BOB_BUDGET_USD = Number(process.env.BOB_BUDGET_USD ?? 20);
+export const BOB_BUDGET_USD = Number(process.env.BOB_BUDGET_USD ?? 28); // raised from $20 by the user on Sep 26 (ST12 evidence loop)
 
 const HEADER = [
   "# Bob Shell cost log — Stage 2: quality iteration",
