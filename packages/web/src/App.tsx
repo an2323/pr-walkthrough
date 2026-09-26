@@ -8,6 +8,7 @@ import { StartScreen } from './StartScreen';
 import { StepScreen } from './StepScreen';
 import { SummaryScreen } from './SummaryScreen';
 import { Drawer } from './Drawer';
+import { LandingPage } from './LandingPage';
 import './styles.css';
 import './v2.css';
 
@@ -52,21 +53,7 @@ export default function App() {
 
   // ---- Derived data ----
   if (walkthroughState.status === 'idle') {
-    return (
-      <div style={{ padding: 40 }}>
-        <p>
-          Add <code>?local=/outline-13673.walkthrough.json</code> to the URL, or navigate to{' '}
-          <code>/owner/repo/number</code>.
-        </p>
-        <p>
-          Examples:
-        </p>
-        <ul>
-          <li><a href="/?local=/outline-13673.walkthrough.json">/?local=/outline-13673.walkthrough.json</a></li>
-          <li><a href="/excalidraw/excalidraw/10295">/excalidraw/excalidraw/10295</a></li>
-        </ul>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   if (walkthroughState.status === 'loading') {

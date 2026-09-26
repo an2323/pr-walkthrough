@@ -211,3 +211,103 @@ html, body { height: 100%; }
   .eq i { animation: none; height: 8px; }
   * { transition: none !important; }
 }
+
+/* ── Landing page ──────────────────────────────────────────────── */
+.landing {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+.landing-hero {
+  margin-bottom: 48px;
+}
+.landing-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.landing-sub {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0 0 24px;
+  max-width: 520px;
+  line-height: 1.6;
+}
+.landing-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.landing-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+}
+.landing-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 212, 0.2);
+}
+.landing-error {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--bad);
+}
+.landing-examples-h {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--ink);
+}
+.landing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.landing-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.landing-card-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.landing-card-desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+  flex: 1;
+  line-height: 1.4;
+}
+.landing-card-footer {
+  margin-top: 4px;
+}
+.landing-card-link {
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.landing-card-link:hover {
+  text-decoration: underline;
+}
+.landing-status {
+  font-size: 0.82rem;
+}
+.landing-status.loading {
+  color: var(--muted);
+}
+.landing-status.unavailable {
+  color: var(--muted);
+  font-style: italic;
+}
