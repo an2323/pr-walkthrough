@@ -29,7 +29,7 @@ import { parseHunks, type Hunk, type PullRequestMeta } from "@pr-walkthrough/sha
 import type { AnalyzerInput, WalkthroughDraft } from "../src/analyzer/interface.js";
 import type { RepoWorkspace } from "../src/git/workspace.js";
 import { prepareWorkspace, gitCommonDir } from "../src/git/workspace.js";
-import { validate } from "../src/validation/index.js";
+import { validate, checkQuality } from "../src/validation/index.js";
 import { fetchPRMeta } from "../src/github/client.js";
 import { classifyHunks } from "../src/analyzer/classify-hunks.js";
 import { assertBudget, recordSpend } from "../src/analyzer/budget.js";
@@ -323,9 +323,19 @@ function normalizeDraft(draft: Record<string, unknown>): number {
   return fixed;
 }
 
+interface RunInfo {
+  durationMs: number;
+  sessionCost: number;
+  maxCost: number;
+  toolCalls: number;
+  subagents: number;
+  repairs: number;
+  taskId?: string;
+}
+
 async function validateDraft(
   draft: Record<string, unknown>, repoPath: string, diff: string, hunks: Hunk[],
-  runDir: string, summary: Record<string, unknown>, durationMs?: number
+  runDir: string, summary: Record<string, unknown>, runInfo?: RunInfo
 ): Promise<void> {
   summary.normalizedBlocks = normalizeDraft(draft);
   // The backend owns `pr`; the analyzer is told to omit it.
@@ -343,7 +353,23 @@ async function validateDraft(
   summary.errors = result.errors.slice(0, 30);
   if (result.walkthrough) {
     // Backend owns run metadata; the analyzer tends to invent `generatedAt`.
-    result.walkthrough.meta = { ...result.walkthrough.meta, analyzer: "bob-shell", generatedAt: new Date().toISOString(), durationMs: durationMs ?? result.walkthrough.meta.durationMs };
+    result.walkthrough.meta = {
+      ...result.walkthrough.meta,
+      analyzer: "bob-shell",
+      generatedAt: new Date().toISOString(),
+      durationMs: runInfo?.durationMs ?? result.walkthrough.meta.durationMs,
+      ...(runInfo && {
+        run: {
+          costUsd: runInfo.sessionCost, maxCostUsd: runInfo.maxCost, durationMs: runInfo.durationMs,
+          toolCalls: runInfo.toolCalls, subagents: runInfo.subagents, repairs: runInfo.repairs, taskId: runInfo.taskId,
+        },
+      }),
+    };
+    const warnings = checkQuality(result.walkthrough);
+    summary.qualityWarnings = warnings;
+    if (warnings.length > 0) {
+      console.log(`• ${warnings.length} quality warning(s) (see docs/output-contract.md):`, warnings.map((w) => w.code).join(", "));
+    }
     await writeFile(path.join(runDir, "walkthrough.json"), JSON.stringify(result.walkthrough, null, 2));
   }
 }
@@ -414,7 +440,10 @@ async function main(): Promise<void> {
     };
     if (draft) {
       await writeFile(path.join(runDir, "walkthrough.draft.json"), JSON.stringify(draft, null, 2));
-      await validateDraft(draft, repoPath, diff, hunks, runDir, summary, run.ms);
+      await validateDraft(draft, repoPath, diff, hunks, runDir, summary, {
+        durationMs: run.ms, sessionCost: run.sessionCost, maxCost: Number(maxCost),
+        toolCalls: run.toolCalls, subagents: run.subagents, repairs: 1, taskId: run.taskId,
+      });
     }
     await recordSpend({
       pr: `${PR.repo}#${PR.number}`, mode: "repair", maxCost: Number(maxCost), actualCost: run.sessionCost,
@@ -467,7 +496,10 @@ async function main(): Promise<void> {
     summary.walkthroughFound = !!draft;
     if (draft) {
       await writeFile(path.join(runDir, "walkthrough.draft.json"), JSON.stringify(draft, null, 2));
-      await validateDraft(draft, repoPath, diff, hunks, runDir, summary, run.ms);
+      await validateDraft(draft, repoPath, diff, hunks, runDir, summary, {
+        durationMs: run.ms, sessionCost: run.sessionCost, maxCost: Number(maxCost),
+        toolCalls: run.toolCalls, subagents: run.subagents, repairs: 0, taskId: run.taskId,
+      });
     }
   }
 

@@ -20,7 +20,7 @@ import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { fetchPRMeta, parsePRUrl } from "../github/client.js";
 import { prepareWorkspace } from "../git/workspace.js";
-import { validate } from "../validation/index.js";
+import { validate, checkQuality } from "../validation/index.js";
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."); // repo root (src/api → 4 up)
@@ -137,8 +137,12 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
     }
 
     await saveWalkthrough(result.walkthrough);
+    const qualityWarnings = checkQuality(result.walkthrough);
+    if (qualityWarnings.length > 0) {
+      console.log(`[analyze] ${qualityWarnings.length} quality warning(s) for ${owner}/${repo}#${number}:`, qualityWarnings.map((w) => w.code).join(", "));
+    }
     const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${number}`;
-    res.json({ walkthroughUrl });
+    res.json({ walkthroughUrl, qualityWarnings });
   } catch (err) {
     console.error("[analyze] error:", err);
     res.status(500).json({ error: String(err) });

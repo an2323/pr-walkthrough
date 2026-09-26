@@ -1166,7 +1166,8 @@
       "visual": {
         "type": "map",
         "caption": "The count now goes from the viewer into shared state, and the header reads it from there."
-      }
+      },
+      "check": "The new totalChanges field is read from the same context as editor. Does anything else read totalChanges before this step publishes it?"
     },
     {
       "id": "s9",

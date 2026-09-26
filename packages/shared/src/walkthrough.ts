@@ -176,7 +176,7 @@ export interface Step {
   title: string;
   /** ≤ 9 words, no identifiers — shown as h1 in v2 viewer. Fallback: routeLabel. */
   headline?: string;
-  /** One plain sentence shown under the headline — no identifiers. Fallback: first sentence of narration. */
+  /** One or two short plain sentences shown under the headline — no identifiers. Fallback: first sentence of narration. */
   say?: string;
   /** One concrete thing for the reviewer to verify. When present, shown as a checkbox card. */
   check?: string;
