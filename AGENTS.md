@@ -61,3 +61,8 @@ When Bob Shell is invoked as the analyzer (`ANALYZER=bob`), it runs headless via
 - `packages/shared/src/schema.ts` — all Zod validators
 - `docs/bob-brief/examples/outline-13673.walkthrough.json` — golden example output
 - `pr-walkthrough-plan.md` — full implementation plan with verify steps
+- `docs/prototypes/walkthrough-ux-v2.html` — agreed viewer UX (ST6a); open in a browser, port to React
+
+## Secrets
+
+- `.env` (gitignored) holds `BOB_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`. Load them in the server only; never send them to the browser, log them, or commit them. `.env.example` documents the names.

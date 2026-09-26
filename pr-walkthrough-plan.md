@@ -18,7 +18,7 @@
 - The viewer is a direct React port of the working prototype HTML.
 - All Bob 2.0 agentic features (Plan mode, Agent mode, subagents, parallel tasks, custom skills, AGENTS.md) are used and documented throughout.
 
-**Non-goals (this hackathon):** Auth, multi-tenant, databases, private repos, non-GitHub hosts, pre-generated audio files.
+**Non-goals (this hackathon):** Auth, multi-tenant, databases, private repos, non-GitHub hosts. (Pre-generated narration audio IS in scope now — see ST6b.)
 
 ---
 
@@ -97,7 +97,7 @@ export interface RepoWorkspace {
   readFile(path: string, revision: "base" | "head"): Promise<string>;
   diff(): Promise<string>;
 }
-export function prepareWorkspace(repoUrl: string, pr: PullRequestMeta): Promise<RepoWorkspace>;
+export function prepareWorkspace(repoUrl: string, headSha: string, baseSha: string, cacheDir?: string): Promise<RepoWorkspace>; // as implemented
 ```
 
 ### Data Flow
@@ -247,7 +247,7 @@ App
 **Intent:** Give the server reliable, repeatable access to base and head file contents and a parsed `Hunk[]` list. This is the foundation for both the analyzer input and the verbatim validator.
 
 **Expected Outcomes:**
-- `prepareWorkspace(repoUrl, pr)` clones (or fetches) the repo, checks out head, returns a `RepoWorkspace` with `readFile(path, "base"|"head")` and `diff()`.
+- `prepareWorkspace(repoUrl, headSha, baseSha, cacheDir?)` clones (or fetches) the repo, checks out head, returns a `RepoWorkspace` with `readFile(path, "base"|"head")` and `diff()`.
 - `parseHunks(diffText)` returns `Hunk[]` with stable `file#n` ids matching the schema.
 - Unit tests for `parseHunks` covering multi-file diffs, renames, and binary files.
 
@@ -346,7 +346,7 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 - Envelope (confirmed by ST5a): `{ type, timestamp, status, stats: { task_id, duration_ms, session_costs, max_cost, tool_calls }, last_message }`. The walkthrough is inside `last_message`, usually wrapped in a ```json fence after a line of prose.
 - Port `normalizeDraft()` too: Bob sometimes cites `.walkthrough/base/<path>` as a code block's `file`. Backend sets `meta.generatedAt`/`durationMs` (Bob invents them).
 - Prompt template: [`docs/analyzer-prompt.md`](docs/analyzer-prompt.md); inject full `walkthrough.ts` and golden JSON at fill time.
-- Subagents: instruct Bob Shell in the prompt to spawn subagents for independent symbol searches (e.g. "spawn a subagent to find all usages of this function").
+- Subagents: NOT in ST5. The `pr-walkthrough` mode has `groups: [read]` only and the ST5a run worked without subagents. Trying `subagent` in the mode is part of ST10.
 
 ---
 
@@ -408,13 +408,72 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 0. Fix `prepareWorkspace`: fork PR heads are not on any upstream branch — fetch `pull/{number}/head` (and the base sha) explicitly before checkout; clone with `--filter=blob:none` to keep large repos fast (see `scripts/bob-spike.ts`).
 1. Implement `packages/server/src/github/client.ts`: wrap Octokit; read `GITHUB_TOKEN` from env; fetch PR metadata and commit list.
 2. Implement `packages/server/src/github/adapter.ts`: `analyzePR(prUrl)` orchestrates workspace prep → diff parse → analyzer → validation → storage.
-3. Add Express routes in `packages/server/src/api/routes.ts`: `POST /api/analyze`, `GET /api/walkthroughs/:owner/:repo/:number`.
+3. Add Express routes in `packages/server/src/api/routes.ts`: `POST /api/analyze`, `GET /api/walkthroughs/:owner/:repo/:number`, and `GET /api/context/:owner/:repo/:number?file=&rev=base|head&from=&to=` (returns real file lines from the cached checkout, so the viewer can expand code context beyond what the analyzer quoted).
 4. Implement webhook handler: verify GitHub signature (`X-Hub-Signature-256`), enqueue job (simple in-memory queue for the hackathon).
 5. Optional: `postPRComment(pr, walkthroughUrl)` via Octokit.
 
 **Relevant Context:**
 - Without a `GITHUB_TOKEN`, the GitHub API rate-limits at 60 req/h — too low for cloning private PRs or heavy polling.
 - The `GET /api/walkthroughs/...` response is the single endpoint the React viewer fetches.
+
+---
+
+### Sub-Task 6a — Viewer v2: low-cognitive-load UX
+
+**Status:** [ ] pending — design agreed with the user on Sep 26
+
+**Intent:** Replace the "everything on one screen" viewer with the agreed UX. Reference implementation (single HTML file, both demo PRs, open it in a browser): [`docs/prototypes/walkthrough-ux-v2.html`](docs/prototypes/walkthrough-ux-v2.html). Port its structure and behaviour to React; keep the current colour tokens (palette is a later step).
+
+**Principles (do not regress):**
+- One screen = one idea: plain-language headline, one sentence, ONE visual, one reviewer action. No identifiers in prose — identifiers live only inside code.
+- Route = three chapters (Problem → Fix → Try it) shown as dots in the top bar; no left step list.
+- Code shows changed lines ±3 context; the rest folds into "⋯ N more lines" that expands in place; "open file ↗" links to GitHub at the right sha. When a step has a visual AND code, the code is behind "Show the code change".
+- The map (graph) appears ONLY on the start screen (Before/After toggle) and on steps whose visual is `map`. Edge labels in plain words, identifier in the tooltip. Only nodes touched by the shown edges.
+- "How the analysis got here" opens a side drawer with the full analysis (beats, annotations, sources, notes, full question). This is where technical depth lives.
+- Source marker only when not a fact: "from the commit history" / "our reading of the code" / "not run yet". Dead ends = "Detour" with a struck-through old path.
+- Voice is one button in the bottom bar; the screen text stays short, narration is richer. "Listen instead" on the start screen plays the whole route.
+- Minor steps and skipped hunks are not screens: they are one line each in the summary.
+- The last two screens ("Try it in the app", "Your review") stay as in the prototype for now — the user wants to redesign them later.
+
+**Schema additions (all optional, with fallbacks so current JSON still renders):**
+```ts
+// Walkthrough
+plain?: { title: string; problem: string; fix: string };
+// Step
+headline?: string;          // ≤ 9 words, no identifiers   — fallback: routeLabel
+say?: string;               // 1 sentence, no identifiers  — fallback: first sentence of narration
+check?: string;             // one concrete thing for the reviewer to verify — fallback: none
+minor?: boolean;            // shown only in the summary
+visual?:
+  | { type: "flow"; rows: { label: string; status?: "ok" | "bad" | "old" }[][] }  // fallback: beat traces
+  | { type: "map"; caption?: string }
+  | { type: "symptoms"; items: string[] };
+// GraphEdge
+plainLabel?: string;        // fallback: label
+// OpenQuestion
+short?: string;             // one-line plain version — fallback: question
+```
+The analyzer starts filling these in ST10; until then the viewer uses the fallbacks.
+
+**✓ Verify (zero cost):** both `data/walkthroughs/excalidraw/excalidraw/10295.json` and the Outline golden JSON render without errors via the API; step through every screen with ← →; expand a fold; open "How the analysis got here"; toggle Before/After on the start screen; no horizontal scroll at 400 px width; `pnpm --filter @pr-walkthrough/web lint` passes.
+
+---
+
+### Sub-Task 6b — Narration audio (ElevenLabs, backend-only)
+
+**Status:** [ ] pending — key and voice are in `.env` (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`); TTS call verified on Sep 26
+
+**Intent:** Replace robotic Web Speech with good narration for the demo, without exposing the key or depending on the network during the demo.
+
+**Design:**
+- `TtsProvider` interface (like `Analyzer`): `ElevenLabsTts` (primary) and `WebSpeech` fallback on the client when audio is unavailable.
+- One audio file **per sentence** of `step.narration` (sentence split must match the viewer's) → captions stay in sync without timestamps.
+- `GET /api/audio/:owner/:repo/:number/:stepId/:sentence.mp3` → serves `data/audio/{owner}/{repo}/{number}/{stepId}-{n}.mp3`; generates it on first request, then always from disk. Cache key includes a hash of the sentence text + voice id, so edited narration regenerates.
+- Script `pnpm --filter @pr-walkthrough/server tts:pregen <owner/repo#number>` generates all files for a demo PR ahead of time.
+- ElevenLabs call: `POST https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=mp3_44100_128`, header `xi-api-key`, body `{ text, model_id: "eleven_multilingual_v2" }`. The voice is a Voice Library voice: `GET /v1/voices/{id}` returns 404 for it, but TTS works — do not treat the 404 as an error.
+- Budget: Outline narration ≈ 3k characters; the key has a credit cap. Log characters per run.
+
+**✓ Verify:** pregen for #10295 creates one mp3 per sentence; a second run makes 0 API calls; with `ELEVENLABS_API_KEY` unset the viewer falls back to Web Speech and nothing breaks.
 
 ---
 
@@ -441,9 +500,8 @@ node -e "
 "
 # Must print: VALID before proceeding to Bob Shell generation.
 
-# 2. Generate #10295 first (smallest PR, lowest cost). Record Bobcoins before and after.
-# 3. Validate output immediately — if invalid, fix the prompt before generating #10013.
-# 4. Only generate #10013 if budget > 15 Bobcoins remaining.
+# 2. #10295 is ALREADY generated and valid (ST5a) — data/walkthroughs/excalidraw/excalidraw/10295.json. Do not regenerate.
+# 3. #10013 is generated only after ST10 (prompt iteration). Budget is in USD (`session_costs`); ~$46.9 left on Sep 26.
 ```
 
 **✓ Verify end-to-end (after caching, zero additional cost):**
@@ -455,8 +513,8 @@ ANALYZER=cached pnpm dev   # starts both server and web
 
 **Todo List:**
 1. Adapt the golden JSON (`docs/bob-brief/examples/outline-13673.walkthrough.json`) to the final schema (fill any gaps, run validation).
-2. **Check Bobcoin balance.** Generate walkthrough for `excalidraw/excalidraw#10295` using Bob Shell (smallest PR — lowest cost), always with `--max-cost`. Validate immediately. (If ST5a's `full` run was valid, its `walkthrough.json` is this file.)
-3. **Check Bobcoin balance again.** Only generate `excalidraw/excalidraw#10013` if balance > 15 coins.
+2. `excalidraw/excalidraw#10295`: done in ST5a — just make sure the viewer and `CachedAnalyzer` serve it.
+3. `excalidraw/excalidraw#10013`: generate after ST10, always with `--max-cost`.
 4. Document Bobcoin cost per run in `docs/cost-log.md`.
 5. Verify `ANALYZER=cached` serves all stored walkthroughs correctly through the full stack.
 
@@ -483,8 +541,8 @@ ANALYZER=cached pnpm dev   # starts both server and web
 |---|---|
 | Plan mode | This plan file; initial architecture design |
 | Agent mode | Implementing each sub-task sequentially |
-| Subagents | Inside BobShellAnalyzer prompt: Bob Shell spawns subagents for parallel symbol searches ("where is this value read?") |
-| Parallel tasks | Subagents inside a single Bob Shell analysis run to explore independent code paths concurrently |
+| Subagents | Planned for ST10 (not yet verified in the read-only `pr-walkthrough` mode) — do not claim in README unless ST10 confirms it |
+| Custom mode | `pr-walkthrough` read-only Bob Shell mode written into the checkout (`.bob/custom_modes.yaml`) |
 | Custom skill | `/walkthrough <PR url>` skill for interactive use in the IDE (Could item #12 from brief) |
 | AGENTS.md | Workspace instructions for Bob Shell read-only access, repo layout, dev commands |
 | Bob Shell | `BobShellAnalyzer` — core analyzer; runs non-interactively in the repo checkout |
@@ -526,6 +584,8 @@ ANALYZER=cached pnpm dev   # starts both server and web
 **Intent:** Structure of Bob's output is already right; the gap is depth of the causal explanation. Iterate the prompt only once the product works end-to-end.
 
 **Known gap (from ST5a on #10295):** the PR's key mechanism lives outside the diff — `Sidebar.tsx` closes the floating sidebar via its own `useOutsideClick` → `closeLibrary()`, and the hook skips targets with `[data-prevent-outside-click]`. Removing that attribute from the menu trigger IS the fix; the `.dropdown-menu-container` wrapper only stops the menu from closing itself. Bob's s8 called the removal "redundant" (tagged `fact`), s5 narration misplaces the close logic, and `Sidebar.tsx` is never quoted. Open question 1 (inner `.dropdown-menu-container`) is a false alarm — those elements are below `menuRef`, not ancestors.
+
+**Also in ST10:** make the analyzer fill the ST6a plain-language fields (`plain`, `headline`, `say`, `check`, `minor`, `visual`, `plainLabel`, `short`). The hand-written plain text for both demo PRs inside `docs/prototypes/walkthrough-ux-v2.html` (`PLAINS` object) is the target style — use it as the few-shot example.
 
 **Prompt changes to try:**
 1. For every behaviour the PR title/description claims, find and quote the code that produces it; if no hunk does, it is outside the diff — locate it.
@@ -668,7 +728,9 @@ ST2  ✓ done (viewer)
 | M4 | Validation pipeline passes on golden JSON + real files | 0 |
 | M5 | CachedAnalyzer + API routes serve golden JSON end-to-end | 0 |
 | M6 | Viewer fetches from server API; full stack works with cached JSON | 0 |
-| M6.5 | ST5a spike: smoke + readonly + full run on `#10295`, numbers in `docs/cost-log.md` | ~2–8 Bobcoins |
-| M7 | BobShellAnalyzer generates valid walkthrough for `#10295` | ~5–15 Bobcoins |
-| M8 | All demo PRs cached; full stack demo working | ~10–30 Bobcoins total |
+| M6a | Viewer v2 (agreed UX) renders both demo PRs from the API | 0 |
+| M6b | Narration audio pre-generated for demo PRs, served from disk | ElevenLabs credits only |
+| M6.5 | ✓ ST5a spike: smoke + readonly + full run on `#10295`, numbers in `docs/cost-log.md` | $3.15 spent |
+| M7 | BobShellAnalyzer (ported from the spike) wired into the server | 0 (verify with cached) |
+| M8 | All demo PRs cached; full stack demo working | ST10 re-runs ~$6 + #10013 ~$5–10 |
 | M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |

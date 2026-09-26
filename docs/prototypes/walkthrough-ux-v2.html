@@ -1,0 +1,575 @@
+<meta charset="utf-8">
+<title>Walkthrough UX Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --paper: #f4f5f7; --panel: #ffffff; --raised: #f8f9fa; --ink: #161616; --muted: #525c69; --faint: #8d96a3; --line: #e3e6ea;
+  --accent: #0f62fe; --accent-soft: #e5eeff;
+  --good: #198038; --good-soft: #defbe6; --bad: #da1e28; --bad-soft: #fff1f1; --warn: #8e6a00; --warn-soft: #fcf4d6;
+  --add: rgba(25,128,56,.12); --del: rgba(218,30,40,.10);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow: 0 1px 2px rgba(22,22,22,.05), 0 10px 30px rgba(22,22,22,.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #121212; --panel: #1c1c1c; --raised: #222325; --ink: #f4f4f4; --muted: #b0b7c0; --faint: #7d8590; --line: #30363d;
+    --accent: #78a9ff; --accent-soft: #0f2a5c;
+    --good: #42be65; --good-soft: #0e2a17; --bad: #fa4d56; --bad-soft: #3a0c0f; --warn: #f1c21b; --warn-soft: #3a2f05;
+    --add: rgba(66,190,101,.15); --del: rgba(250,77,86,.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121212; --panel: #1c1c1c; --raised: #222325; --ink: #f4f4f4; --muted: #b0b7c0; --faint: #7d8590; --line: #30363d;
+  --accent: #78a9ff; --accent-soft: #0f2a5c;
+  --good: #42be65; --good-soft: #0e2a17; --bad: #fa4d56; --bad-soft: #3a0c0f; --warn: #f1c21b; --warn-soft: #3a2f05;
+  --add: rgba(66,190,101,.15); --del: rgba(250,77,86,.14);
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 var(--sans); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+.app > * { min-width: 0; }
+.pr span { overflow: hidden; text-overflow: ellipsis; }
+
+/* top: only where you are */
+.top { display: flex; align-items: center; gap: 20px; padding: 12px 24px; }
+.pr { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+.pr b { color: var(--ink); font-weight: 500; }
+.chapters { display: flex; gap: 18px; flex: none; }
+.ch { white-space: nowrap; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.ch.on { color: var(--ink); }
+.dots { display: flex; gap: 4px; }
+.dots button { width: 8px; height: 8px; padding: 0; border-radius: 50%; border: 0; background: var(--line); }
+.dots button.done { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.dots button.now { background: var(--accent); transform: scale(1.35); }
+
+/* stage: one idea */
+.stage { overflow-y: auto; padding: 24px 24px 40px; }
+.card { max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.eyebrow { font-size: 13px; color: var(--faint); }
+.eyebrow b { color: var(--accent); font-weight: 600; }
+h1 { font-size: 30px; line-height: 1.2; letter-spacing: -.015em; margin: 0; text-wrap: balance; font-weight: 600; }
+.say { font-size: 18px; line-height: 1.55; color: var(--muted); margin: 0; max-width: 58ch; }
+
+.visual { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 20px; }
+
+/* flow */
+.flows { display: flex; flex-direction: column; gap: 12px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.node { padding: 8px 14px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); font-size: 15px; }
+.node.good { background: var(--good-soft); border-color: color-mix(in srgb, var(--good) 35%, transparent); color: var(--good); }
+.node.bad { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); color: var(--bad); }
+.arrow { color: var(--faint); font-size: 18px; }
+
+/* symptom list */
+.symptoms { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.symptoms li { display: flex; gap: 12px; align-items: center; font-size: 16px; }
+.symptoms .ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bad-soft); color: var(--bad); font-weight: 600; flex: none; }
+
+/* layers */
+.layers { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: end; }
+.stack { display: flex; flex-direction: column; gap: 6px; }
+.stack h4 { margin: 0 0 4px; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+.layer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line); font-size: 14.5px; }
+.layer span:last-child { font: 500 13px/1.5 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.layer.hl { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.layer.hl.bad { border-color: var(--bad); background: var(--bad-soft); }
+.layers .mid { align-self: center; color: var(--faint); font-size: 22px; }
+
+/* code: only what changed */
+.code { font: 13.5px/1.7 var(--mono); overflow-x: auto; margin: -4px -4px 0; }
+.code-h { display: flex; justify-content: space-between; gap: 12px; font: 12.5px/1.4 var(--sans); color: var(--faint); margin-bottom: 10px; }
+.code-h span:first-child { font-family: var(--mono); color: var(--muted); }
+.ln { display: grid; grid-template-columns: 18px auto; padding: 0 10px 0 4px; white-space: pre; min-width: max-content; border-radius: 4px; }
+.ln .g { color: var(--faint); text-align: center; user-select: none; }
+.ln.added { background: var(--add); } .ln.added .g { color: var(--good); }
+.ln.removed { background: var(--del); } .ln.removed .g { color: var(--bad); }
+.ln.removed .t { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 50%, transparent); }
+.ln.context .t { color: var(--faint); }
+.ln.focus { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.ln.elided .t { color: var(--faint); font-style: italic; }
+.node.old { text-decoration: line-through; color: var(--muted); }
+.detour { color: var(--warn); font-weight: 500; }
+.src { font-style: italic; }
+#prSel { font: 500 13px/1.3 var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; margin-right: 6px; }
+.fold { display: block; width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer; }
+.fold:hover { color: var(--accent); background: var(--accent-soft); }
+.code-h a { color: var(--muted); text-decoration: none; }
+.code-h a:hover { color: var(--accent); }
+.more { align-self: flex-start; border: 1px dashed var(--line); background: transparent; border-radius: 10px; padding: 9px 16px; font-size: 14px; color: var(--muted); }
+.more:hover { border-color: var(--accent); color: var(--accent); }
+.mapbox { display: flex; flex-direction: column; gap: 10px; overflow-x: auto; }
+.mapsvg { width: 100%; height: auto; display: block; margin: 0 auto; font-family: var(--sans); }
+.map-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.map-top h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.map-cap { font-size: 14.5px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--paper); }
+.seg button { border: 0; background: transparent; padding: 4px 14px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--faint); }
+.lg { display: inline-block; width: 18px; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.lg.bad { border-color: var(--bad); border-top-style: dashed; } .lg.faint { border-color: var(--faint); border-top-style: dashed; } .lg.good { border-color: var(--good); }
+.fold { color: var(--faint); font: italic 12px/1.9 var(--mono); padding-left: 22px; }
+
+/* reviewer action */
+.check { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: 14px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 45%, transparent); cursor: pointer; }
+.check input { appearance: none; width: 22px; height: 22px; flex: none; margin: 1px 0 0; border-radius: 6px; border: 2px solid var(--accent); display: grid; place-items: center; cursor: pointer; background: var(--panel); }
+.check input:checked { background: var(--accent); }
+.check input:checked::after { content: ""; width: 6px; height: 11px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.check .lbl { display: flex; flex-direction: column; gap: 2px; }
+.check .k { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.check.done { border-style: solid; opacity: .75; }
+
+.ask { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 14.5px; padding: 12px 16px; border-radius: 12px; background: var(--warn-soft); color: var(--ink); }
+.ask .q { display: flex; gap: 10px; align-items: baseline; }
+.ask .q b { color: var(--warn); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; flex: none; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 12px; font-size: 13px; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: var(--panel); font-weight: 600; }
+
+.quiet { display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; }
+.link { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.link:hover { color: var(--accent); text-decoration-color: var(--accent); }
+
+/* bottom: two big actions */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--panel); }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 18px; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
+.btn:disabled { opacity: .35; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.listen { display: inline-flex; align-items: center; gap: 10px; border: 0; background: transparent; font-size: 14px; color: var(--muted); padding: 6px 10px; border-radius: 999px; }
+.listen:hover { background: var(--paper); }
+.listen .ic { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+.listen.on .ic { background: var(--accent); color: #fff; }
+.listen svg { width: 13px; height: 13px; }
+.eq { display: inline-flex; gap: 2px; align-items: end; height: 12px; }
+.eq i { width: 3px; background: currentColor; animation: eq .9s ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: .15s; } .eq i:nth-child(3) { animation-delay: .3s; }
+@keyframes eq { 0%, 100% { height: 3px; } 50% { height: 12px; } }
+
+/* start + summary */
+.hero-stats { display: flex; flex-wrap: wrap; gap: 24px; }
+.stat b { display: block; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+.pf { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pf section { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 16px 18px; }
+.pf h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.pf .p h3 { color: var(--bad); } .pf .f h3 { color: var(--good); }
+.pf p { margin: 0; font-size: 16px; }
+.cta { display: flex; flex-wrap: wrap; gap: 10px; }
+.sum-list { display: flex; flex-direction: column; gap: 8px; }
+.sum-item { display: flex; gap: 10px; align-items: baseline; font-size: 15px; }
+.sum-item .m { width: 18px; flex: none; text-align: center; }
+.sum-item .m.ok { color: var(--good); } .sum-item .m.no { color: var(--faint); }
+.comment { font: 13.5px/1.6 var(--mono); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; white-space: pre-wrap; margin: 0; }
+h2 { font-size: 18px; margin: 8px 0 0; }
+.note { font-size: 13px; color: var(--faint); }
+
+/* details drawer: the full analysis, only on request */
+.drawer { position: fixed; inset: 0 0 0 auto; width: min(560px, 100%); background: var(--panel); box-shadow: var(--shadow); z-index: 30; display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+.drawer-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); border-bottom: 1px solid var(--line); }
+.drawer-h h3 { margin: 0; font-size: 15px; }
+.drawer-b { overflow-y: auto; padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 18px; font-size: 14px; }
+.drawer-b h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.drawer-b p { margin: 0 0 8px; }
+.drawer-b code { font-family: var(--mono); font-size: .9em; background: var(--paper); padding: 1px 4px; border-radius: 3px; }
+.ann { margin: 2px 0 6px 22px; padding: 4px 10px; border-left: 2px solid var(--accent); font: 13px/1.45 var(--sans); white-space: normal; color: var(--muted); }
+.x { border: 0; background: none; font-size: 22px; color: var(--muted); line-height: 1; }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.25); z-index: 25; }
+.proto { font-size: 12px; color: var(--faint); border-top: 1px solid var(--line); padding-top: 12px; }
+
+@media (max-width: 720px) {
+  .top { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 16px; }
+  .chapters { justify-content: space-between; }
+  .stage { padding: 16px 16px 28px; }
+  h1 { font-size: 24px; } .say { font-size: 16.5px; }
+  .pf { grid-template-columns: 1fr; }
+  .layers { grid-template-columns: 1fr; } .layers .mid { transform: rotate(90deg); justify-self: center; }
+  .bar { padding-inline: 16px; }
+  .listen .t { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .eq i { animation: none; height: 8px; } * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="pr" id="pr"></div>
+    <nav class="chapters" id="chapters" aria-label="Progress"></nav>
+  </header>
+  <main class="stage" id="stage"></main>
+  <footer class="bar">
+    <button class="btn" id="back">←</button>
+    <button class="listen" id="listen"><span class="ic" id="listenIc"></span><span class="t" id="listenT"></span></button>
+    <button class="btn primary" id="next"></button>
+  </footer>
+</div>
+<div id="layer"></div>
+
+<script type="application/json" id="data-excalidraw">{"schemaVersion":1,"summary":{"problem":"The floating sidebar (library panel) had a lower z-index than the top-right UI buttons, so those buttons would render on top of the open sidebar. Additionally, opening the main menu while the floating sidebar was open left both visible at the same time, causing the menu to appear beneath the sidebar on mobile.","solution":"Raise the sidebar's z-index above the top UI layer so it is never obscured by toolbar buttons, and make clicking the main menu trigger close the floating sidebar — done by wrapping the trigger and content in a shared DOM container and using that container boundary to replace the old data-attribute guard."},"hunks":[{"id":"packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx#1","file":"packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx","header":"@@ -35,10 +35,16 @@ const DropdownMenu = ({","added":8,"removed":2},{"id":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx#1","file":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx","header":"@@ -34,8 +34,15 @@ const MenuContent = ({","added":9,"removed":2},{"id":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1","file":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx","header":"@@ -24,7 +24,6 @@ const MenuTrigger = ({","added":0,"removed":1},{"id":"packages/excalidraw/css/styles.scss#1","file":"packages/excalidraw/css/styles.scss","header":"@@ -13,10 +13,10 @@","added":1,"removed":1},{"id":"packages/excalidraw/hooks/useOutsideClick.ts#1","file":"packages/excalidraw/hooks/useOutsideClick.ts","header":"@@ -5,7 +5,7 @@ import { EVENT } from \"@excalidraw/common\";","added":1,"removed":1}],"graph":{"nodes":[{"id":"sidebar","label":"Sidebar","sublabel":"floating library panel","file":"packages/excalidraw/components/Sidebar/Sidebar.scss","kind":"file","layout":{"col":0,"row":0}},{"id":"styles","label":"styles.scss","sublabel":"global z-index vars","file":"packages/excalidraw/css/styles.scss","kind":"file","layout":{"col":1,"row":0}},{"id":"dropdown","label":"DropdownMenu","sublabel":"trigger + content wrapper","file":"packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx","kind":"file","layout":{"col":0,"row":1}},{"id":"content","label":"DropdownMenuContent","sublabel":"outside-click logic","file":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx","kind":"file","layout":{"col":1,"row":1}},{"id":"trigger","label":"DropdownMenuTrigger","sublabel":"hamburger button","file":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx","kind":"file","layout":{"col":2,"row":1}},{"id":"outsideclick","label":"useOutsideClick","sublabel":"DOM event hook","file":"packages/excalidraw/hooks/useOutsideClick.ts","kind":"file","layout":{"col":2,"row":2}},{"id":"mainmenu","label":"MainMenu","sublabel":"uses DropdownMenu","file":"packages/excalidraw/components/main-menu/MainMenu.tsx","kind":"file","layout":{"col":0,"row":2}}],"edges":[{"id":"e1","from":"styles","to":"sidebar","label":"--zIndex-ui-library: 80","kind":"data","state":"before","problem":true,"visibleUntil":2},{"id":"e2","from":"styles","to":"sidebar","label":"--zIndex-ui-library: 120","kind":"data","state":"after","visibleFrom":3},{"id":"e3","from":"trigger","to":"outsideclick","label":"data-prevent-outside-click","kind":"data","state":"before","visibleUntil":5},{"id":"e4","from":"dropdown","to":"content","label":"dropdown-menu-container wrapper","kind":"data","state":"after","visibleFrom":6},{"id":"e5","from":"content","to":"outsideclick","label":"closest(.dropdown-menu-container)","kind":"call","state":"after","visibleFrom":6},{"id":"e6","from":"mainmenu","to":"dropdown","label":"open=openMenu==canvas","kind":"props","state":"unchanged"}]},"steps":[{"id":"s1","kind":"symptom","routeLabel":"Two symptoms","title":"Sidebar buttons bleed through the open sidebar; menu and sidebar overlap on mobile","focusNode":"sidebar","tag":"fact","narration":"There are two related visual problems. On all screen sizes, when the floating sidebar is open, the toolbar buttons in the top-right corner appear on top of it instead of being hidden behind it. On mobile specifically, opening the main menu while the sidebar is open leaves both panels visible at once, with the menu appearing underneath the sidebar. The PR fixes both.","beats":[{"kind":"current","heading":"The sidebar's z-index","text":"The sidebar uses `--zIndex-ui-library` (80) and the top-bar UI uses `--zIndex-ui-top` (100). Because 80 \u003c 100, any absolutely-positioned button in the top bar can paint over the open sidebar.","code":[{"file":"packages/excalidraw/css/styles.scss","revision":"base","label":"base z-index table","lines":[{"kind":"context","text":"  --zIndex-ui-bottom: 60;"},{"kind":"focus","text":"  --zIndex-ui-library: 80;","annotation":"Sidebar stacking level — lower than ui-top (100).","annotationTag":"fact"},{"kind":"context","text":"  --zIndex-ui-context-menu: 90;"},{"kind":"context","text":"  --zIndex-ui-styles-popup: 100;"},{"kind":"focus","text":"  --zIndex-ui-top: 100;","annotation":"Top-bar (including top-right buttons) stacks here — above the sidebar.","annotationTag":"fact"}]}]}],"hunkIds":[],"sources":[{"type":"pr_description","ref":"move sidebar above top layer UI (especially top-right) so that buttons aren't above the sidebar when open"},{"type":"pr_description","ref":"close sidebar (when not docked) when opening main menu"}]},{"id":"s2","kind":"cause","routeLabel":"z-index ordering","title":"Sidebar z-index sits below --zIndex-ui-top, letting toolbar buttons paint over it","focusNode":"styles","tag":"fact","narration":"The sidebar is a large absolute-positioned panel. Its stacking value of 80 is below the value of 100 assigned to the top bar. So every button in the top-right corner of the canvas — including the library trigger itself — renders in front of the open sidebar panel. Raising the sidebar's value above the top bar is the straightforward fix for this.","beats":[{"kind":"current","heading":"DOM order vs z-index","text":"The sidebar is rendered outside `layer-ui__wrapper` (which has `z-index: var(--zIndex-layerUI)` = 4), but the top-bar `FixedSideContainer` and the `.App-top-bar` use `--zIndex-ui-top` = 100. With `--zIndex-ui-library` = 80 the sidebar loses the paint order.","code":[{"file":"packages/excalidraw/css/styles.scss","revision":"head","label":"App-top-bar z-index (unchanged)","lines":[{"kind":"context","text":"  .App-top-bar {"},{"kind":"focus","text":"    z-index: var(--zIndex-ui-top);","annotation":"Top bar (and the buttons inside it) stacks at 100.","annotationTag":"fact"},{"kind":"context","text":"    display: flex;"},{"kind":"context","text":"    flex-direction: column;"},{"kind":"context","text":"  }"}]}]},{"kind":"change","heading":"Raise the sidebar above the top bar","text":"`--zIndex-ui-library` is bumped from 80 to 120, placing it above `--zIndex-ui-top` (100) while staying below `--zIndex-modal` (1000).","code":[{"file":"packages/excalidraw/css/styles.scss","revision":"diff","lines":[{"kind":"context","text":"  --zIndex-ui-bottom: 60;"},{"kind":"removed","text":"  --zIndex-ui-library: 80;"},{"kind":"context","text":"  --zIndex-ui-context-menu: 90;"},{"kind":"context","text":"  --zIndex-ui-styles-popup: 100;"},{"kind":"context","text":"  --zIndex-ui-top: 100;"},{"kind":"added","text":"  --zIndex-ui-library: 120;","annotation":"Now above ui-top (100) so the sidebar always paints over toolbar buttons.","annotationTag":"fact"}]}]}],"hunkIds":["packages/excalidraw/css/styles.scss#1"],"sources":[{"type":"diff","ref":"packages/excalidraw/css/styles.scss#1"},{"type":"pr_description","ref":"move sidebar above top layer UI (especially top-right)"}]},{"id":"s3","kind":"constraint","routeLabel":"New ordering → new clash","title":"Raising the sidebar creates a new problem on mobile: the main menu now renders below it","focusNode":"mainmenu","tag":"inferred","narration":"Once the sidebar is above the top bar, a second problem surfaces on mobile. The main menu dropdown is rendered inside the top bar at z-index 100. If the sidebar is open and someone opens the main menu, the menu panel (at 100) is now below the sidebar (at 120). So the fix to the first symptom makes the second symptom worse. The author's solution is to close the floating sidebar whenever the main menu opens.","beats":[{"kind":"problem","heading":"Why closing is necessary","text":"On mobile, `MobileMenu.tsx` renders `renderSidebars()` first, then the `App-top-bar`. The main menu dropdown expands inside the top bar. With the sidebar now above the top bar's z-index, an open sidebar would always overlap the main menu.","traces":[[{"label":"sidebar z-index = 120","status":"ok"},{"label":"main menu z-index = ui-top = 100","status":"bad"},{"label":"menu renders behind sidebar","status":"bad"}]]}],"hunkIds":[],"notes":["The mobile z-index clash is inferred from the PR description's explicit mention of this as the motivation for closing the sidebar on menu open."],"sources":[{"type":"pr_description","ref":"close sidebar (when not docked) when opening main menu. This is necessary otherwise the previous change would make the main menu below the sidebar on mobile."},{"type":"inference","ref":"MobileMenu.tsx render order: renderSidebars() before App-top-bar"}]},{"id":"s4","kind":"data_origin","routeLabel":"How menu opens","title":"Opening the main menu sets openMenu='canvas' but does not touch openSidebar","focusNode":"mainmenu","tag":"fact","narration":"The main menu trigger toggles a piece of application state called open-menu. Before this PR, that toggle had no relationship with the sidebar state, so both could be open simultaneously. The sidebar trigger, by contrast, already cleared open-menu when it opened. This asymmetry is what we need to fix.","beats":[{"kind":"current","heading":"MainMenu toggle — no sidebar interaction","text":"`MainMenu` calls `setAppState` with `openMenu` and resets `openPopup`/`openDialog`, but never touches `openSidebar`.","code":[{"file":"packages/excalidraw/components/main-menu/MainMenu.tsx","revision":"head","label":"unchanged — main menu toggle","lines":[{"kind":"context","text":"            \u003cDropdownMenu.Trigger"},{"kind":"context","text":"              onToggle={() => {"},{"kind":"context","text":"                setAppState({"},{"kind":"focus","text":"                  openMenu: appState.openMenu === \"canvas\" ? null : \"canvas\",","annotation":"Toggles the menu but leaves openSidebar untouched.","annotationTag":"fact"},{"kind":"context","text":"                  openPopup: null,"},{"kind":"context","text":"                  openDialog: null,"},{"kind":"context","text":"                });"}]}]},{"kind":"current","heading":"SidebarTrigger already does the reverse","text":"When a sidebar opens it clears `openMenu: null`, but the main menu never mirrors this.","code":[{"file":"packages/excalidraw/components/Sidebar/SidebarTrigger.tsx","revision":"head","label":"SidebarTrigger (unchanged)","lines":[{"kind":"context","text":"          setAppState({"},{"kind":"focus","text":"            openSidebar: isOpen ? { name, tab } : null,","annotation":"Sidebar open/close also clears the main menu — one direction already worked.","annotationTag":"fact"},{"kind":"focus","text":"            openMenu: null,"},{"kind":"context","text":"            openPopup: null,"},{"kind":"context","text":"          });"}]}]}],"hunkIds":[],"sources":[{"type":"code","ref":"packages/excalidraw/components/main-menu/MainMenu.tsx"},{"type":"code","ref":"packages/excalidraw/components/Sidebar/SidebarTrigger.tsx"}]},{"id":"s5","kind":"decision","routeLabel":"Key decision","title":"Close the sidebar when the menu opens — but re-opening must not close it immediately","focusNode":"content","tag":"inferred","narration":"The cleanest place to close the sidebar is in the outside-click handler that already governs when the menu closes. When the menu opens, the browser fires a pointer-down event on the trigger button. The outside-click hook on the menu content sees that event and fires its callback — which today calls onClickOutside, closing the menu immediately after it was opened. The old fix for that was a data attribute on the trigger button. This PR changes how that exclusion works, which opens the door to also putting the sidebar-close logic there.","beats":[{"kind":"current","heading":"Old guard: data attribute on the trigger","text":"The trigger button carried `data-prevent-outside-click`. `useOutsideClick` checks `event.target.closest(\"[data-prevent-outside-click]\")` and bails if found, so clicking the trigger never fires the outside-click callback.","code":[{"file":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx","revision":"base","lines":[{"kind":"context","text":"  return ("},{"kind":"context","text":"    \u003cbutton"},{"kind":"focus","text":"      data-prevent-outside-click","annotation":"Global escape hatch: any element in the DOM with this attribute suppresses the callback.","annotationTag":"fact"},{"kind":"context","text":"      className={classNames}"},{"kind":"context","text":"      onClick={onToggle}"}]}]},{"kind":"problem","heading":"Why the data attribute is too coarse","text":"Any component using `useOutsideClick` anywhere on the page will also ignore clicks on `[data-prevent-outside-click]` elements, even if those elements are completely unrelated. More importantly, the sidebar needs to react to exactly this event (clicking the menu trigger) to close itself — but the attribute blocks all outside-click processing at the hook level, before the callback is even called.","traces":[[{"label":"click main-menu trigger"},{"label":"useOutsideClick fires"},{"label":".closest([data-prevent-outside-click]) = trigger","status":"bad"},{"label":"return early — callback never called","status":"bad"},{"label":"sidebar cannot observe this event","status":"bad"}]]}],"hunkIds":[],"notes":["The 'too coarse' observation is inferred from the code structure; the PR description does not explicitly state it."],"sources":[{"type":"code","ref":"packages/excalidraw/hooks/useOutsideClick.ts:71"},{"type":"inference","ref":"data-prevent-outside-click prevents sidebar from reacting to the trigger click"}]},{"id":"s6","kind":"change","routeLabel":"Wrapper div","title":"Wrap trigger + content in a named container div so the content can see if the click was on the trigger","focusNode":"dropdown","tag":"fact","narration":"Instead of tagging the trigger button with a global data attribute, the PR groups the trigger and the open menu content inside a single invisible wrapper div that carries a class name. Now the content's outside-click handler can walk up the DOM to its nearest container and check whether the click landed inside that container. If it did, it means the user clicked the trigger, so the handler should not fire.","beats":[{"kind":"change","heading":"Fragment → named container div","text":"The JSX fragment is replaced with a `\u003cdiv className=\"dropdown-menu-container\">` with `display: contents` so it has no effect on box layout.","code":[{"file":"packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx","revision":"diff","lines":[{"kind":"removed","text":"    \u003c>"},{"kind":"added","text":"    \u003cdiv"},{"kind":"added","text":"      className=\"dropdown-menu-container\""},{"kind":"added","text":"      style={{"},{"kind":"added","text":"        // remove this div from box layout"},{"kind":"added","text":"        display: \"contents\","},{"kind":"added","text":"      }}"},{"kind":"added","text":"    >","annotation":"display:contents makes this div invisible to the box model but it still exists as a DOM node for .contains() / .closest().","annotationTag":"fact"},{"kind":"context","text":"      {MenuTriggerComp}"},{"kind":"context","text":"      {open && MenuContentCompWithPlacement}"},{"kind":"removed","text":"    \u003c/>"},{"kind":"added","text":"    \u003c/div>"}]}]}],"hunkIds":["packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx#1"],"sources":[{"type":"diff","ref":"packages/excalidraw/components/dropdownMenu/DropdownMenu.tsx#1"},{"type":"code_comment","ref":"DropdownMenu.tsx: '// remove this div from box layout'"}]},{"id":"s7","kind":"change","routeLabel":"Guard in content","title":"Move the trigger-exclusion guard into the content's callback, using the container boundary","focusNode":"content","tag":"fact","narration":"With the wrapper in place, the menu content's outside-click callback can now do its own DOM check: if the click target is inside the same container as the content, it must be the trigger, so close should be suppressed. This replaces the data attribute entirely. The callback is now aware of its own trigger rather than relying on a global convention.","beats":[{"kind":"current","heading":"Old callback — unconditional","text":"The outside-click callback called `onClickOutside` with no conditions; the trigger was excluded earlier, at the hook level.","code":[{"file":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx","revision":"base","lines":[{"kind":"context","text":"  useOutsideClick(menuRef, () => {"},{"kind":"focus","text":"    callbacksRef.onClickOutside?.();","annotation":"Always fires when useOutsideClick decides the click is outside — relied on the data attribute to suppress trigger clicks.","annotationTag":"fact"},{"kind":"context","text":"  });"}]}]},{"kind":"change","heading":"New callback — checks container boundary","text":"The callback now walks up the DOM from the menu div to the nearest `.dropdown-menu-container`, then checks whether the event target is inside it. If yes — it's the trigger — so `onClickOutside` is skipped.","code":[{"file":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx","revision":"head","lines":[{"kind":"context","text":"  useOutsideClick(menuRef, (event) => {"},{"kind":"context","text":"    // prevents closing if clicking on the trigger button"},{"kind":"context","text":"    if ("},{"kind":"focus","text":"      !menuRef.current","annotation":"Walks from the menu element up to the shared wrapper div.","annotationTag":"fact"},{"kind":"focus","text":"        ?.closest(\".dropdown-menu-container\")"},{"kind":"focus","text":"        ?.contains(event.target)","annotation":"If the event target is inside the container (i.e., it's the trigger), skip closing.","annotationTag":"fact"},{"kind":"context","text":"    ) {"},{"kind":"context","text":"      callbacksRef.onClickOutside?.();"},{"kind":"context","text":"    }"},{"kind":"context","text":"  });"}]}]}],"hunkIds":["packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx#1"],"sources":[{"type":"diff","ref":"packages/excalidraw/components/dropdownMenu/DropdownMenuContent.tsx#1"}]},{"id":"s8","kind":"change","routeLabel":"Remove data attr","title":"Remove data-prevent-outside-click from the trigger button — now redundant","focusNode":"trigger","tag":"fact","narration":"With the container-based guard in place, the data attribute on the trigger button is no longer needed. Removing it is important because its presence could still suppress outside-click callbacks in other components on the page that happen to use the same hook — a silent side-effect the new approach avoids.","beats":[{"kind":"change","heading":"Attribute removed","text":"The trigger button no longer participates in the global `data-prevent-outside-click` protocol.","code":[{"file":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx","revision":"diff","lines":[{"kind":"context","text":"  return ("},{"kind":"context","text":"    \u003cbutton"},{"kind":"removed","text":"      data-prevent-outside-click","annotation":"Removed: the container check in DropdownMenuContent now handles this locally.","annotationTag":"fact"},{"kind":"context","text":"      className={classNames}"},{"kind":"context","text":"      onClick={onToggle}"}]}]}],"hunkIds":["packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1"],"sources":[{"type":"diff","ref":"packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1"}]},{"id":"s9","kind":"change","routeLabel":"Event type fix","title":"Tighten the callback type in useOutsideClick so event.target is accessible","focusNode":"outsideclick","tag":"fact","narration":"The new content callback needs to read event.target to call contains on it. The hook's callback signature typed the event as plain Event, which doesn't expose target as an HTML element in TypeScript. The type is narrowed to include the target so the new code compiles cleanly — a minimal supporting change.","beats":[{"kind":"change","heading":"Callback type widened to include target","text":"The `callback` parameter's event type gains `& { target: T }`, matching what the hook already casts internally.","code":[{"file":"packages/excalidraw/hooks/useOutsideClick.ts","revision":"diff","lines":[{"kind":"context","text":"  /** if performance is of concern, memoize the callback */"},{"kind":"removed","text":"  callback: (event: Event) => void,"},{"kind":"added","text":"  callback: (event: Event & { target: T }) => void,","annotation":"Aligns the public type with the internal cast on line 28, enabling event.target.closest() in callers.","annotationTag":"fact"}]}]}],"hunkIds":["packages/excalidraw/hooks/useOutsideClick.ts#1"],"sources":[{"type":"diff","ref":"packages/excalidraw/hooks/useOutsideClick.ts#1"}]},{"id":"s10","kind":"verification","routeLabel":"How to verify","title":"Manual steps to confirm both fixes","focusNode":"sidebar","tag":"unverified","narration":"These scenarios haven't been run automatically, but they each target one of the two decisions in this PR. The first scenario checks the z-index fix; the second and third check the sidebar-close behavior and that the menu toggle itself still works correctly after the data attribute was removed.","beats":[{"kind":"current","heading":"Scenario","text":"Run on base and head to compare.","traces":[[{"label":"open floating sidebar (not docked)"},{"label":"top-right buttons are hidden behind sidebar","status":"ok"}],[{"label":"sidebar open, click hamburger menu"},{"label":"sidebar closes, menu opens on top","status":"ok"}],[{"label":"menu open, click hamburger menu again"},{"label":"menu closes (toggle still works)","status":"ok"}],[{"label":"menu open, click outside menu (not on trigger)"},{"label":"menu closes","status":"ok"}]]}],"hunkIds":[],"sources":[{"type":"inference","ref":"derived from the two fix goals in the PR description"}]}],"skippedHunks":[],"openQuestions":[{"id":"q1","stepId":"s7","question":"The `.dropdown-menu-container` class name is also used inside `DropdownMenuContent` for the inner `Island` and `Stack.Col` wrappers — does `closest(\".dropdown-menu-container\")` risk matching the inner element instead of the outer wrapper, and if so, would `.contains()` return the wrong answer?","why":"DropdownMenuContent.tsx line 84 and 89 already apply `className=\"dropdown-menu-container\"` to children; closest() walks up from menuRef.current and will stop at the first ancestor with that class, which should be the outer wrapper — but if menuRef is nested inside one of those inner elements the wrong node could be found.","tag":"inferred"},{"id":"q2","stepId":"s2","question":"The sidebar's z-index is now 120, above `--zIndex-ui-styles-popup` (100) and `--zIndex-ui-top` (100) but below `--zIndex-modal` (1000). Does a docked sidebar also get z-index 120, and could it overlap style/property popups that use `--zIndex-ui-styles-popup`?","why":"Sidebar.scss applies `--zIndex-ui-library` unconditionally; the `--docked` modifier only removes box-shadow. A docked sidebar at 120 would sit above property popovers at 100.","tag":"inferred"},{"id":"q3","stepId":"s8","question":"Are there other `DropdownMenu` usages across the codebase where callers rely on `data-prevent-outside-click` on the trigger for their own `useOutsideClick` listeners? Removing the attribute from `DropdownMenuTrigger` could inadvertently let those listeners fire on trigger clicks.","why":"The attribute is a page-wide convention checked by `useOutsideClick.ts:71`; `Modal.tsx` and `PropertiesPopover.tsx` still use it on their own elements, suggesting other components may depend on the same convention from the trigger.","tag":"inferred"}],"verification":{"status":"not_run","scenario":["Open floating sidebar (not docked) → top-right toolbar buttons should be hidden behind the sidebar panel","With sidebar open, click the hamburger menu trigger → sidebar should close and the menu should open on top","Click hamburger menu trigger again → menu should toggle closed (trigger still works after data attribute removal)","With menu open, click anywhere outside (not on the trigger) → menu should close"]},"meta":{"analyzer":"bob-shell","generatedAt":"2026-09-26T11:23:10Z","language":"en","durationMs":173349},"pr":{"repo":"excalidraw/excalidraw","number":10295,"title":"fix: close floating sidebar on main menu open","url":"https://github.com/excalidraw/excalidraw/pull/10295","author":"dwelle","baseSha":"95ddc663392d94cd22a17a982dde5060849038de","headSha":"67926be60b32cd8e429f507c730597c91cdefe17","filesChanged":5,"additions":19,"deletions":7,"commitTitles":["fix: close floating sidebar on main menu open"],"body":"- move sidebar above top layer UI (especially top-right) so that buttons aren't above the sidebar when open\n- close sidebar (when not docked) when opening main menu. This is necessary otherwise the previous change would make the main menu below the sidebar on mobile."},"coverage":{"totalHunks":5,"explained":5,"skipped":0,"uncoveredHunkIds":[]}}</script>
+<script type="application/json" id="data-outline">{"schemaVersion":1,"pr":{"repo":"outline/outline","number":13673,"title":"fix: History changes indicator missing on load and stuck on \"N changes\"","url":"https://github.com/outline/outline/pull/13673","author":"Tom Moor","mergedAt":"2026-09-07","headSha":"70ef12b","filesChanged":6,"additions":71,"deletions":44,"commitTitles":["fix: History changes indicator missing on load and stuck on \"N changes\"","fix: Match changes param check to RevisionViewer","fix: Disable change nav buttons until Diff extension is available","fix: Reset changes count only on unmount to avoid flicker"]},"summary":{"problem":"In document history, the header's changes counter didn't appear on load and got stuck, because it read the count through a non-reactive editor ref that is set late and replaced on remount.","solution":"Compute the count from the changeset where it is already built, publish it through the observable DocumentContext, and make the editor reference observable too."},"hunks":[{"id":"app/components/DocumentContext.tsx#1","file":"app/components/DocumentContext.tsx","header":"@@ -14,7 +14,12 @@ class DocumentContext {","added":6,"removed":1},{"id":"app/components/DocumentContext.tsx#2","file":"app/components/DocumentContext.tsx","header":"@@ -67,6 +72,11 @@ class DocumentContext {","added":5,"removed":0},{"id":"app/scenes/Document/components/ChangesNavigation.tsx#1","file":"app/scenes/Document/components/ChangesNavigation.tsx","header":"@@ -6,32 +6,24 @@ import { CaretDownIcon, CaretUpIcon } from \"outline-icons\";","added":5,"removed":13},{"id":"app/scenes/Document/components/ChangesNavigation.tsx#2","file":"app/scenes/Document/components/ChangesNavigation.tsx","header":"@@ -50,14 +42,16 @@ export const ChangesNavigation = observer(function ChangesNavigation_({","added":4,"removed":2},{"id":"app/scenes/Document/components/Document.tsx#1","file":"app/scenes/Document/components/Document.tsx","header":"@@ -365,7 +365,6 @@ function DocumentScene({","added":0,"removed":1},{"id":"app/scenes/Document/components/Header.tsx#1","file":"app/scenes/Document/components/Header.tsx","header":"@@ -21,7 +21,6 @@ import Flex from \"~/components/Flex\";","added":0,"removed":1},{"id":"app/scenes/Document/components/Header.tsx#2","file":"app/scenes/Document/components/Header.tsx","header":"@@ -44,7 +43,6 @@ import { SearchHighlightChip } from \"./SearchHighlightChip\";","added":0,"removed":1},{"id":"app/scenes/Document/components/Header.tsx#3","file":"app/scenes/Document/components/Header.tsx","header":"@@ -62,7 +60,6 @@ type Props = {","added":0,"removed":1},{"id":"app/scenes/Document/components/Header.tsx#4","file":"app/scenes/Document/components/Header.tsx","header":"@@ -263,7 +260,7 @@ function DocumentHeader({","added":1,"removed":1},{"id":"app/scenes/Document/components/RevisionViewer.tsx#1","file":"app/scenes/Document/components/RevisionViewer.tsx","header":"@@ -44,7 +44,7 @@ type Props = Omit\u003cEditorProps, \"extensions\"> & {","added":1,"removed":1},{"id":"app/scenes/Document/components/RevisionViewer.tsx#2","file":"app/scenes/Document/components/RevisionViewer.tsx","header":"@@ -80,22 +80,38 @@ function RevisionViewer(props: Props, ref: React.Ref\u003cTEditor>) {","added":25,"removed":9},{"id":"shared/editor/extensions/Diff.ts#1","file":"shared/editor/extensions/Diff.ts","header":"@@ -36,6 +36,29 @@ type DiffOptions = {","added":23,"removed":0},{"id":"shared/editor/extensions/Diff.ts#2","file":"shared/editor/extensions/Diff.ts","header":"@@ -82,19 +105,7 @@ export default class Diff extends Extension\u003cDiffOptions> {","added":1,"removed":13}],"graph":{"nodes":[{"id":"doc","label":"Document","sublabel":"page","file":"app/scenes/Document/components/Document.tsx","kind":"file","layout":{"col":0,"row":0}},{"id":"header","label":"Header","sublabel":"revision header","file":"app/scenes/Document/components/Header.tsx","kind":"file","layout":{"col":0,"row":1}},{"id":"cn","label":"ChangesNavigation","sublabel":"the counter","file":"app/scenes/Document/components/ChangesNavigation.tsx","kind":"file","layout":{"col":0,"row":2}},{"id":"ctx","label":"DocumentContext","sublabel":"shared state","file":"app/components/DocumentContext.tsx","kind":"file","layout":{"col":1,"row":0}},{"id":"rv","label":"RevisionViewer","sublabel":"diff editor","file":"app/scenes/Document/components/RevisionViewer.tsx","kind":"file","layout":{"col":1,"row":1}},{"id":"diff","label":"Diff","sublabel":"editor extension","file":"shared/editor/extensions/Diff.ts","kind":"file","layout":{"col":1,"row":2}}],"edges":[{"id":"e1","from":"doc","to":"header","label":"editorRef","kind":"props","state":"before","problem":true,"visibleUntil":9},{"id":"e2","from":"header","to":"cn","label":"editorRef","kind":"props","state":"before","problem":true,"visibleUntil":9},{"id":"e3","from":"rv","to":"ctx","label":"setEditor","kind":"data","state":"unchanged","visibleUntil":6},{"id":"e4","from":"rv","to":"ctx","label":"setEditor + setTotalChanges","kind":"data","state":"after","visibleFrom":7},{"id":"e5","from":"rv","to":"diff","label":"new Diff(...)","kind":"call","state":"unchanged"},{"id":"e6","from":"cn","to":"ctx","label":"useDocumentContext","kind":"data","state":"after","visibleFrom":10}]},"steps":[{"id":"s1","kind":"symptom","routeLabel":"Symptom","title":"The changes counter is missing or stuck","focusNode":"cn","tag":"fact","narration":"When you look at an older version of a document, the header shows how many changes it contains and lets you jump between them. According to the pull request, that counter often doesn't appear at all, and when it does, it gets stuck instead of showing which change you're on. The counter is drawn in the header, so that's where we start.","beats":[{"kind":"current","heading":"How it works now","text":"`ChangesNavigation` renders the counter in the revision header. It decides whether to render from the URL, then reads the count from the editor's Diff extension.","code":[{"file":"app/scenes/Document/components/ChangesNavigation.tsx","revision":"base","label":"before the change","lines":[{"kind":"focus","text":"  const showChanges = query.get(\"changes\");","annotation":"Turns the whole counter on or off based on the URL.","annotationTag":"fact"},{"kind":"context","text":"  if (!showChanges) {"},{"kind":"context","text":"    return null;"},{"kind":"context","text":"  }"},{"kind":"context","text":""},{"kind":"focus","text":"  const diffExtension = editorRef.current?.extensions.extensions.find(","annotation":"The count lives inside the editor: ref → editor → extensions → Diff.","annotationTag":"fact"},{"kind":"context","text":"    (ext) => ext instanceof Diff"},{"kind":"context","text":"  ) as Diff | undefined;"},{"kind":"focus","text":"  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"},{"kind":"elided","text":"…"},{"kind":"context","text":"      {totalChanges > 0 && (","annotation":"With a count of 0 the counter renders nothing.","annotationTag":"fact"}]}]}],"hunkIds":[],"sources":[{"type":"pr_title","ref":"fix: History changes indicator missing on load and stuck on \"N changes\""},{"type":"code","ref":"app/scenes/Document/components/ChangesNavigation.tsx (base)"}]},{"id":"s2","kind":"cause","routeLabel":"URL flag mismatch","title":"Small cause: get() versus has()","focusNode":"cn","tag":"commit_history","narration":"First, a small mismatch. Two parts of the page check the same flag in the address bar, but in different ways. If the flag is present without a value, one part says yes and the other says no, so the changes are highlighted in the text while the counter stays hidden.","beats":[{"kind":"current","heading":"How it works now","text":"The same `changes` URL parameter is read in two places, with two different methods.","code":[{"file":"app/scenes/Document/components/ChangesNavigation.tsx","revision":"base","lines":[{"kind":"focus","text":"  const showChanges = query.get(\"changes\");","annotation":"Asks: does the parameter have a non-empty value?","annotationTag":"fact"}]},{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"base","label":"unchanged code","lines":[{"kind":"focus","text":"  const showChanges = props.showChanges ?? query.has(\"changes\");","annotation":"Asks: is the parameter present at all? Decides whether highlights are built.","annotationTag":"fact"}]}]},{"kind":"problem","heading":"What breaks","text":"With a link like `?changes` (no value) the two checks disagree.","traces":[[{"label":"URL …?changes"},{"label":"get(\"changes\")"},{"label":"\"\"","status":"bad"},{"label":"return null","status":"bad"}],[{"label":"URL …?changes"},{"label":"has(\"changes\")"},{"label":"true","status":"ok"},{"label":"highlights built","status":"ok"}]]},{"kind":"change","heading":"What we change","text":"Both places now ask the same question, so highlights and counter switch on together.","code":[{"file":"app/scenes/Document/components/ChangesNavigation.tsx","revision":"diff","lines":[{"kind":"removed","text":"  const showChanges = query.get(\"changes\");"},{"kind":"added","text":"  const showChanges = query.has(\"changes\");"}]}]}],"hunkIds":["app/scenes/Document/components/ChangesNavigation.tsx#1"],"notes":["That links of the form ?changes (without a value) exist in the app is inferred from the commit title; the analyzer did not locate where they are generated."],"sources":[{"type":"commit_message","ref":"Match changes param check to RevisionViewer"},{"type":"diff","ref":"app/scenes/Document/components/ChangesNavigation.tsx#1"}]},{"id":"s3","kind":"cause","routeLabel":"Ref passed as prop","title":"How the header gets the editor","focusNode":"header","tag":"fact","narration":"The header reaches the editor through a reference that is handed down from the page, through the header, into the counter. The catch is that updating such a reference never tells anyone to redraw. So the header only notices the editor when it happens to redraw for some unrelated reason.","beats":[{"kind":"current","heading":"How it works now","text":"`editorRef` is prop-drilled from `Document` through `Header` into `ChangesNavigation`. Setting `ref.current` does not re-render, and MobX `observer` cannot track it.","code":[{"file":"app/scenes/Document/components/Document.tsx","revision":"base","lines":[{"kind":"focus","text":"            \u003cHeader"},{"kind":"focus","text":"              editorRef={editorRef}"},{"kind":"context","text":"              document={document}"},{"kind":"context","text":"              revision={revision}"},{"kind":"elided","text":"…"}]},{"file":"app/scenes/Document/components/Header.tsx","revision":"base","lines":[{"kind":"focus","text":"                \u003cChangesNavigation revision={revision} editorRef={editorRef} />","annotation":"The counter reads the editor from a ref, which is not reactive.","annotationTag":"fact"}]}]}],"hunkIds":[],"sources":[{"type":"code","ref":"app/scenes/Document/components/Document.tsx, app/scenes/Document/components/Header.tsx (base)"}]},{"id":"s4","kind":"constraint","routeLabel":"Late editor","title":"The editor appears late, and more than once","focusNode":"rv","tag":"inferred","narration":"The editor that draws the highlighted text is loaded lazily, and it is rebuilt from scratch when the older version it compares against finishes loading. So on the first draw the header sees no editor at all, and after the rebuild it keeps looking at the old one.","beats":[{"kind":"current","heading":"How it works now","text":"This was already documented in a code comment: the editor is remounted via `key` whenever the diff configuration or the comparison data changes.","code":[{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"base","label":"unchanged code","lines":[{"kind":"context","text":"  // The editor builds its extensions once, on mount, so it has to be remounted"},{"kind":"context","text":"  // whenever the diff configuration changes. Revisions are listed without their"},{"kind":"context","text":"  // content, so the revision being compared against — and with it the Diff"},{"kind":"context","text":"  // extension — usually only arrives on a later render; without this neither"},{"kind":"context","text":"  // the highlights nor the change count would ever appear."},{"kind":"elided","text":"…"},{"kind":"focus","text":"    comparisonData ? \"loaded\" : \"pending\",","annotation":"The key flips when comparison data arrives → new editor instance.","annotationTag":"fact"},{"kind":"elided","text":"…"},{"kind":"focus","text":"        ref={mergeRefs([ref, setEditor])}","annotation":"The editor is also published to DocumentContext, but that field is not observable yet.","annotationTag":"fact"}]}]},{"kind":"problem","heading":"What breaks","text":"Two timelines, one per symptom.","traces":[[{"label":"header renders"},{"label":"editorRef.current"},{"label":"null","status":"bad"},{"label":"count = 0"},{"label":"counter hidden","status":"bad"}],[{"label":"editor remounted"},{"label":"header not re-rendered","status":"bad"},{"label":"observes old Diff","status":"bad"},{"label":"stuck on \"N changes\"","status":"bad"}]]}],"hunkIds":[],"notes":["The mechanism behind \"stuck\" (header still observing the previous Diff instance while buttons drive the new one) is the analyzer's inference from code, not described by the author."],"sources":[{"type":"code_comment","ref":"app/scenes/Document/components/RevisionViewer.tsx: editorKey comment"},{"type":"inference","ref":"stuck mechanism"}]},{"id":"s5","kind":"change","routeLabel":"observable.ref","title":"Make the editor reactive","focusNode":"ctx","tag":"fact","narration":"The editor was already being stored in a shared place for the document, but nobody could subscribe to it. Now that slot notifies anyone who reads it, so the header redraws the moment the editor appears or is replaced.","beats":[{"kind":"change","heading":"What we change","text":"`editor` in `DocumentContext` becomes a MobX observable reference.","code":[{"file":"app/components/DocumentContext.tsx","revision":"diff","lines":[{"kind":"context","text":"  /** The editor instance for this document */"},{"kind":"removed","text":"  editor?: Editor;"},{"kind":"added","text":"  @observable.ref","annotation":"`.ref` tracks only replacement of the reference; MobX won't try to make the whole ProseMirror editor deeply observable.","annotationTag":"fact"},{"kind":"added","text":"  editor: Editor | undefined = undefined;"}]}]}],"hunkIds":["app/components/DocumentContext.tsx#1"],"sources":[{"type":"diff","ref":"app/components/DocumentContext.tsx#1"}]},{"id":"s6","kind":"decision","routeLabel":"countChanges","title":"The counter doesn't need the editor at all","focusNode":"diff","tag":"fact","narration":"Making the editor reactive fixes the stuck counter, but the number would still only show up after the editor loads. The key idea of this change: the number of changes depends only on the difference between two versions, not on the editor. So the counting logic is pulled out into a function that works without an editor.","beats":[{"kind":"current","heading":"How it works now","text":"Counting is an instance method, so it needs a mounted `Diff` extension.","code":[{"file":"shared/editor/extensions/Diff.ts","revision":"base","lines":[{"kind":"focus","text":"  public getTotalChangesCount(): number {"},{"kind":"focus","text":"    const { changes } = this.options;","annotation":"Needs an instance: only reachable through a mounted editor.","annotationTag":"fact"},{"kind":"elided","text":"    … reduce over inserted + deleted + modified …"},{"kind":"context","text":"  }"}]}]},{"kind":"change","heading":"What we change","text":"The same logic moves to a static method; the instance method now delegates to it. Behaviour of counting is unchanged.","code":[{"file":"shared/editor/extensions/Diff.ts","revision":"diff","lines":[{"kind":"added","text":"  public static countChanges("},{"kind":"added","text":"    changes: readonly ExtendedChange[] | null"},{"kind":"added","text":"  ): number {"},{"kind":"added","text":"    if (!changes) {"},{"kind":"added","text":"      return 0;"},{"kind":"added","text":"    }"},{"kind":"elided","text":"    … same reduce as before …"},{"kind":"added","text":"  }"},{"kind":"context","text":""},{"kind":"context","text":"  public getTotalChangesCount(): number {"},{"kind":"removed","text":"    const { changes } = this.options;"},{"kind":"elided","text":"    … old reduce removed …"},{"kind":"added","text":"    return Diff.countChanges(this.options.changes);","annotation":"Pure move, no new logic.","annotationTag":"fact"},{"kind":"context","text":"  }"}]}]}],"hunkIds":["shared/editor/extensions/Diff.ts#1","shared/editor/extensions/Diff.ts#2"],"sources":[{"type":"diff","ref":"shared/editor/extensions/Diff.ts"},{"type":"code_comment","ref":"app/scenes/Document/components/RevisionViewer.tsx: \"so the indicator can render before the editor ... finished mounting\""}]},{"id":"s7","kind":"change","routeLabel":"Count in RevisionViewer","title":"Count where the changeset already exists","focusNode":"rv","tag":"fact","narration":"The difference between the two versions is already calculated in the component that shows the old version. Now the count is taken from that same calculation and put into the shared document state, so the header gets it immediately instead of waiting for the editor.","beats":[{"kind":"current","heading":"How it works now","text":"The changeset is computed here and its only consumer is the `Diff` extension passed into the editor.","code":[{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"base","lines":[{"kind":"focus","text":"  const extensions = React.useMemo(() => {"},{"kind":"focus","text":"    const changeset = ChangesetHelper.getChangeset(","annotation":"The difference between the two revisions.","annotationTag":"fact"},{"kind":"elided","text":"…"},{"kind":"context","text":"        ? [new Diff({ changes: changeset?.changes })]","annotation":"The only consumer of the changeset.","annotationTag":"fact"},{"kind":"elided","text":"…"},{"kind":"context","text":"  }, [revision.data, comparisonData, showChanges]);"}]}]},{"kind":"change","heading":"What we change","text":"The memo now returns both the extensions and the count, and the count is published to the context.","code":[{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"diff","lines":[{"kind":"removed","text":"  const extensions = React.useMemo(() => {"},{"kind":"added","text":"  const { extensions, totalChanges } = React.useMemo(() => {"},{"kind":"context","text":"    const changeset = ChangesetHelper.getChangeset("},{"kind":"elided","text":"…"},{"kind":"added","text":"      totalChanges: showChanges","annotation":"Count and highlights come from the same changeset in the same memo, so they cannot diverge.","annotationTag":"fact"},{"kind":"added","text":"        ? Diff.countChanges(changeset?.changes ?? null)"},{"kind":"added","text":"        : 0,"},{"kind":"elided","text":"…"},{"kind":"added","text":"  React.useEffect(() => {"},{"kind":"added","text":"    setTotalChanges(totalChanges);"},{"kind":"added","text":"  }, [totalChanges, setTotalChanges]);"}]}],"traces":[[{"label":"changeset"},{"label":"Diff.countChanges"},{"label":"context.totalChanges","status":"ok"},{"label":"header updates","status":"ok"}]]}],"hunkIds":["app/scenes/Document/components/RevisionViewer.tsx#1","app/scenes/Document/components/RevisionViewer.tsx#2"],"sources":[{"type":"diff","ref":"app/scenes/Document/components/RevisionViewer.tsx#2"}]},{"id":"s8","kind":"change","routeLabel":"Field in context","title":"A channel between the viewer and the header","focusNode":"ctx","tag":"fact","narration":"Back to the shared document state. The component that knows the count and the header that shows it aren't directly connected, so a shared observable value is the shortest path between them. The same place already carries the editor, so an existing channel is extended rather than a new one invented.","beats":[{"kind":"change","heading":"What we change","text":"A new observable `totalChanges` with an action setter.","code":[{"file":"app/components/DocumentContext.tsx","revision":"diff","lines":[{"kind":"added","text":"  /** The total number of changes in the currently viewed revision diff */"},{"kind":"added","text":"  @observable"},{"kind":"added","text":"  totalChanges: number = 0;"},{"kind":"elided","text":"…"},{"kind":"added","text":"  @action"},{"kind":"added","text":"  setTotalChanges = (totalChanges: number) => {"},{"kind":"added","text":"    this.totalChanges = totalChanges;"},{"kind":"added","text":"  };"}]}]}],"hunkIds":["app/components/DocumentContext.tsx#1","app/components/DocumentContext.tsx#2"],"notes":["Not chosen (inferred): passing the count down through Document and Header as props — that prop chain was the source of the problem."],"sources":[{"type":"diff","ref":"app/components/DocumentContext.tsx#2"}]},{"id":"s9","kind":"dead_end","routeLabel":"Flicker","title":"Reset only on unmount","focusNode":"rv","tag":"commit_history","isDeadEnd":true,"narration":"There was one more iteration. If the count is cleared every time it's recalculated, it drops to zero for a moment whenever you switch versions, and the header blinks. So clearing was moved to a separate step that only runs when you leave the history view.","beats":[{"kind":"problem","heading":"What broke in the first version","text":"Likely intermediate version: reset in the cleanup of the publishing effect.","code":[{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"diff","reconstructed":true,"label":"reconstructed from commit title, not in the diff","lines":[{"kind":"focus","text":"  React.useEffect(() => {"},{"kind":"focus","text":"    setTotalChanges(totalChanges);"},{"kind":"focus","text":"    return () => setTotalChanges(0);","annotation":"Runs on every recalculation → count briefly 0 → header flickers.","annotationTag":"inferred"},{"kind":"focus","text":"  }, [totalChanges, setTotalChanges]);"}]}]},{"kind":"change","heading":"What we change","text":"A separate effect with stable deps runs its cleanup only on unmount.","code":[{"file":"app/scenes/Document/components/RevisionViewer.tsx","revision":"diff","lines":[{"kind":"added","text":"  // Reset the count on unmount so it does not linger on the live document."},{"kind":"added","text":"  React.useEffect(() => () => setTotalChanges(0), [setTotalChanges]);","annotation":"Two effects instead of one: publishing and resetting have different lifetimes.","annotationTag":"fact"}]}]}],"hunkIds":["app/scenes/Document/components/RevisionViewer.tsx#2"],"notes":["The PR was squash-merged, so the exact intermediate code is not preserved. Its shape is reconstructed from the commit title."],"sources":[{"type":"commit_message","ref":"Reset changes count only on unmount to avoid flicker"}]},{"id":"s10","kind":"change","routeLabel":"Header reads context","title":"The header reads from the context","focusNode":"cn","tag":"commit_history","narration":"Now the number arrives immediately, while the editor may still be loading. That's why the last commit disables the previous and next buttons until the editor is ready; otherwise they would appear together with the number but do nothing.","beats":[{"kind":"change","heading":"What we change","text":"No more props: the counter takes `editor` and `totalChanges` from context; navigation buttons are disabled until the Diff extension exists.","code":[{"file":"app/scenes/Document/components/ChangesNavigation.tsx","revision":"diff","lines":[{"kind":"added","text":"  const { editor, totalChanges } = useDocumentContext();"},{"kind":"elided","text":"…"},{"kind":"removed","text":"  const diffExtension = editorRef.current?.extensions.extensions.find("},{"kind":"added","text":"  const diffExtension = editor?.extensions.extensions.find("},{"kind":"elided","text":"…"},{"kind":"removed","text":"  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"},{"kind":"elided","text":"…"},{"kind":"removed","text":"              onClick={() => editorRef.current?.commands.nextChange()}"},{"kind":"added","text":"              onClick={() => editor?.commands.nextChange()}"},{"kind":"added","text":"              disabled={!diffExtension}","annotation":"The count can now render before the editor exists; buttons must wait for it.","annotationTag":"commit_history"}]},{"file":"app/scenes/Document/components/Header.tsx","revision":"diff","lines":[{"kind":"removed","text":"                \u003cChangesNavigation revision={revision} editorRef={editorRef} />"},{"kind":"added","text":"                \u003cChangesNavigation />"}]}]}],"hunkIds":["app/scenes/Document/components/ChangesNavigation.tsx#1","app/scenes/Document/components/ChangesNavigation.tsx#2","app/scenes/Document/components/Header.tsx#4"],"skipped":["Removed the editorRef prop, its type and unused imports from Header.tsx and Document.tsx"],"sources":[{"type":"commit_message","ref":"Disable change nav buttons until Diff extension is available"}]},{"id":"s11","kind":"verification","routeLabel":"Proof","title":"How to check it","focusNode":"cn","tag":"unverified","narration":"This scenario has not been run yet. It's what the tool would execute on the main branch and on the pull request branch. Each line checks one of the decisions above, not just the original symptom.","beats":[{"kind":"current","heading":"Scenario","text":"Run on base and head; record both.","traces":[[{"label":"open revision with ?changes"},{"label":"\"N changes\" immediately","status":"ok"}],[{"label":"click next change"},{"label":"\"1 of N changes\"","status":"ok"}],[{"label":"change compareTo"},{"label":"new N, no flash of 0","status":"ok"}],[{"label":"back to live document"},{"label":"counter gone","status":"ok"}]]}],"hunkIds":[],"sources":[{"type":"inference","ref":"derived from the steps above"}]}],"skippedHunks":[{"hunkId":"app/scenes/Document/components/Document.tsx#1","reason":"removed editorRef prop"},{"hunkId":"app/scenes/Document/components/Header.tsx#1","reason":"removed unused Editor import"},{"hunkId":"app/scenes/Document/components/Header.tsx#2","reason":"removed editorRef from Props"},{"hunkId":"app/scenes/Document/components/Header.tsx#3","reason":"removed editorRef from destructuring"}],"openQuestions":[{"id":"q1","stepId":"s4","question":"After the editor remounts, does the current-change index reset, so the label shows \"N changes\" until the user clicks next? Is that intended?","why":"The index lives on the Diff instance, which is recreated on every remount.","tag":"inferred"},{"id":"q2","stepId":"s7","question":"While comparison data is still loading, what count is published — 0, or a count against the wrong base?","why":"totalChanges is computed from comparisonData, which may be undefined on the first render.","tag":"inferred"}],"verification":{"status":"not_run","scenario":["Open a revision with ?changes → \"N changes\" appears immediately","Click next change → \"1 of N changes\"","Change compareTo → new N without a flash of 0","Return to the live document → counter disappears"]},"meta":{"analyzer":"manual","generatedAt":"2026-09-25T00:00:00Z","language":"en"},"coverage":{"totalHunks":13,"explained":9,"skipped":4,"uncoveredHunkIds":[]}}</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const md = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+  let W, PLAIN, byId, flow, minors;
+
+  /*
+   * Plain-language layer. In the product these become analyzer output fields
+   * (headline, say, check, minor, visual); here they are written by hand for #10295
+   * to show the target. Everything technical stays in the analysis (Details drawer).
+   */
+  const PLAINS = {};
+  PLAINS.excalidraw = {
+    title: "The menu and the sidebar no longer overlap",
+    problem: "With the sidebar open, toolbar buttons show on top of it, and on phones the menu opens underneath it.",
+    fix: "Put the sidebar on a higher layer, and close it whenever the main menu opens.",
+    steps: {
+      s1: { ch: "problem", head: "Two things look wrong when the sidebar is open", say: "Nothing here is broken in logic. It is about what is drawn on top of what.",
+            visual: { type: "symptoms", items: ["Toolbar buttons appear over the open sidebar", "On phones, the menu opens under the sidebar"] } },
+      s2: { ch: "problem", head: "The sidebar sat on a lower layer than the toolbar", say: "Each panel has a layer number, and the higher number is drawn on top. The fix moves the sidebar above the toolbar.",
+            visual: { type: "layers", before: [["Dialogs", 1000], ["Toolbar", 100], ["Sidebar", 80, "bad"]], after: [["Dialogs", 1000], ["Sidebar", 120, "hl"], ["Toolbar", 100]] },
+            check: "Sidebar is now 120: above the toolbar, still below dialogs. Is that the right slot?", code: ["s2", 1, 0] },
+      s3: { ch: "problem", head: "That creates a new clash on phones", say: "On phones the menu lives inside the toolbar. If the sidebar stays open, it now covers the menu.",
+            visual: { type: "flow", rows: [[["Sidebar raised", ""], ["Menu stays in toolbar layer", ""], ["Menu hidden under sidebar", "bad"]]] } },
+      s4: { ch: "problem", head: "Opening the menu never closed the sidebar", say: "One direction already worked. The other did not.",
+            visual: { type: "flow", rows: [[["Open sidebar", ""], ["Menu closes", "good"]], [["Open menu", ""], ["Sidebar stays open", "bad"]]] } },
+      s5: { ch: "fix", head: "Decision: a click on the menu button closes the sidebar", say: "A floating sidebar already closes when you click outside it. The menu button was marked as “ignore this click”. Remove the mark, and the sidebar closes on its own.",
+            visual: { type: "flow", rows: [[["Click menu button", ""], ["Sidebar sees a click outside", ""], ["Sidebar closes", "good"]]] },
+            check: "Nothing else should depend on clicks on this button being ignored. Agree?" },
+      s6: { ch: "fix", head: "The menu and its button share one wrapper", say: "Without the mark, the menu would close itself when its own button is clicked. An invisible wrapper lets it recognise its own button.",
+            code: ["s6", 0, 0], check: "The wrapper takes no space in the layout. Could it still change how any menu looks?" },
+      s7: { ch: "fix", head: "The menu ignores clicks on its own button", say: "A click inside the wrapper keeps the menu open. A click anywhere else closes it, as before.",
+            code: ["s7", 1, 0], check: "Could anything else inside the wrapper be mistaken for the button?" },
+      s8: { ch: "fix", head: "The “ignore this click” mark is removed", say: "This one-line removal is what makes the sidebar close when the menu opens.",
+            code: ["s8", 0, 0], check: "Other click-outside listeners now react to this button too. Is that intended everywhere?" },
+      s9: { minor: true, head: "A type is widened so the new check compiles", say: "No change in behaviour.", code: ["s9", 0, 0] },
+      s10: { ch: "check", head: "Try it in the app", say: "Four short scenarios cover both fixes.", visual: { type: "try" } },
+    },
+    edges: {
+      "--zIndex-ui-library: 80": "layer 80", "--zIndex-ui-library: 120": "layer 120",
+      "data-prevent-outside-click": "“ignore this click” mark", "dropdown-menu-container wrapper": "wraps",
+      "closest(.dropdown-menu-container)": "checks the wrapper", "open=openMenu==canvas": "opens",
+    },
+    // Short, plain versions of the analyzer's open questions (full text stays in Details).
+    questions: {
+      s7: "Could the menu pick the wrong wrapper, since inner parts use the same class name?",
+      s2: "Does a docked sidebar at layer 120 now cover the style popups?",
+      s8: "Could other menus or popovers now close unexpectedly?",
+    },
+  };
+
+
+  PLAINS.outline = {
+    title: "The history counter shows up at once and keeps counting",
+    problem: "In document history, the change counter often doesn’t appear, and when it does it gets stuck on “N changes”.",
+    fix: "Count the changes where the comparison is already made, and hand the number to the header directly.",
+    steps: {
+      s1: { ch: "problem", head: "The change counter is missing or stuck", say: "When you open an older version, the header should say how many changes there are and let you step through them.",
+            visual: { type: "symptoms", items: ["The counter doesn’t appear when the page loads", "When it does, it stays on “N changes” instead of “2 of N”"] } },
+      s2: { ch: "problem", head: "Two parts read the same link differently", say: "A small side issue. For a link ending in “?changes”, the text shows highlights, but the counter decides changes are off.",
+            visual: { type: "flow", rows: [[["Link ends in ?changes", ""], ["Counter: “no value, so off”", "bad"], ["Hidden", "bad"]], [["Link ends in ?changes", ""], ["Viewer: “flag is there, so on”", "good"], ["Highlights shown", "good"]]] },
+            code: ["s2", 2, 0], check: "Both now ask “is the flag there?”. Should a flag with no value turn changes on?" },
+      s3: { ch: "problem", head: "The header hears about the editor by chance", say: "The editor is passed down through a handle that never announces changes. The header only notices it when it redraws for some other reason.",
+            visual: { type: "map", caption: "The editor travels down through two components, and nobody is told when it changes." } },
+      s4: { ch: "problem", head: "The editor arrives late, then gets rebuilt", say: "On the first draw there is no editor yet. Later it is rebuilt from scratch, and the header keeps looking at the old one.",
+            visual: { type: "flow", rows: [[["First draw", ""], ["No editor yet", "bad"], ["Counter hidden", "bad"]], [["Editor rebuilt", ""], ["Header sees the old one", "bad"], ["Stuck on “N changes”", "bad"]]] } },
+      s5: { ch: "fix", head: "The shared editor slot now announces changes", say: "The editor was already kept in a shared place for the document. Now anything that reads it redraws when the editor appears or is replaced.",
+            code: ["s5", 0, 0], check: "Everything reading this slot now redraws when the editor changes. Anything expensive among them?" },
+      s6: { ch: "fix", head: "Decision: counting doesn’t need the editor", say: "The number depends only on the two versions being compared. So the counting moves into a function that works without any editor.",
+            visual: { type: "flow", rows: [[["Two versions", ""], ["Their difference", ""], ["Number of changes", "good"]]] },
+            code: ["s6", 1, 0], check: "The counting is moved, not rewritten. Does the diff confirm the logic is identical?" },
+      s7: { ch: "fix", head: "Count right where the difference is made", say: "The viewer already works out the difference to highlight it. Now it also takes the count from there and puts it in the shared state.",
+            visual: { type: "flow", rows: [[["Difference worked out", ""], ["Count taken", ""], ["Shared state", "good"], ["Header updates", "good"]]] },
+            code: ["s7", 1, 0], check: "When highlights are off the count is 0. Is that the right value to publish?" },
+      s8: { ch: "fix", head: "The viewer and the header share one number", say: "They aren’t connected directly, so the number travels through the shared document state, the same place that already holds the editor.",
+            visual: { type: "map", caption: "The count now goes from the viewer into shared state, and the header reads it from there." }, code: ["s8", 0, 0] },
+      s9: { ch: "fix", detour: true, head: "Detour: resetting the count made it blink", say: "A first version reset the count to zero on every update, so switching versions flashed a 0. Now it resets only when you leave history.",
+            visual: { type: "flow", rows: [[["Tried first: reset on every update", "old"], ["Counter flashes 0", "bad"]], [["Now: reset when leaving history", ""], ["No flash", "good"]]] },
+            code: ["s9", 1, 0], check: "Can the old count linger if you jump to another document without leaving history?" },
+      s10: { ch: "fix", head: "The header reads the shared number", say: "The number now shows at once. The next and previous buttons stay disabled until the editor is ready, so they never appear and do nothing.",
+            code: ["s10", 0, 0], check: "Buttons are disabled until the editor loads. Is that clear enough to the user?" },
+      s11: { ch: "check", head: "Try it in the app", say: "Four short scenarios, one for each decision.", visual: { type: "try" } },
+    },
+    edges: {
+      "editorRef": "passes the editor down", "setEditor": "stores the editor", "setEditor + setTotalChanges": "stores editor + count",
+      "new Diff(...)": "creates", "useDocumentContext": "reads editor + count",
+    },
+    questions: {
+      s4: "After the editor is rebuilt, does the position reset to “N changes” until you click next?",
+      s7: "While the older version is still loading, what count is shown: 0, or one against the wrong version?",
+    },
+  };
+
+  const CH = { problem: "Problem", fix: "Fix", check: "Try it" };
+  const SOURCE = { commit_history: "from the commit history", inferred: "our reading of the code", unverified: "not run yet" };
+  const qOf = (id) => (W.openQuestions || []).find((q) => q.stepId === id);
+
+  let S = { i: -1, checks: {}, tried: {}, asks: {}, gaps: {}, showCode: {}, mapMode: "before", playing: false, token: 0 };
+  let current = null; // i: -1 start, flow.length = summary
+  const END = () => flow.length;
+
+  // ---------- pieces ----------
+  const CTX = 3; // context lines kept around each change
+  function ghUrl(b) {
+    const sha = b.revision === "base" ? W.pr.baseSha : W.pr.headSha;
+    return sha ? `https://github.com/${W.pr.repo}/blob/${sha}/${b.file}` : `${W.pr.url}/files`;
+  }
+  function codeBlock([sid, bi, ci]) {
+    const b = byId[sid]?.beats[bi]?.code?.[ci];
+    if (!b) return "";
+    const L = b.lines;
+    const key = (l) => l && (l.kind !== "context" || /^\s*\/\//.test(l.text));
+    const keep = L.map((_, i) => { for (let d = -CTX; d <= CTX; d++) if (key(L[i + d])) return true; return false; });
+    const line = (l) => `<div class="ln ${l.kind}"><span class="g">${{ added: "+", removed: "−", focus: "›" }[l.kind] || ""}</span><span class="t">${esc(l.text)}</span></div>`;
+    let out = "", i = 0;
+    while (i < L.length) {
+      if (keep[i]) { out += line(L[i]); i++; continue; }
+      let j = i; while (j < L.length && !keep[j]) j++;
+      const gk = `${sid}:${bi}:${ci}:${i}`;
+      out += S.gaps[gk] ? L.slice(i, j).map(line).join("") : `<button class="fold" data-gap="${gk}">⋯ ${j - i} more line${j - i > 1 ? "s" : ""}</button>`;
+      i = j;
+    }
+    const n = L.filter((l) => l.kind === "added").length, r = L.filter((l) => l.kind === "removed").length;
+    return `<div class="code-h"><span title="${esc(b.file)}">${esc(b.file.split("/").pop())}</span><span>${n || r ? `+${n} −${r}` : { base: "before the change", head: "after the change" }[b.revision] || ""} · <a href="${esc(ghUrl(b))}" target="_blank" rel="noopener">open file ↗</a></span></div><div class="code">${out}</div>`;
+  }
+
+  // ---------- map: shown only on the start screen and on structural steps ----------
+  function edgeSet(mode, stepNo) {
+    return W.graph.edges.filter((e) => {
+      if (stepNo) return (e.visibleFrom ?? 1) <= stepNo && stepNo <= (e.visibleUntil ?? 1e9);
+      if (mode === "before") return e.state === "before" || (e.state === "unchanged" && !e.visibleFrom);
+      return e.state === "after" || (e.state === "unchanged" && !e.visibleUntil);
+    });
+  }
+  function mapSvg(edges, focus, allNodes) {
+    const used = new Set(edges.flatMap((e) => [e.from, e.to]).concat(focus ? [focus] : []));
+    const nodes = W.graph.nodes.filter((n) => allNodes || used.has(n.id));
+    const cols = [...new Set(nodes.map((n) => n.layout?.col ?? 0))].sort((a, b) => a - b);
+    const rows = [...new Set(nodes.map((n) => n.layout?.row ?? 0))].sort((a, b) => a - b);
+    const NW = 176, NH = 50, GX = 150, GY = 46, P = 6;
+    const pos = {};
+    nodes.forEach((n) => { pos[n.id] = { x: P + cols.indexOf(n.layout?.col ?? 0) * (NW + GX), y: P + rows.indexOf(n.layout?.row ?? 0) * (NH + GY) }; });
+    const Wd = P * 2 + cols.length * NW + (cols.length - 1) * GX, Hd = P * 2 + rows.length * NH + (rows.length - 1) * GY;
+    const tone = (e) => e.problem ? "bad" : e.state === "after" ? "good" : e.state === "before" ? "faint" : "muted";
+    const seg = (a, b) => {
+      const ax = a.x + NW / 2, ay = a.y + NH / 2, bx = b.x + NW / 2, by = b.y + NH / 2, dx = bx - ax, dy = by - ay;
+      const t = Math.min(Math.abs(NW / 2 / (dx || 1e-9)), Math.abs(NH / 2 / (dy || 1e-9)));
+      return [ax + dx * t, ay + dy * t, bx - dx * t, by - dy * t];
+    };
+    const plain = PLAIN.edges || {};
+    const E = edges.map((e) => {
+      const [x1, y1, x2, y2] = seg(pos[e.from], pos[e.to]); const c = tone(e);
+      const lbl = plain[e.label] || e.label || "", mx = (x1 + x2) / 2, my = (y1 + y2) / 2, w = lbl.length * 6.4 + 12;
+      return `<g><title>${esc(e.label || "")}</title><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--${c})" stroke-width="${e.state === "unchanged" ? 1.3 : 2}" ${e.state === "before" ? 'stroke-dasharray="5 4"' : ""} marker-end="url(#mk-${c})"/>
+        ${lbl ? `<rect x="${mx - w / 2}" y="${my - 10}" width="${w}" height="20" rx="4" fill="var(--panel)"/><text x="${mx}" y="${my + 4}" text-anchor="middle" font-size="11.5" fill="var(--${c === "faint" ? "muted" : c})">${esc(lbl)}</text>` : ""}</g>`;
+    }).join("");
+    const N = nodes.map((n) => { const p = pos[n.id], f = n.id === focus;
+      return `<g><title>${esc(n.file || "")}</title><rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="9" fill="${f ? "var(--accent-soft)" : "var(--raised)"}" stroke="${f ? "var(--accent)" : "var(--line)"}" stroke-width="${f ? 2 : 1}"/>
+        <text x="${p.x + NW / 2}" y="${p.y + 21}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">${esc(n.label)}</text>
+        <text x="${p.x + NW / 2}" y="${p.y + 38}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${esc(n.sublabel || "")}</text></g>`; }).join("");
+    return `<svg class="mapsvg" viewBox="0 0 ${Wd} ${Hd}" style="max-width:${Wd}px" role="img" aria-label="How the pieces connect"><defs>${["bad", "good", "faint", "muted"].map((c) => `<marker id="mk-${c}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--${c})"/></marker>`).join("")}</defs>${E}${N}</svg>`;
+  }
+  function mapLegend() {
+    return `<div class="legend"><span><i class="lg bad"></i>the problem path</span><span><i class="lg faint"></i>removed by the PR</span><span><i class="lg good"></i>added by the PR</span></div>`;
+  }
+
+  function visual(p) {
+    const v = p.visual;
+    if (!v) return p.code ? `<div class="visual">${codeBlock(p.code)}</div>` : "";
+    if (v.type === "map") {
+      const s = flow[S.i];
+      return `<div class="visual mapbox">${v.caption ? `<div class="map-cap">${esc(v.caption)}</div>` : ""}${mapSvg(edgeSet(null, W.steps.indexOf(s) + 1), s.focusNode)}${mapLegend()}</div>`;
+    }
+    if (v.type === "symptoms") return `<div class="visual"><ul class="symptoms">${v.items.map((t) => `<li><span class="ic">!</span>${esc(t)}</li>`).join("")}</ul></div>`;
+    if (v.type === "flow") return `<div class="visual flows">${v.rows.map((r) => `<div class="flow">${r.map(([t, c], k) => `${k ? '<span class="arrow">→</span>' : ""}<span class="node ${c}">${esc(t)}</span>`).join("")}</div>`).join("")}</div>`;
+    if (v.type === "layers") {
+      const st = (h, rows) => `<div class="stack"><h4>${h}</h4>${rows.map(([n, z, c]) => `<div class="layer ${c ? "hl " + c : ""}"><span>${n}</span><span>${z}</span></div>`).join("")}</div>`;
+      return `<div class="visual"><div class="layers">${st("Before · top is drawn last", v.before)}<span class="mid">→</span>${st("After", v.after)}</div></div>`;
+    }
+    if (v.type === "try") return `<div class="visual sum-list">${(W.verification?.scenario || []).map((t, k) =>
+      `<label class="sum-item" style="cursor:pointer"><input type="checkbox" data-try="${k}" ${S.tried[k] ? "checked" : ""}> <span>${esc(t.replace(/\s*→\s*/, " → "))}</span></label>`).join("")}</div>`;
+    return "";
+  }
+
+  function checkBox(s, p) {
+    if (!p.check) return "";
+    const on = !!S.checks[s.id];
+    return `<label class="check ${on ? "done" : ""}"><input type="checkbox" data-check="${s.id}" ${on ? "checked" : ""}><span class="lbl"><span class="k">Your check</span><span>${esc(p.check)}</span></span></label>`;
+  }
+
+  function askRow(s) {
+    const q = PLAIN.questions[s.id];
+    if (!q) return "";
+    const on = !!S.asks[s.id];
+    return `<div class="ask"><span class="q"><b>Ask?</b><span>${esc(q)}</span></span><button class="chip" data-ask="${s.id}" aria-pressed="${on}">${on ? "Added" : "Add to review"}</button></div>`;
+  }
+
+  // ---------- screens ----------
+  function start() {
+    const checks = flow.filter((s) => PLAIN.steps[s.id].check).length;
+    const min = Math.max(1, Math.round(W.steps.reduce((a, s) => a + s.narration.split(/\s+/).length, 0) / 150));
+    return `<div class="card">
+      <div class="eyebrow">Pull request walkthrough</div>
+      <h1>${esc(PLAIN.title)}</h1>
+      <div class="pf"><section class="p"><h3>Problem</h3><p>${esc(PLAIN.problem)}</p></section><section class="f"><h3>Fix</h3><p>${esc(PLAIN.fix)}</p></section></div>
+      <div class="hero-stats"><div class="stat"><b>${flow.length}</b><span>short steps</span></div><div class="stat"><b>${checks}</b><span>things to check</span></div><div class="stat"><b>~${min} min</b><span>to listen</span></div><div class="stat"><b>${W.coverage.explained + (W.coverage.skipped || 0)}/${W.coverage.totalHunks}</b><span>diff hunks covered</span></div></div>
+      <section class="visual mapbox"><div class="map-top"><h3>How the pieces connect</h3>
+        <div class="seg" role="group" aria-label="Before or after the PR"><button data-mode="before" aria-pressed="${S.mapMode === "before"}">Before</button><button data-mode="after" aria-pressed="${S.mapMode === "after"}">After</button></div></div>
+        ${mapSvg(edgeSet(S.mapMode), null, true)}${mapLegend()}</section>
+      <div class="cta"><button class="btn primary" data-go="0">Start →</button><button class="btn" id="listenAll">▶ Listen instead</button></div>
+    </div>`;
+  }
+
+  function step() {
+    const s = flow[S.i], p = PLAIN.steps[s.id];
+    const inCh = flow.filter((x) => PLAIN.steps[x.id].ch === p.ch);
+    return `<div class="card">
+      <div class="eyebrow"><b>${CH[p.ch]}</b> · ${inCh.indexOf(s) + 1} of ${inCh.length}${p.detour ? ` · <span class="detour">a path the author tried and replaced</span>` : ""}${SOURCE[s.tag] ? ` · <span class="src">${SOURCE[s.tag]}</span>` : ""}</div>
+      <h1>${esc(p.head)}</h1>
+      <p class="say">${esc(p.say)}</p>
+      ${visual(p)}
+      ${p.visual && p.code ? (S.showCode[s.id] ? `<div class="visual">${codeBlock(p.code)}</div>` : `<button class="more" data-code="${s.id}">Show the code change</button>`) : ""}
+      ${checkBox(s, p)}
+      ${askRow(s)}
+      <div class="quiet"><button class="link" data-details="${s.id}">How the analysis got here</button></div>
+    </div>`;
+  }
+
+  function summary() {
+    const withCheck = flow.filter((s) => PLAIN.steps[s.id].check);
+    const asked = Object.keys(S.asks).filter((k) => S.asks[k]);
+    const comment = asked.length ? asked.map((id) => `- ${PLAIN.questions[id]}`).join("\n") : "";
+    const tried = Object.values(S.tried).filter(Boolean).length, tries = (W.verification?.scenario || []).length;
+    return `<div class="card">
+      <div class="eyebrow"><b>Your review</b></div>
+      <h1>${withCheck.every((s) => S.checks[s.id]) ? "All checks done" : `${withCheck.filter((s) => S.checks[s.id]).length} of ${withCheck.length} checks done`}</h1>
+      <div class="sum-list">${withCheck.map((s) => `<div class="sum-item"><span class="m ${S.checks[s.id] ? "ok" : "no"}">${S.checks[s.id] ? "✓" : "○"}</span><button class="link" data-go="${flow.indexOf(s)}" style="text-align:left">${esc(PLAIN.steps[s.id].check)}</button></div>`).join("")}
+        <div class="sum-item"><span class="m ${tried === tries ? "ok" : "no"}">${tried === tries ? "✓" : "○"}</span><span>Tried ${tried} of ${tries} scenarios in the app</span></div></div>
+      <h2>Questions for the author</h2>
+      ${comment ? `<pre class="comment" id="comment">${esc(comment)}</pre><div class="cta"><button class="btn primary" id="copy">Copy as review comment</button></div>`
+        : `<p class="note">None added. The analysis suggested ${Object.keys(PLAIN.questions).length}; add them with “Add to review” on the steps.</p>`}
+      <h2>Also in this PR</h2>
+      ${minors.map((s) => `<div class="sum-item"><span class="m no">·</span><span>${esc(PLAIN.steps[s.id].head)}. ${esc(PLAIN.steps[s.id].say)} <button class="link" data-details="${s.id}">show</button></span></div>`).join("")}
+      ${(W.skippedHunks || []).length ? `<div class="sum-item"><span class="m no">·</span><span>${W.skippedHunks.length} small cleanups: ${esc([...new Set(W.skippedHunks.map((h) => h.reason))].join("; "))}</span></div>` : ""}
+      ${!minors.length && !(W.skippedHunks || []).length ? `<p class="note">Nothing else.</p>` : ""}
+      <p class="note">All ${W.coverage.totalHunks} changes in the diff are covered by the steps above.</p>
+      <p class="proto">Prototype: the plain-language text is hand-written for this PR to show the target output. The analysis behind “How the analysis got here” is the real Bob Shell result.</p>
+    </div>`;
+  }
+
+  // ---------- details: the full analysis, on request only ----------
+  function details(id) {
+    const s = byId[id];
+    const beat = (b) => `<div><h4>${{ current: "How it works now", problem: "What breaks", change: "What changes" }[b.kind]}</h4><p>${md(b.text)}</p>
+      ${(b.code || []).map((c) => `<div class="code-h"><span>${esc(c.file)}</span></div><div class="code">${c.lines.map((l) => `<div class="ln ${l.kind}"><span class="g">${{ added: "+", removed: "−", focus: "›" }[l.kind] || ""}</span><span class="t">${esc(l.text)}</span></div>${l.annotation ? `<div class="ann">${md(l.annotation)}</div>` : ""}`).join("")}</div>`).join("")}</div>`;
+    const q = qOf(id);
+    $("layer").innerHTML = `<div class="scrim" id="scrim"></div><aside class="drawer" role="dialog" aria-label="Analysis details"><div class="drawer-h"><h3>${md(s.title)}</h3><button class="x" id="closeD" aria-label="Close">×</button></div>
+      <div class="drawer-b">${s.beats.map(beat).join("")}
+      ${q ? `<div><h4>Question (full)</h4><p>${md(q.question)}</p><p class="note">${md(q.why)}</p></div>` : ""}
+      ${s.notes?.length ? `<div><h4>Notes</h4>${s.notes.map((n) => `<p>${md(n)}</p>`).join("")}</div>` : ""}
+      <div><h4>Sources</h4>${s.sources.map((r) => `<p class="note">${esc(r.type.replace(/_/g, " "))}: ${md(r.ref)}</p>`).join("")}</div></div></aside>`;
+    const close = () => ($("layer").innerHTML = "");
+    $("scrim").onclick = close; $("closeD").onclick = close; $("closeD").focus();
+  }
+
+  // ---------- chrome ----------
+  function chapters() {
+    $("pr").innerHTML = `<select id="prSel" aria-label="Pull request">${Object.keys(SETS).map((k) => `<option value="${k}" ${k === current ? "selected" : ""}>${esc(SETS[k].W.pr.repo)}#${SETS[k].W.pr.number}</option>`).join("")}</select> <span>${esc(W.pr.title)}</span>`;
+    $("prSel").onchange = (e) => load(e.target.value);
+    const cur = S.i >= 0 && S.i < END() ? PLAIN.steps[flow[S.i].id].ch : null;
+    $("chapters").innerHTML = Object.keys(CH).map((c) => `<div class="ch ${cur === c ? "on" : ""}">${CH[c]}<span class="dots">${flow.map((s, k) => PLAIN.steps[s.id].ch === c ? `<button class="${k === S.i ? "now" : k < S.i ? "done" : ""}" data-go="${k}" aria-label="Step ${k + 1}: ${esc(PLAIN.steps[s.id].head)}"></button>` : "").join("")}</span></div>`).join("");
+  }
+
+  function bar() {
+    $("back").disabled = S.i < 0;
+    const nx = S.i < 0 ? "Start →" : S.i < END() - 1 ? "Next →" : S.i === END() - 1 ? "Finish review →" : "Back to start";
+    $("next").textContent = nx;
+    $("listen").classList.toggle("on", S.playing);
+    $("listenIc").innerHTML = S.playing ? `<span class="eq"><i></i><i></i><i></i></span>` : `<svg viewBox="0 0 16 16"><path d="M4 2 L14 8 L4 14 z" fill="currentColor"/></svg>`;
+    $("listenT").textContent = S.playing ? "Listening… tap to stop" : S.i >= 0 && S.i < END() ? "Listen to this step" : "Listen to the whole walkthrough";
+  }
+
+  function render() {
+    const y = $("stage").scrollTop;
+    chapters();
+    $("stage").innerHTML = S.i < 0 ? start() : S.i >= END() ? summary() : step();
+    bar();
+    wire();
+    $("stage").scrollTop = y;
+  }
+
+  function wire() {
+    document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => go(+b.dataset.go)));
+    document.querySelectorAll("[data-gap]").forEach((b) => (b.onclick = () => { S.gaps[b.dataset.gap] = true; render(); }));
+    document.querySelectorAll("[data-code]").forEach((b) => (b.onclick = () => { S.showCode[b.dataset.code] = true; render(); }));
+    document.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = () => { S.mapMode = b.dataset.mode; render(); }));
+    document.querySelectorAll("[data-details]").forEach((b) => (b.onclick = () => details(b.dataset.details)));
+    document.querySelectorAll("[data-check]").forEach((b) => (b.onchange = () => { S.checks[b.dataset.check] = b.checked; render(); }));
+    document.querySelectorAll("[data-try]").forEach((b) => (b.onchange = () => { S.tried[b.dataset.try] = b.checked; }));
+    document.querySelectorAll("[data-ask]").forEach((b) => (b.onclick = () => { S.asks[b.dataset.ask] = !S.asks[b.dataset.ask]; render(); }));
+    const la = $("listenAll"); if (la) la.onclick = () => { go(0); listen(true); };
+    const cp = $("copy"); if (cp) cp.onclick = () => {
+      const t = $("comment").textContent;
+      navigator.clipboard?.writeText(t).then(() => (cp.textContent = "Copied"), () => selectText());
+      if (!navigator.clipboard) selectText();
+      function selectText() { const r = document.createRange(); r.selectNodeContents($("comment")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); cp.textContent = "Selected — press ⌘C"; }
+    };
+  }
+
+  function go(i, keep) {
+    i = Math.max(-1, Math.min(END(), i));
+    if (!keep) stopListen();
+    S.i = i; render(); $("stage").scrollTop = 0;
+  }
+
+  // ---------- voice: the analyzer's narration, spoken; the screen stays short ----------
+  const synth = "speechSynthesis" in window ? speechSynthesis : null;
+  let timer;
+  function listen(all) {
+    if (S.i < 0 || S.i >= END()) { go(0, true); all = true; }
+    S.playing = true; const t = ++S.token; bar();
+    const text = flow[S.i].narration;
+    const done = () => {
+      if (t !== S.token) return;
+      if (all && S.i < END() - 1) { go(S.i + 1, true); setTimeout(() => t === S.token && listen(true), 500); }
+      else { S.playing = false; bar(); }
+    };
+    if (synth) { const u = new SpeechSynthesisUtterance(text); u.lang = W.meta?.language || "en"; u.onend = done; u.onerror = () => { timer = setTimeout(done, 2500); }; synth.speak(u); }
+    else timer = setTimeout(done, text.split(/\s+/).length * 400);
+  }
+  function stopListen() { S.token++; S.playing = false; clearTimeout(timer); try { synth?.cancel(); } catch {} }
+  $("listen").onclick = () => { if (S.playing) { stopListen(); bar(); } else listen(S.i < 0 || S.i >= END()); };
+  $("back").onclick = () => go(S.i - 1);
+  $("next").onclick = () => go(S.i >= END() ? -1 : S.i + 1);
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea") || e.metaKey || e.ctrlKey) return;
+    if (e.key === "ArrowRight") go(S.i + 1);
+    else if (e.key === "ArrowLeft") go(S.i - 1);
+    else if (e.key === "Escape") $("layer").innerHTML = "";
+  });
+
+  const SETS = {
+    excalidraw: { W: JSON.parse($("data-excalidraw").textContent), P: PLAINS.excalidraw },
+    outline: { W: JSON.parse($("data-outline").textContent), P: PLAINS.outline },
+  };
+  function load(k) {
+    stopListen();
+    current = SETS[k] ? k : "excalidraw";
+    W = SETS[current].W; PLAIN = SETS[current].P;
+    byId = Object.fromEntries(W.steps.map((s) => [s.id, s]));
+    flow = W.steps.filter((s) => !PLAIN.steps[s.id]?.minor);
+    minors = W.steps.filter((s) => PLAIN.steps[s.id]?.minor);
+    S = { i: -1, checks: {}, tried: {}, asks: {}, gaps: {}, showCode: {}, mapMode: "before", playing: false, token: S.token + 1 };
+    try { history.replaceState(null, "", "#" + current); } catch {}
+    render(); $("stage").scrollTop = 0;
+  }
+  load(location.hash.slice(1));
+})();
+</script>
