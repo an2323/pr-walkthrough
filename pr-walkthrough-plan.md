@@ -9,7 +9,7 @@
 
 **Goal:** Build an interactive PR walkthrough tool for the IBM Bob 2.0 Hackathon (Sep 25–27, 2026). Given a GitHub PR URL, the system analyses the full repository with Bob Shell (non-interactive) and produces a structured JSON walkthrough that a React viewer renders as an ordered, narrated, annotated route through the reviewer's reasoning.
 
-**Scope:** Must-have items 1–6 from the brief, plus ST6c (live analysis), ST6d (GitHub round-trip) and ST6f (public demo). **Cut on Sep 26:** LLM fallback analyzer (Claude/watsonx), live GitHub webhook (smee), Outline in the public demo, the agent-verifier (ST6e).
+**Scope:** Must-have items 1–6 from the brief, plus ST6c (live analysis), ST6d (GitHub round-trip) and ST6f (public demo). **Cut on Sep 26:** LLM fallback analyzer (Claude/watsonx), live GitHub webhook (smee), Outline in the public demo. The agent-verifier (ST6e) was cut and then **brought back** the same day: it runs after the main items, before ST11.
 
 **Approach:**
 - Monorepo with three packages: `shared` (schema + validators), `server` (Node/TS backend), `web` (React viewer).
@@ -527,13 +527,28 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ### Sub-Task 6e — Agent-verifier ("Try it in the app")
 
-**Status:** ✂ **cut** (Sep 26)
+**Status:** ↩ **back in scope** (Sep 26, user decision) — **deferred until the main items are done**: after ST6g, ST7, ST8, ST9; before ST11 (Railway). Was cut earlier the same day; that cut is reversed. Needs the user's go-ahead (and likely a stage-budget decision) before any paid run.
 
-The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: true` for dev servers is confirmed to work) that starts BASE and HEAD, writes a Playwright test and returns before/after screenshots with highlight boxes. Estimated 2–3 h and $3–8 per run.
+**Intent:** This is part of the product, not decoration: when a PR is analysed, the system also starts the app at BASE and at HEAD, reproduces the scenario, and records before/after screenshots with the spot to look at highlighted. They land automatically in the first Problem step (the ST6g `shots` visual) — no manual screenshots per PR. **Ideally Bob does it.** First target: Excalidraw only (the user has confirmed local dev servers start and screenshots can be taken).
 
-**Why cut:** the before/after is context for the viewer of the demo video, not part of the product. Two screenshots taken by hand (excalidraw at BASE and HEAD with the sidebar open; the same at mobile width with the menu open, ~30–40 min) give most of the effect. The agent would also push the stage budget past $20.
+**Order of work:**
+1. ST6g first: manual #10295 screenshots + the `shots` visual with highlight boxes in the viewer. This fixes the output format the verifier must produce, and the demo is safe even if the verifier slips.
+2. Main plan items (ST7 narration, ST8, ST9).
+3. Then this ST: the verifier fills the same `shots` visual automatically.
 
-**Instead:** two manual screenshots (BASE / HEAD). **Updated Sep 26:** they are part of the product, not just the video — they become the visual of the first Problem step (see ST6g); the video and README reuse them. The "Try it in the app" chapter and the "Tried N of M scenarios" line are **hidden** in the viewer via `SHOW_TRY_IT = false` in `packages/web/src/features.ts` — flip it to bring the bare scenario checklist back unchanged.
+**Design:**
+- **Bob does the work** in a second custom mode `pr-verifier`, run as a separate `bob run` after the analysis (same checkout, per-PR worktrees): groups `read` + `execute` (+ `browser` if Bob's browser tool can take screenshots reliably — check first; otherwise Bob writes and runs a Playwright script). `execute_command` with `background: true` for dev servers is confirmed to work.
+- **Input:** the finished walkthrough (first Problem step, `verification.scenario`, the files touched), plus the recipe for the repo: how to install/start it (Excalidraw: `yarn`, `yarn start`, port). The backend prepares two worktrees (BASE, HEAD) and fixed ports.
+- **Bob's job:** start BASE and HEAD, reproduce the scenario (e.g. #10295: open the floating sidebar, then the main menu), take one screenshot per side at desktop width (optionally mobile), and return JSON: `{ before: { file, highlights[] }, after: { file, highlights[] }, caption, steps[] }`, highlights as 0..1 fractions of the image (ST6g schema). Bob picks the highlight region from what changed (DOM element bounding box of the component the PR touches).
+- **Backend:** validates the JSON (files exist, sizes, highlights in range), copies images to `data/shots/{owner}/{repo}/{number}/`, writes the `shots` visual into the first Problem step, and always kills the processes Bob started and frees the ports (they outlive the session).
+- **Safety:** `execute` runs code from the repository, so: allowlist of repos (Excalidraw only at first), throwaway checkout outside this repo, no secrets in the env of the verifier process, network limited to install, timeout, `--max-cost`. Not exposed as "any PR" in public until ST11's guards exist.
+- **Fallback if Bob is unreliable:** the backend runs a per-repo Playwright script for the same scenario and fills the same `shots` visual (no Bobcoins). The format stays the same, so the viewer doesn't care who produced the images.
+- **Progress screen (ST6c):** new stages "Starting the app (before/after)" and "Taking screenshots".
+- **Cost:** estimated $3–8 per run (unverified). Stage-2 cap is $20 with ~$9.80 left; a verifier run plus retries may need the cap raised — ask the user before the first run and log every run in `docs/cost-log-stage2.md`.
+
+**Until this is done:** #10295's screenshots are the manual ones from ST6g. The "Try it in the app" chapter and the "Tried N of M scenarios" line stay **hidden** via `SHOW_TRY_IT = false` in `packages/web/src/features.ts`.
+
+**✓ Verify:** with the user's go-ahead, one verifier run on #10295 produces BASE/HEAD screenshots showing the toolbar-over-sidebar bug and its fix, with highlight boxes over the right spot; they appear in step 1 of the viewer; no dev-server process or port is left running afterwards; a second PR from Excalidraw (#8340) works without code changes, or the reason it can't is written down.
 
 ---
 
@@ -565,7 +580,7 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 **Intent:** The reviewer should *see* the bug before reading about it, and the start screen should only answer "what is this PR". The architecture map is an orientation aid, not a review step, so it moves out of the main flow.
 
 **Decisions (Sep 26):**
-- **Before/after screenshots → the first Problem step.** For #10295: excalidraw at BASE vs HEAD with the floating sidebar open (toolbar buttons over the sidebar vs under it); optionally the same at mobile width with the menu open. Taken by hand (ST6e is cut). They are the step's ONE visual (Before | After side by side on desktop, a toggle on mobile), replacing the current visual of that step. Captions in plain words.
+- **Before/after screenshots → the first Problem step.** For #10295: excalidraw at BASE vs HEAD with the floating sidebar open (toolbar buttons over the sidebar vs under it); optionally the same at mobile width with the menu open. Taken by hand for now; later produced automatically by the verifier (ST6e), in the same format. They are the step's ONE visual (Before | After side by side on desktop, a toggle on mobile), replacing the current visual of that step. Captions in plain words.
 - **Highlights drawn by the viewer, not baked into the PNG:** each screenshot gets 1–2 boxes with a short label over the spot to look at — red on Before, green on After, at the same place on both so the change jumps out (#10295: Before "Buttons draw over the sidebar", After "Sidebar is on top"). Boxes, not arrows (arrows are hard to place across widths and cover UI). Coordinates are fractions of the image size, so boxes stay aligned at any width; colours come from the theme tokens (`--bad` / `--good`); labels stay real text (editable, screen-reader friendly); the box can fade in after the image (nice under narration in the video). The PNGs stay clean and can be reused in the README.
 - **Schema:** optional on a step (paths relative to `data/shots/{owner}/{repo}/{number}/`):
   ```ts
@@ -683,7 +698,7 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 ### Sub-Task 10 — Analyzer quality iteration
 
-**Status:** [-] nearly done — **2 of 2 allowed prompt-edit iterations done on #10295, converged** (done by Claude Code after Bob IDE hit its limit; do not start ST10 over). #8340 cross-check run intentionally paused (not a technical blocker — budget/priorities call, see below). **Bobcoin budget for this ST: ≤ $10**, of which **~$4.46 spent** (2 iterations: $1.929 + $2.529); stage-2 total cap stays **$20** (no raise needed since ST6e is cut), **$10.20 spent overall** — see `docs/cost-log-stage2.md`.
+**Status:** [-] nearly done — **2 of 2 allowed prompt-edit iterations done on #10295, converged** (done by Claude Code after Bob IDE hit its limit; do not start ST10 over). #8340 cross-check run intentionally paused (not a technical blocker — budget/priorities call, see below). **Bobcoin budget for this ST: ≤ $10**, of which **~$4.46 spent** (2 iterations: $1.929 + $2.529); stage-2 total cap stays **$20** (the revived ST6e may need a raise — the user decides before its first run), **$10.20 spent overall** — see `docs/cost-log-stage2.md`.
 
 **Iteration results on #10295** (each is `valid: true, errorCount: 0` immediately, no repair needed):
 
@@ -739,7 +754,8 @@ Iteration 1 fixed the three prompt/schema/checker number mismatches (headline wo
 | Outline licence | Unverified — not deployed in the public demo (ST6f); private test data only |
 | LLM fallback if Bobcoins run out | ✂ Cut. `CachedAnalyzer` covers the demo; the stage-2 budget guard ($20) prevents running out mid-demo |
 | Narration language | English only |
-| Before/after for #10295 | Two screenshots taken by hand (BASE/HEAD), shown as the visual of the first Problem step (ST6g) and reused in the video/README; the agent-verifier (ST6e) is cut |
+| Before/after for #10295 | Two screenshots taken by hand (BASE/HEAD), shown as the visual of the first Problem step (ST6g) and reused in the video/README; later produced automatically by Bob (ST6e, Excalidraw first) |
+| Automated before/after screenshots | Back in scope: Bob starts BASE/HEAD, reproduces the scenario, returns screenshots + highlights (ST6e), after the main items and before ST11 |
 | Where the map lives | Off the start screen; on demand via a button on every screen + a link on the summary (ST6g) |
 | Live analysis of any PR in public | Railway backend, as the very last step (ST11); Vercel stays static |
 | Live GitHub webhook | ✂ Cut. ST6d posts comments via the REST API instead; a bot comment is a "should" |
@@ -779,7 +795,7 @@ bob.ibm.com/docs/shell) and confirmed at runtime by the ST5a spike and the stage
 - In a mode with `execute`, `execute_command` supports `background: true` (Bob starts a
   server, gets a pid, can curl it). Processes Bob starts **outlive the session** and keep
   their port — whoever uses this must kill them after the run. Not used by the analyzer
-  (read-only); was the basis for the cut ST6e.
+  (read-only); this is what the verifier (ST6e) relies on.
 
 **Design:**
 1. Read-only via a custom mode written into the checkout as
@@ -827,7 +843,9 @@ Reference implementation: `packages/server/scripts/bob-spike.ts`.
 | Bob Shell produces invalid JSON or hallucinates code lines | Medium | Validation + one repair retry; golden example in prompt as few-shot reference |
 | Bobcoin budget runs out before demo PRs are generated | Medium | Generate `#10295` first (5 files, +19−7); CachedAnalyzer for demo runs; stage budget guard refuses runs that could exceed $20 |
 | `outline/outline` licence unverified | Confirmed risk | Exclude from public demo; use only Excalidraw PRs (MIT); outline is private test data |
-| Excalidraw doesn't build at old commits for the before/after screenshots | Medium | Only two manual screenshots are needed (ST6e cut); if BASE won't build, describe the bug in the video with the walkthrough's own "problem" step |
+| Excalidraw doesn't build at old commits for the before/after screenshots | Medium | Manual #10295 screenshots from ST6g keep the demo safe; the verifier (ST6e) reports "could not start BASE" instead of failing the walkthrough |
+| Verifier runs repository code (`execute`) | Medium | Repo allowlist (Excalidraw first), throwaway checkout, no secrets in its env, timeout + `--max-cost`, backend kills leftover processes (ST6e) |
+| Verifier is unreliable or too expensive | Medium | Same output format from a per-repo Playwright fallback run by the backend (no Bobcoins) |
 | GitHub write token leaks or posts to upstream | Low | Fine-grained PAT scoped to the demo fork only, backend-only, `.env` gitignored (ST6d) |
 | Static Vercel build drifts from the API-backed viewer | Low | One code path with a `VITE_STATIC` switch; verify both before submitting (ST6f) |
 | dagre graph layout looks bad for some PRs | Low | Test with golden JSON early; fall back to manual layout hints grid |
@@ -901,9 +919,10 @@ ST6g  Before/after screenshots in step 1; map on demand; label-overlap fix
 ST7   Demo data + narration   →   ST8 / ST9  screenshots, README, video, submit
      │
      ▼
-ST11  Live analysis for any PR on Railway (last, optional)
-
-ST6e  ✂ cut — two manual before/after screenshots instead (now in step 1, ST6g)
+ST6e  Verifier: Bob starts BASE/HEAD and takes the before/after screenshots (Excalidraw first; paid, needs go-ahead)
+     │
+     ▼
+ST11  Live analysis for any PR on Railway (last)
 Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #9403 retry
 ```
 
@@ -931,4 +950,5 @@ Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #94
 | M7.9 | ST6g: #10295 step 1 shows before/after screenshots; map opens on demand, no label overlap | 0 |
 | M8 | All demo PRs cached; full stack demo working | #8340 confirmation ~$1–2; #9403 retry if budget allows |
 | M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |
-| M10 | ST11: public live analysis on Railway (optional, after submission-ready) | per run, with the user's go-ahead |
+| M9.5 | ST6e: Bob-produced before/after screenshots with highlights in step 1 (Excalidraw) | ~$3–8 per run (estimate), with the user's go-ahead |
+| M10 | ST11: public live analysis on Railway | per run, with the user's go-ahead |
