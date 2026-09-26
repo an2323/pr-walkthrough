@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import type { Hunk, PullRequestMeta } from "@pr-walkthrough/shared";
 import type { Analyzer, AnalyzerInput, WalkthroughDraft } from "./interface.js";
 import { classifyHunks } from "./classify-hunks.js";
+import { gitCommonDir } from "../git/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -90,8 +91,15 @@ export async function writeSidecar(
     ].join("\n")
   );
 
-  // Keep sidecar files out of `git status` of the cached clone.
-  await appendFile(path.join(repoPath, ".git", "info", "exclude"), "\n.walkthrough/\n.bob/\n");
+  // Keep sidecar files out of `git status`. `repoPath` may be a linked worktree
+  // (its `.git` is a file, not a directory) — `info/exclude` is shared across all
+  // worktrees and lives under the common git dir, so resolve that explicitly.
+  // Idempotent: writeSidecar runs on every analysis of every PR sharing this repo.
+  const excludePath = path.join(await gitCommonDir(repoPath), "info", "exclude");
+  const existingExclude = await readFile(excludePath, "utf-8").catch(() => "");
+  if (!existingExclude.includes(".walkthrough/")) {
+    await appendFile(excludePath, "\n.walkthrough/\n.bob/\n");
+  }
 }
 
 // ---------------------------------------------------------------------------

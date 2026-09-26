@@ -73,7 +73,7 @@ beforeAll(async () => {
   workspace = await prepareWorkspace(REPO_URL, HEAD_SHA, baseSha, 13673, CACHE_DIR);
 
   input = {
-    repoPath: REPO_PATH,
+    repoPath: workspace.repoPath,
     baseSha,
     headSha: HEAD_SHA,
     pr: raw.pr,

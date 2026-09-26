@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { parseHunks, type Hunk, type PullRequestMeta } from "@pr-walkthrough/shared";
 import type { AnalyzerInput, WalkthroughDraft } from "../src/analyzer/interface.js";
 import type { RepoWorkspace } from "../src/git/workspace.js";
+import { prepareWorkspace, gitCommonDir } from "../src/git/workspace.js";
 import { validate } from "../src/validation/index.js";
 import { fetchPRMeta } from "../src/github/client.js";
 import { classifyHunks } from "../src/analyzer/classify-hunks.js";
@@ -46,21 +47,15 @@ async function git(cwd: string, args: string[]): Promise<string> {
 }
 
 /**
- * Clone (blobless) and check out the PR head. Fork PR heads are not on any
- * upstream branch, so they must be fetched via refs/pull/N/head.
+ * Prepare a git worktree for the PR head (shared clone + per-PR worktree —
+ * see git/workspace.ts). Delegates entirely to `prepareWorkspace` so the
+ * spike exercises the exact same checkout path the live server uses.
  */
 async function prepareCheckout(): Promise<string> {
-  const repoPath = path.join(CACHE_DIR, PR.repo.replace("/", "__"));
-  if (!existsSync(path.join(repoPath, ".git"))) {
-    await mkdir(CACHE_DIR, { recursive: true });
-    await execFileAsync("git", [
-      "clone", "--quiet", "--filter=blob:none", "--no-checkout",
-      `https://github.com/${PR.repo}`, repoPath,
-    ]);
-  }
-  await git(repoPath, ["fetch", "--quiet", "origin", `pull/${PR.number}/head`, PR.baseSha!]);
-  await git(repoPath, ["checkout", "--detach", "--quiet", "--force", PR.headSha!]);
-  return repoPath;
+  const workspace = await prepareWorkspace(
+    `https://github.com/${PR.repo}`, PR.headSha!, PR.baseSha!, PR.number, CACHE_DIR
+  );
+  return workspace.repoPath;
 }
 
 /** Everything Bob would otherwise need `git` for, written as plain files. */
@@ -103,8 +98,15 @@ async function writeSidecar(repoPath: string, diff: string, hunks: Hunk[]): Prom
     ].join("\n")
   );
 
-  // Keep sidecar files out of `git status` of the cached clone.
-  await appendFile(path.join(repoPath, ".git", "info", "exclude"), "\n.walkthrough/\n.bob/\n");
+  // Keep sidecar files out of `git status`. `repoPath` is a linked worktree
+  // (its `.git` is a file, not a directory) — `info/exclude` is shared across
+  // all worktrees and lives under the common git dir. Idempotent: this runs
+  // on every spike run against a repo that may already have the lines.
+  const excludePath = path.join(await gitCommonDir(repoPath), "info", "exclude");
+  const existingExclude = await readFile(excludePath, "utf-8").catch(() => "");
+  if (!existingExclude.includes(".walkthrough/")) {
+    await appendFile(excludePath, "\n.walkthrough/\n.bob/\n");
+  }
 }
 
 async function fillPrompt(hunks: Hunk[]): Promise<string> {

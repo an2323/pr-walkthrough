@@ -170,19 +170,20 @@ router.get(
       return;
     }
 
-    // Derive the cache path for this repo.
-    const repoName = `${owner}__${repo}`;
-    const repoPath = path.join(GIT_CACHE_DIR, repoName);
-    if (!existsSync(path.join(repoPath, ".git"))) {
-      res.status(404).json({ error: `Repo checkout not found — run /api/analyze first` });
-      return;
-    }
-
-    // Load the stored walkthrough to get the SHAs.
+    // Load the stored walkthrough first — its headSha tells us which worktree to read.
     const num = parseInt(number, 10);
     const wt = await loadWalkthrough(owner, repo, num);
     if (!wt) {
       res.status(404).json({ error: `No walkthrough for ${owner}/${repo}#${number}` });
+      return;
+    }
+
+    // Each PR gets its own git worktree (see git/workspace.ts) so concurrent
+    // analyses of different PRs on the same repo don't share a working tree.
+    const repoName = `${owner}__${repo}`;
+    const repoPath = path.join(GIT_CACHE_DIR, repoName, "wt", wt.pr.headSha ?? "");
+    if (!wt.pr.headSha || !existsSync(path.join(repoPath, ".git"))) {
+      res.status(404).json({ error: `Repo checkout not found — run /api/analyze first` });
       return;
     }
 
