@@ -560,13 +560,24 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 ### Sub-Task 6g — Before/after screenshots in the first step; map on demand
 
-**Status:** [ ] pending · **Must** · ~2 h · 0 Bobcoins · do before ST7 (narration) and ST9 (video)
+**Status:** [ ] pending · **Must** · ~2.5 h · 0 Bobcoins · do before ST7 (narration) and ST9 (video)
 
 **Intent:** The reviewer should *see* the bug before reading about it, and the start screen should only answer "what is this PR". The architecture map is an orientation aid, not a review step, so it moves out of the main flow.
 
 **Decisions (Sep 26):**
 - **Before/after screenshots → the first Problem step.** For #10295: excalidraw at BASE vs HEAD with the floating sidebar open (toolbar buttons over the sidebar vs under it); optionally the same at mobile width with the menu open. Taken by hand (ST6e is cut). They are the step's ONE visual (Before | After side by side on desktop, a toggle on mobile), replacing the current visual of that step. Captions in plain words.
-- **Schema:** optional `visual: { type: "shots"; before: string; after: string; caption?: string }` on a step (paths relative to `data/shots/{owner}/{repo}/{number}/`). Fallback: the step's existing visual. For the hackathon only #10295 gets shots, set by hand in the JSON — the analyzer does not produce them.
+- **Highlights drawn by the viewer, not baked into the PNG:** each screenshot gets 1–2 boxes with a short label over the spot to look at — red on Before, green on After, at the same place on both so the change jumps out (#10295: Before "Buttons draw over the sidebar", After "Sidebar is on top"). Boxes, not arrows (arrows are hard to place across widths and cover UI). Coordinates are fractions of the image size, so boxes stay aligned at any width; colours come from the theme tokens (`--bad` / `--good`); labels stay real text (editable, screen-reader friendly); the box can fade in after the image (nice under narration in the video). The PNGs stay clean and can be reused in the README.
+- **Schema:** optional on a step (paths relative to `data/shots/{owner}/{repo}/{number}/`):
+  ```ts
+  visual: {
+    type: "shots";
+    before: { src: string; highlights?: Highlight[] };
+    after:  { src: string; highlights?: Highlight[] };
+    caption?: string;
+  }
+  type Highlight = { x: number; y: number; w: number; h: number; label?: string }; // 0..1 of image size
+  ```
+  Fallback: the step's existing visual. For the hackathon only #10295 gets shots and highlight coordinates, set by hand in the JSON — the analyzer does not produce them.
 - **Static demo:** `export-static` copies `data/shots/...` into `dist/data/shots/...`; re-deploy after (commands in ST6f).
 - **Start screen:** title, Problem / Fix, stats, Start / Listen — **no map**.
 - **Map on demand — both entry points:** (1) a "How the pieces connect" button available on every screen (top bar or the quiet row) that opens a modal / drawer with the Before/After map; (2) a link to the same modal on the "Your review" summary screen, as the payoff after the flow. Steps with `visual: map` keep their inline map.
@@ -575,7 +586,7 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 **Assessment of the map as a review aid (Sep 26):** useful as orientation ("which modules does this touch, what was removed, what was added"), weak as a review tool. On #10295 it mixes two nearly independent fixes (stacking order on the left, outside-click handling on the right) with no link between the clusters; "After" alone hides the problem path; edge labels repeat implementation details that the steps already show with code. Without the steps' context it reads as boxes. Hence: keep it, but on demand, not as the hero of the start screen and not a required screen.
 
-**✓ Verify:** #10295 step 1 shows both screenshots (desktop side by side, mobile toggle, no horizontal scroll at 375 px); the start screen has no map; the map button opens the modal from any screen and from the summary, Esc closes it; no edge label overlaps a node on #10295 and #8340 (Before, After, Both); the static build serves the screenshots with no `/api/*` requests.
+**✓ Verify:** #10295 step 1 shows both screenshots (desktop side by side, mobile toggle, no horizontal scroll at 375 px) with the highlight boxes and labels on the right spot at desktop and 375 px; the start screen has no map; the map button opens the modal from any screen and from the summary, Esc closes it; no edge label overlaps a node on #10295 and #8340 (Before, After, Both); the static build serves the screenshots with no `/api/*` requests.
 
 ---
 
