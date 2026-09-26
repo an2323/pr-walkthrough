@@ -12,6 +12,7 @@ import { LandingPage } from './LandingPage';
 import { ProgressScreen } from './ProgressScreen';
 import { SHOW_TRY_IT } from './features';
 import { ReviewProvider } from './review';
+import { audioUrl } from './staticMode';
 import './styles.css';
 import './v2.css';
 
@@ -26,11 +27,6 @@ const synth = typeof window !== 'undefined' && 'speechSynthesis' in window
 function splitSentences(text: string): string[] {
   const parts = text.split(/(?<=[.?!])\s+/);
   return parts.map(s => s.trim()).filter(s => s.length > 0);
-}
-
-/** Build the audio URL for a single sentence. */
-function audioUrl(owner: string, repo: string, number: number, stepId: string, sentenceIndex: number): string {
-  return `/api/audio/${owner}/${repo}/${number}/${stepId}/${sentenceIndex}.mp3`;
 }
 
 export default function App() {
@@ -239,11 +235,11 @@ function AppInner({
       for (let i = 0; i < sentences.length; i++) {
         if (t !== tokenRef.current) return;
         const url = audioUrl(ownerStr, repoStr, prNumber, step.id, i);
-        // Try the server audio first; on 503/error fall back to Web Speech.
+        // Try the recorded audio first; if there is none (no key, missing static file) fall back to Web Speech.
         let usedApi = false;
         try {
           const probe = await fetch(url, { method: 'HEAD' });
-          if (probe.ok || probe.status !== 503) {
+          if (probe.ok) {
             await playSentenceAudio(url);
             usedApi = true;
           }

@@ -7,6 +7,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { CodeBlock } from '@pr-walkthrough/shared';
+import { STATIC } from './staticMode';
 
 export type ReviewStatus =
   | { enabled: false; reason?: string }
@@ -40,6 +41,7 @@ export function ReviewProvider({ repo, number, children }: { repo: string; numbe
   const base = `/api/review/${repo}/${number}`;
 
   useEffect(() => {
+    if (STATIC) return;
     let alive = true;
     fetch(base)
       .then((r) => (r.ok ? r.json() : { enabled: false }))

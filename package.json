@@ -6,6 +6,7 @@
     "build": "pnpm --filter '@pr-walkthrough/*' build",
     "dev": "concurrently \"pnpm --filter @pr-walkthrough/server dev\" \"pnpm --filter @pr-walkthrough/web dev\"",
     "lint": "pnpm --filter '@pr-walkthrough/*' lint",
+    "build:static": "pnpm --filter @pr-walkthrough/shared build && VITE_STATIC=1 pnpm --filter @pr-walkthrough/web build && pnpm --filter @pr-walkthrough/server export-static",
     "test": "pnpm --filter '@pr-walkthrough/*' test"
   },
   "devDependencies": {

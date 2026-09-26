@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Walkthrough } from '@pr-walkthrough/shared';
+import { walkthroughUrl } from './staticMode';
 
 type State =
   | { status: 'idle' }
@@ -31,7 +32,7 @@ export function useWalkthrough(): State {
       );
       if (match) {
         const [, owner, repo, number] = match;
-        url = `/api/walkthroughs/${owner}/${repo}/${number}`;
+        url = walkthroughUrl(owner, repo, parseInt(number, 10));
       }
     }
 

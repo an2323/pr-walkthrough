@@ -13,7 +13,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProgressEvent, ProgressEventOf, ProgressStage } from '@pr-walkthrough/shared';
+import { STATIC, recordingUrl } from './staticMode';
 import './ProgressScreen.css';
+
+/** Static build only — mirrors REPLAY_TARGET_MS in the server's replay route. */
+const STATIC_REPLAY_TARGET_MS = 20_000;
 
 const STAGES: { stage: ProgressStage; label: string }[] = [
   { stage: 'clone', label: 'Workspace' },
@@ -64,8 +68,40 @@ export function ProgressScreen({ owner, repo, number }: Props) {
   const speed = search.get('speed'); // optional override, forwarded to the replay endpoint as-is
   const viewerPath = `/${owner}/${repo}/${number}`;
 
+  // ---- Static build: replay the recording in the browser, paced like the server's replay ----
+  useEffect(() => {
+    if (!STATIC) return;
+    if (!isReplay) {
+      setConnectionLost(true);
+      return;
+    }
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    fetch(recordingUrl(owner, repo, number))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
+      .then((raw) => {
+        if (cancelled) return;
+        const recorded = raw.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l) as ProgressEvent);
+        const t0 = recorded[0]?.t ?? 0;
+        const totalMs = recorded.length > 0 ? recorded[recorded.length - 1].t : 0;
+        const rate = Number(speed) > 0 ? Number(speed) : Math.max(1, totalMs / STATIC_REPLAY_TARGET_MS);
+        for (const e of recorded) {
+          timers.push(setTimeout(() => setEvents((prev) => [...prev, e]), (e.t - t0) / rate));
+        }
+      })
+      .catch(() => { if (!cancelled) setConnectionLost(true); });
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [owner, repo, number, isReplay, speed]);
+
   // ---- SSE subscription ----
   useEffect(() => {
+    if (STATIC) return;
     const url = isReplay
       ? `/api/runs/${owner}/${repo}/${number}/events${speed ? `?speed=${encodeURIComponent(speed)}` : ''}`
       : jobId

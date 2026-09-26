@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { STATIC, walkthroughUrl } from './staticMode';
 
 interface ExampleCard {
   owner: string;
@@ -63,7 +64,7 @@ function cardHref(c: ExampleCard): string {
 }
 
 function apiHref(c: ExampleCard): string {
-  return `/api/walkthroughs/${c.owner}/${c.repo}/${c.number}`;
+  return walkthroughUrl(c.owner, c.repo, c.number);
 }
 
 function replayHref(c: ExampleCard): string {
@@ -138,11 +139,20 @@ export function LandingPage() {
     <div className="landing">
       <div className="landing-hero">
         <h1 className="landing-title">PR Walkthrough</h1>
-        <p className="landing-sub">
-          Paste a GitHub pull request URL to get a narrated, step-by-step walkthrough
-          written by IBM Bob 2.0.
-        </p>
+        {STATIC ? (
+          <p className="landing-sub">
+            Narrated, step-by-step walkthroughs of pull requests, written by IBM Bob 2.0
+            with the whole repository in view. This public demo shows finished walkthroughs;
+            analysing a new PR and posting review comments back to GitHub run locally.
+          </p>
+        ) : (
+          <p className="landing-sub">
+            Paste a GitHub pull request URL to get a narrated, step-by-step walkthrough
+            written by IBM Bob 2.0.
+          </p>
+        )}
 
+        {!STATIC && (<>
         <div className="landing-input-row">
           <input
             className="landing-input"
@@ -158,6 +168,7 @@ export function LandingPage() {
           </button>
         </div>
         {error && <p className="landing-error">{error}</p>}
+        </>)}
       </div>
 
       <div className="landing-examples">
@@ -166,6 +177,7 @@ export function LandingPage() {
           {EXAMPLES.map((card) => {
             const key = cardHref(card);
             const ready = availability[key];   // true | false | undefined (loading)
+            if (STATIC && ready === false) return null;
             return (
               <div className="landing-card" key={key}>
                 <div className="landing-card-title">{card.title}</div>
