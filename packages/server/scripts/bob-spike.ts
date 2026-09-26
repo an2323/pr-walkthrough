@@ -27,6 +27,9 @@ import { validate } from "../src/validation/index.js";
 const execFileAsync = promisify(execFile);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+// Project-level secrets (BOB_API_KEY, ...) live in the gitignored root .env.
+if (existsSync(path.join(ROOT, ".env"))) process.loadEnvFile(path.join(ROOT, ".env"));
 const CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const MODE_SLUG = "pr-walkthrough";
 
@@ -214,10 +217,55 @@ function findWalkthrough(envelope: unknown): Record<string, unknown> | undefined
   return undefined;
 }
 
+/**
+ * Bob sometimes cites the sidecar path (`.walkthrough/base/<path>`) as the file of
+ * a code block. Map it back to the repo path and mark the block as BASE.
+ */
+function normalizeDraft(draft: Record<string, unknown>): number {
+  let fixed = 0;
+  for (const step of (draft.steps as { beats?: { code?: { file: string; revision: string }[] }[] }[]) ?? []) {
+    for (const beat of step.beats ?? []) {
+      for (const block of beat.code ?? []) {
+        if (block.file.startsWith(".walkthrough/base/")) {
+          block.file = block.file.slice(".walkthrough/base/".length);
+          block.revision = "base";
+          fixed++;
+        }
+      }
+    }
+  }
+  return fixed;
+}
+
+async function validateDraft(
+  draft: Record<string, unknown>, repoPath: string, diff: string, hunks: Hunk[],
+  runDir: string, summary: Record<string, unknown>, durationMs?: number
+): Promise<void> {
+  summary.normalizedBlocks = normalizeDraft(draft);
+  // The backend owns `pr`; the analyzer is told to omit it.
+  const full = { ...draft, pr: PR } as unknown as WalkthroughDraft;
+  const workspace: RepoWorkspace = {
+    repoPath, baseSha: PR.baseSha!, headSha: PR.headSha!,
+    readFile: (file, rev) =>
+      rev === "base" ? git(repoPath, ["show", `${PR.baseSha}:${file}`]) : readFile(path.join(repoPath, file), "utf-8"),
+    diff: async () => diff,
+  };
+  const input: AnalyzerInput = { repoPath, baseSha: PR.baseSha!, headSha: PR.headSha!, pr: PR, hunks, diff };
+  const result = await validate(full, input, workspace);
+  summary.valid = result.valid;
+  summary.errorCount = result.errors.length;
+  summary.errors = result.errors.slice(0, 30);
+  if (result.walkthrough) {
+    // Backend owns run metadata; the analyzer tends to invent `generatedAt`.
+    result.walkthrough.meta = { ...result.walkthrough.meta, analyzer: "bob-shell", generatedAt: new Date().toISOString(), durationMs: durationMs ?? result.walkthrough.meta.durationMs };
+    await writeFile(path.join(runDir, "walkthrough.json"), JSON.stringify(result.walkthrough, null, 2));
+  }
+}
+
 async function main(): Promise<void> {
   const mode = process.argv[2] ?? "prepare";
-  if (!["prepare", "smoke", "readonly", "full"].includes(mode)) throw new Error(`unknown mode ${mode}`);
-  if (mode !== "prepare" && !process.env.BOB_API_KEY) throw new Error("BOB_API_KEY is not set");
+  if (!["prepare", "smoke", "readonly", "full", "revalidate"].includes(mode)) throw new Error(`unknown mode ${mode}`);
+  if (!["prepare", "revalidate"].includes(mode) && !process.env.BOB_API_KEY) throw new Error("BOB_API_KEY is not set");
 
   const runDir = path.join(ROOT, "data/runs", `${new Date().toISOString().replace(/[:.]/g, "-")}-${mode}`);
   await mkdir(runDir, { recursive: true });
@@ -228,6 +276,16 @@ async function main(): Promise<void> {
   const hunks = parseHunks(diff);
   await writeSidecar(repoPath, diff, hunks);
   console.log(`• ${hunks.length} hunks:`, hunks.map((h) => h.id).join(", "));
+
+  if (mode === "revalidate") {
+    // Re-check a saved draft without calling Bob: `spike revalidate <runDir>`.
+    const src = path.resolve(process.argv[3] ?? "");
+    const draft = JSON.parse(await readFile(path.join(src, "walkthrough.draft.json"), "utf-8"));
+    const summary: Record<string, unknown> = { mode, source: src };
+    await validateDraft(draft, repoPath, diff, hunks, src, summary);
+    console.log("\n" + JSON.stringify(summary, null, 2));
+    return;
+  }
 
   const prompt =
     mode === "smoke"
@@ -250,6 +308,10 @@ async function main(): Promise<void> {
     durationSec: Math.round(run.ms / 1000),
     stdoutIsJson: typeof envelope !== "string",
     envelopeKeys: envelope && typeof envelope === "object" ? Object.keys(envelope) : undefined,
+    // `bob run --format json` → { type, status, stats: { session_costs, tool_calls, ... }, last_message }
+    status: (envelope as { status?: string })?.status,
+    stats: (envelope as { stats?: unknown })?.stats,
+    lastMessage: String((envelope as { last_message?: unknown })?.last_message ?? "").slice(0, 300),
   };
 
   if (mode === "readonly") {
@@ -262,23 +324,7 @@ async function main(): Promise<void> {
     summary.walkthroughFound = !!draft;
     if (draft) {
       await writeFile(path.join(runDir, "walkthrough.draft.json"), JSON.stringify(draft, null, 2));
-      // The backend owns `pr`; the analyzer is told to omit it.
-      const full = { ...draft, pr: PR } as unknown as WalkthroughDraft;
-      const workspace: RepoWorkspace = {
-        repoPath, baseSha: PR.baseSha!, headSha: PR.headSha!,
-        readFile: (file, rev) =>
-          rev === "base" ? git(repoPath, ["show", `${PR.baseSha}:${file}`]) : readFile(path.join(repoPath, file), "utf-8"),
-        diff: async () => diff,
-      };
-      const input: AnalyzerInput = { repoPath, baseSha: PR.baseSha!, headSha: PR.headSha!, pr: PR, hunks, diff };
-      const result = await validate(full, input, workspace);
-      summary.valid = result.valid;
-      summary.errorCount = result.errors.length;
-      summary.errors = result.errors.slice(0, 30);
-      if (result.walkthrough) {
-        result.walkthrough.meta = { ...result.walkthrough.meta, durationMs: run.ms };
-        await writeFile(path.join(runDir, "walkthrough.json"), JSON.stringify(result.walkthrough, null, 2));
-      }
+      await validateDraft(draft, repoPath, diff, hunks, runDir, summary, run.ms);
     }
   }
 

@@ -19,7 +19,9 @@ prepared everything you would otherwise need git for, under `.walkthrough/`:
 - `.walkthrough/pr.diff` — the full unified diff BASE → HEAD.
 - `.walkthrough/commits.txt` — commit titles and messages, oldest first.
 Any other file in the working tree is at HEAD. Ignore `.walkthrough/` and `.bob/`
-when describing the codebase — they are not part of the repository.
+when describing the codebase — they are not part of the repository. In code blocks,
+`file` is always the repository path (`src/a.ts`), never `.walkthrough/base/src/a.ts`;
+quote BASE lines with `revision: "base"`.
 Not allowed: editing files, installing packages, network access, running the app.
 
 ## Inputs
