@@ -636,18 +636,16 @@ ANALYZER=cached pnpm dev   # starts both server and web
 **Expected Outcomes:**
 - `README.md` covers: problem statement, product overview, quick-start (clone + `pnpm install` + `pnpm dev`), env vars, demo mode instructions, Bob 2.0 features used, team, licence.
 - A short demo video. Structure: **before/after** (two manual screenshots of excalidraw #10295 at BASE and HEAD — replaces the cut ST6e) → **walkthrough** of #10295 with narration → **live analysis** progress screen (ST6c) → **comment lands in GitHub** (ST6d). Only Excalidraw PRs on screen.
-- **Impact experiment:** 2–3 people review the same Excalidraw PR, one half with the walkthrough and one half without (swap PRs between people to avoid learning effects). Measure time to a verdict and comprehension (3 fixed questions about what the PR changes and what could break). Numbers go into the README as-is, small sample stated.
 - End-to-end smoke test: `pnpm dev` starts server + web; opening `http://localhost:5173/excalidraw/excalidraw/10295` renders the full walkthrough; the Vercel link (ST6f) does the same.
 
 **Todo List:**
-1. Complete `README.md` (incl. the impact experiment numbers and the Vercel link).
+1. Complete `README.md` (incl. the Vercel link).
 2. Take the two before/after screenshots by hand.
-3. Run the impact experiment.
-4. Record the demo video in the structure above.
-5. Run end-to-end smoke test.
-6. Fix any final issues.
-7. Verify `bob_sessions/` is committed.
-8. Submit before Sep 27, 15:00 UTC.
+3. Record the demo video in the structure above.
+4. Run end-to-end smoke test.
+5. Fix any final issues.
+6. Verify `bob_sessions/` is committed.
+7. Submit before Sep 27, 15:00 UTC.
 
 ---
 
@@ -863,7 +861,7 @@ ST6d  GitHub round-trip: line comments / questions → PR (needs fork + token fr
 ST6f  Public demo on Vercel (static, Excalidraw only)
      │
      ▼
-ST7   Demo data   →   ST8 / ST9  screenshots, README, impact experiment, video, submit
+ST7   Demo data   →   ST8 / ST9  screenshots, README, video, submit
 
 ST6e  ✂ cut — two manual before/after screenshots instead
 Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #9403 retry
@@ -891,4 +889,4 @@ Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #94
 | M7.7 | ST6d: comment/question from the viewer appears on the demo fork's PR | 0 |
 | M7.8 | ST6f: public Vercel link renders the Excalidraw walkthroughs with audio | 0 |
 | M8 | All demo PRs cached; full stack demo working | #8340 confirmation ~$1–2; #9403 retry if budget allows |
-| M9 | Submission: bob_sessions, README (incl. impact experiment), demo video, smoke test | 0 |
+| M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |
