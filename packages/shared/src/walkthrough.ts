@@ -74,6 +74,21 @@ export interface Walkthrough {
     durationMs?: number;
     /** Output language of narration/text, e.g. "en", "uk". */
     language: string;
+    /**
+     * Bob Shell run stats, filled by the BACKEND from `bob run`'s stream-json
+     * output (never invented by the analyzer). Absent for `meta.analyzer !== "bob-shell"`
+     * (e.g. "manual" hand-written examples cost nothing).
+     */
+    run?: {
+      costUsd: number;
+      maxCostUsd: number;
+      durationMs: number;
+      toolCalls: number;
+      subagents: number;
+      /** How many `--resume` repair attempts were needed (0 = valid on the first pass). */
+      repairs: number;
+      taskId?: string;
+    };
   };
 }
 

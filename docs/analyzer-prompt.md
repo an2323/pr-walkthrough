@@ -52,6 +52,27 @@ Not allowed: editing files, installing packages, network access, running the app
    or depended on it. Confirm whether the removal is safe or whether a caller now
    has to change.
 
+## Using sub-agents for search
+
+You have a `spawn_subagent` tool that can start an `explore` sub-agent — read-only,
+cheaper and faster than you, good at "find X" questions but not at judgement calls.
+Use it for the *searches* in the list above, not for deciding what they mean:
+
+- Before searching, list the concrete search questions items 2, 3 and 7 raise for
+  this PR (e.g. "where else is `getTotalChangesCount` called?", "who passes
+  `editorRef` into `Header`?").
+- Questions that don't depend on each other's answers: spawn one `explore`
+  sub-agent PER QUESTION, IN PARALLEL (multiple `spawn_subagent` calls in the same
+  turn), each given exactly one question and the specific files/symbols it concerns.
+  Ask for "medium" thoroughness unless the codebase is unusually large.
+- Read `.walkthrough/base/*`, the changed files themselves, and anything a
+  sub-agent's result points you to, yourself — sub-agents report file:line
+  locations and snippets, they do not draw conclusions.
+- Use your own judgement for what a finding means; a sub-agent's report is a fact
+  lookup, not an opinion.
+- Roughly 6 sub-agents is a reasonable ceiling for one PR — beyond that, group
+  related questions into one sub-agent call instead of spawning more.
+
 ## How to structure the walkthrough
 
 - Order steps by reasoning, not by file or diff order. Typical path:

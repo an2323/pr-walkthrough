@@ -276,6 +276,17 @@ export const WalkthroughSchema = z.object({
     generatedAt: z.string(),
     durationMs: z.number().optional(),
     language: z.string(),
+    run: z
+      .object({
+        costUsd: z.number(),
+        maxCostUsd: z.number(),
+        durationMs: z.number(),
+        toolCalls: z.number(),
+        subagents: z.number(),
+        repairs: z.number(),
+        taskId: z.string().optional(),
+      })
+      .optional(),
   }),
 });
 
