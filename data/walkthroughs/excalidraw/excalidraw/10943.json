@@ -708,5 +708,42 @@
     "explained": 3,
     "skipped": 1,
     "uncoveredHunkIds": []
+  },
+  "shots": {
+    "before": {
+      "src": "before-annotated.png",
+      "raw": "before.png",
+      "highlights": [
+        {
+          "x": 0.37857142857142856,
+          "y": 0.6671428571428571,
+          "w": 0.6214285714285714,
+          "h": 0.16428571428571426,
+          "label": "Picker overflows right edge",
+          "pair": "picker"
+        }
+      ]
+    },
+    "after": {
+      "src": "after-annotated.png",
+      "raw": "after.png",
+      "highlights": [
+        {
+          "x": 0.37857142857142856,
+          "y": 0.6671428571428571,
+          "w": 0.6214285714285714,
+          "h": 0.16428571428571426,
+          "label": "Picker stays in view",
+          "pair": "picker"
+        }
+      ]
+    },
+    "caption": "Arrowhead picker stays inside viewport",
+    "by": "bob-verifier",
+    "run": {
+      "costUsd": 2.619812,
+      "durationMs": 395867,
+      "toolCalls": 36
+    }
   }
 }

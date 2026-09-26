@@ -21,9 +21,12 @@ function pngSize(buf: Buffer): { width: number; height: number } {
 
 /** Tall boxes get the label inside at the bottom; small ones below (or above, near the bottom edge). */
 function labelStyle(h: ShotHighlight): string {
-  if (h.h > 0.25) return "left:8px;bottom:8px;";
-  if (h.y + h.h > 0.88) return "left:-4px;bottom:calc(100% + 6px);";
-  return "left:-4px;top:calc(100% + 6px);";
+  // Boxes in the right half anchor the label to their right edge, so it can't run off the image.
+  const right = h.x + h.w / 2 > 0.5;
+  const side = right ? "right:-4px;" : "left:-4px;";
+  if (h.h > 0.25) return right ? "right:8px;bottom:8px;" : "left:8px;bottom:8px;";
+  if (h.y + h.h > 0.88) return `${side}bottom:calc(100% + 6px);`;
+  return `${side}top:calc(100% + 6px);`;
 }
 
 export async function annotateShot(
