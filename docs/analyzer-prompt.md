@@ -245,8 +245,9 @@ words per label). Types:
   `cls`: `"bad"` for the item that causes the problem, `"hl"` for the one that changed.
 - `flow` — a chain of events or data: a click and who handles it, a value passing
   through functions, a request through layers. `rows` is 1–2 rows of 2–4
-  `[label, cls]` nodes; `cls` is `"bad"` (the wrong outcome), `"good"` (the fixed
-  outcome), `"old"` (a path the PR removes) or `""`. For a before/after contrast use
+  `[label, cls]` nodes; `cls` is `"bad"` (the wrong outcome — mark ONLY the final
+  wrong result, not every step of the chain), `"good"` (the fixed outcome — same
+  rule), `"old"` (a path the PR removes) or `""`. For a before/after contrast use
   two rows ("Before: …", "After: …").
 - `map` — only when the step is about how modules are wired together; it shows the
   graph at this step. At most 1 in 4 steps.

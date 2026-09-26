@@ -60,18 +60,31 @@ export function VisualBlock({
   }
 
   if (visual.type === 'flow') {
+    const hasBad = visual.rows.some((row) => row.some(([, cls]) => cls === 'bad'));
+    const hasGood = visual.rows.some((row) => row.some(([, cls]) => cls === 'good'));
     return (
       <div className="visual flows">
         {visual.rows.map((row, ri) => (
           <div className="flow" key={ri}>
             {row.map(([label, cls], ki) => (
               <Fragment key={ki}>
-                {ki > 0 && <span className="arrow">→</span>}
+                {ki > 0 && (
+                  <span className="arrow" aria-hidden="true">
+                    <span className="arr-h">→</span>
+                    <span className="arr-v">↓</span>
+                  </span>
+                )}
                 <span className={`node ${cls}`}>{label}</span>
               </Fragment>
             ))}
           </div>
         ))}
+        {(hasBad || hasGood) && (
+          <p className="flow-legend">
+            {hasBad && <span><i className="swatch bad" /> wrong outcome</span>}
+            {hasGood && <span><i className="swatch good" /> fixed outcome</span>}
+          </p>
+        )}
       </div>
     );
   }

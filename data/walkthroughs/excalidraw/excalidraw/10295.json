@@ -425,12 +425,12 @@
               ""
             ],
             [
-              "Button says “ignore this tap”",
-              "bad"
+              "Button says ignore this tap",
+              ""
             ],
             [
               "Sidebar never hears it",
-              "bad"
+              ""
             ],
             [
               "Sidebar stays open",
@@ -531,11 +531,11 @@
               ""
             ],
             [
-              "Menu: “tap outside me” → closes",
-              "bad"
+              "Menu closes itself",
+              ""
             ],
             [
-              "Button click → opens again",
+              "Same tap opens it again",
               "bad"
             ]
           ]

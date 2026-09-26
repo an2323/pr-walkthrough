@@ -1,10 +1,9 @@
 /**
  * StepScreen — one screen per non-minor step.
- * Eyebrow, h1, say, visual, code (behind "Show the code" when there is a visual),
+ * Eyebrow, h1, say, visual, code (always shown when present),
  * check card (SHOW_CHECKS), ask row (open question), "How the analysis got here" link.
  */
 
-import { useState } from 'react';
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
 import { VisualBlock } from './VisualBlock';
@@ -56,7 +55,6 @@ export function StepScreen({
 }: Props) {
   const p = plain.steps[step.id];
   const pr = walkthrough.pr;
-  const [showCode, setShowCode] = useState(false);
 
   if (!p) return null;
 
@@ -66,24 +64,9 @@ export function StepScreen({
 
   // Symptom steps describe what the user sees; their "code" is background context, not a change.
   const codeBlocks = step.kind === 'symptom' ? [] : step.beats.flatMap((b) => b.code ?? []);
-  const codeView = (
-    <div className="visual code-stack">
-      {codeBlocks.map((block, i) => (
-        <CodeFold
-          key={i}
-          block={block}
-          prRepo={pr.repo}
-          baseSha={pr.baseSha}
-          headSha={pr.headSha}
-          prUrl={pr.url}
-        />
-      ))}
-    </div>
-  );
 
   return (
     <div className="v2card">
-      {/* Eyebrow */}
       <div className="v2eyebrow">
         <b>{ch}</b>
         {' · '}{stepInChapter} of {chapterTotal}
@@ -95,17 +78,14 @@ export function StepScreen({
         )}
       </div>
 
-      {/* Headline */}
       <h1 className={`v2h1${p.detour ? ' detour' : ''}`}
         style={p.detour ? { textDecoration: 'line-through' } : undefined}
       >
         {p.head}
       </h1>
 
-      {/* Say */}
       <p className="v2say">{p.say}</p>
 
-      {/* Visual */}
       {p.visual && (
         <VisualBlock
           visual={p.visual}
@@ -118,14 +98,19 @@ export function StepScreen({
         />
       )}
 
-      {codeBlocks.length > 0 && !p.visual && codeView}
-
-      {codeBlocks.length > 0 && p.visual && (
-        showCode ? codeView : (
-          <button className="more" onClick={() => setShowCode(true)}>
-            Show the code{codeBlocks.length > 1 ? ` (${codeBlocks.length} snippets)` : ''}
-          </button>
-        )
+      {codeBlocks.length > 0 && (
+        <div className="visual code-stack">
+          {codeBlocks.map((block, i) => (
+            <CodeFold
+              key={i}
+              block={block}
+              prRepo={pr.repo}
+              baseSha={pr.baseSha}
+              headSha={pr.headSha}
+              prUrl={pr.url}
+            />
+          ))}
+        </div>
       )}
 
       {SHOW_CHECKS && p.check && (
@@ -142,7 +127,6 @@ export function StepScreen({
         </label>
       )}
 
-      {/* Open question */}
       {questionText && (
         <div className="ask">
           <span className="q">
@@ -159,7 +143,6 @@ export function StepScreen({
         </div>
       )}
 
-      {/* Details drawer link */}
       <div className="quiet">
         <button className="link-btn" onClick={onOpenDrawer}>
           How the analysis got here
