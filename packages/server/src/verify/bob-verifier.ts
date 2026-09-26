@@ -201,9 +201,11 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
   const baseWt = await ensureWorktree(mainPath, wt.pr.baseSha);
   const headWt = await ensureWorktree(mainPath, wt.pr.headSha);
 
-  onStage?.("app", "Installing the app at BASE and HEAD");
-  await ensureInstalled(recipe, baseWt);
-  await ensureInstalled(recipe, headWt);
+  onStage?.("app", "Preparing the app at BASE and HEAD (reusing installed dependencies)");
+  // Sequential on purpose: the second worktree can then clone the first one's install.
+  const baseInstall = await ensureInstalled(recipe, baseWt);
+  const headInstall = await ensureInstalled(recipe, headWt);
+  console.log(`[verify] dependencies: BASE ${baseInstall}, HEAD ${headInstall}`);
 
   const servers: AppServer[] = [];
   const modePath = path.join(headWt, ".bob", "custom_modes.yaml");

@@ -8,6 +8,13 @@ import type { PlainData } from './v2types';
 import { SHOW_HERO_STATS } from './features';
 import { ShotImage, ShotLightbox } from './ShotsVisual';
 
+/** Who took the before/after screenshots — shown as-is, so it has to be true. */
+const SHOTS_BY: Record<NonNullable<Walkthrough['shots']>['by'] & string, string> = {
+  'bob-verifier': 'taken by Bob in the running app',
+  playwright: 'taken by a Playwright script',
+  manual: 'taken by hand',
+};
+
 interface Props {
   walkthrough: Walkthrough;
   plain: PlainData;
@@ -58,7 +65,11 @@ export function StartScreen({ walkthrough, plain, flow, onStart, onListenAll, on
         </section>
       </div>
 
-      {shots?.caption && <p className="note" style={{ marginTop: -8 }}>Screenshots: {shots.caption}</p>}
+      {shots && (shots.caption || shots.by) && (
+        <p className="note" style={{ marginTop: -8 }}>
+          Screenshots{shots.by ? ` ${SHOTS_BY[shots.by]}` : ''}{shots.caption ? `: ${shots.caption}` : ''}
+        </p>
+      )}
 
       {SHOW_HERO_STATS && <HeroStats walkthrough={walkthrough} plain={plain} flow={flow} />}
 

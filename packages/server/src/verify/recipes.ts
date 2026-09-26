@@ -8,8 +8,13 @@
 export interface AppRecipe {
   /** "owner/repo" */
   repo: string;
-  /** Skip install when this path (relative to the worktree) exists. */
+  /**
+   * Written by the package manager at the very END of a successful install —
+   * its presence means "finished", not just "started" (relative to the worktree).
+   */
   installedMarker: string;
+  /** Lockfile; worktrees with the same one can share an install. */
+  lockfile: string;
   install: { cmd: string; args: string[] };
   /** Dev server on `port`, bound to 127.0.0.1 only. */
   start(port: number): { cmd: string; args: string[]; env: Record<string, string> };
@@ -22,8 +27,9 @@ export interface AppRecipe {
 const RECIPES: AppRecipe[] = [
   {
     repo: "excalidraw/excalidraw",
-    installedMarker: "node_modules/vite",
-    install: { cmd: "yarn", args: ["install", "--frozen-lockfile", "--non-interactive", "--network-timeout", "600000"] },
+    installedMarker: "node_modules/.yarn-integrity",
+    lockfile: "yarn.lock",
+    install: { cmd: "yarn", args: ["install", "--frozen-lockfile", "--prefer-offline", "--non-interactive", "--network-timeout", "600000"] },
     start: (port) => ({
       cmd: "yarn",
       args: ["--cwd", "excalidraw-app", "vite", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
