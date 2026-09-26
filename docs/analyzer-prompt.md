@@ -181,9 +181,16 @@ Fill these fields on each step:
 - `headline` (≤ 9 words, hard limit): one-sentence title for the step shown in the
   chapter list. Write it like a newspaper headline: "Session count moved to shared
   state" not "useSessionCount hook extracted to context".
-- `say` (1–2 short sentences, never 3+): the most important thing about this step in
-  plain language. What changed and why it matters. This is displayed as the main
-  body text in the plain layer, so it must stand alone without the code blocks.
+- `say`: **at most 2 short sentences — this is a hard limit, count them before you
+  finalize the field.** Pick ONE of "what changed" or "why it matters", whichever
+  matters more here — do not write both plus a third consequence sentence just
+  because it feels complete. If you have a third sentence, cut the least essential
+  one; move genuinely useful detail to `notes` instead, or leave it for `narration`.
+  Example: NOT "The container-check code calls `event.target`. The type was
+  previously plain `Event`, which doesn't expose `target`. The type is narrowed so
+  the new code compiles." — three sentences AND identifiers. INSTEAD, one sentence,
+  no identifiers, or mark the step `minor` and skip `say` detail entirely: "A
+  supporting type change needed for the new check to compile."
 - `check` (1 sentence): **required** on every non-minor `change` or `decision` step —
   one concrete, verifiable thing a reviewer can go test (a value, a boundary, an
   interaction). If you genuinely can't name one, the step is probably `minor` or the
