@@ -4,13 +4,12 @@
 > Get visual feedback on the product before writing any server code.
 > Session A (server chain) and Session B (viewer polish) run in parallel after ST1+ST2.
 > **Each completed subtask (ST) must be committed to git before starting the next one.**
-> ⚠️ As of Sep 26 the repo has **no commits** (ST1–ST4 are done but uncommitted). Commit before continuing.
 
 ## Top-Level Overview
 
 **Goal:** Build an interactive PR walkthrough tool for the IBM Bob 2.0 Hackathon (Sep 25–27, 2026). Given a GitHub PR URL, the system analyses the full repository with Bob Shell (non-interactive) and produces a structured JSON walkthrough that a React viewer renders as an ordered, narrated, annotated route through the reviewer's reasoning.
 
-**Scope:** Must-have items 1–6 from the brief. GitHub webhook and LLM fallback are "should" items addressed if time permits.
+**Scope:** Must-have items 1–6 from the brief, plus ST6c (live analysis), ST6d (GitHub round-trip) and ST6f (public demo). **Cut on Sep 26:** LLM fallback analyzer (Claude/watsonx), live GitHub webhook (smee), Outline in the public demo, the agent-verifier (ST6e).
 
 **Approach:**
 - Monorepo with three packages: `shared` (schema + validators), `server` (Node/TS backend), `web` (React viewer).
@@ -477,6 +476,77 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ---
 
+> **ST6c–ST6f** were added on Sep 26 after ST5–ST6b were closed. ST5–ST6b stay closed as history;
+> these are new work that continues the server + UI track before ST7. Order: **ST6c → ST6d → ST6f → ST7**.
+> None of them spends Bobcoins except a real run on the ST6c progress screen, which goes through the
+> stage-2 budget guard like any other run.
+
+### Sub-Task 6c — Live analysis: job queue + progress screen
+
+**Status:** [ ] pending · **Must** · ~2 h · 0 Bobcoins to build (replay of recorded events), one real run to demo it, if approved
+
+**Intent:** Paste a PR link and watch what Bob is doing right now; at the end get the walkthrough plus its price and duration.
+
+**Design:**
+- `POST /api/analyze` returns `{ jobId }` immediately instead of blocking 3+ minutes; an in-memory job map holds status, events and the result (single process, no DB — non-goal).
+- `GET /api/jobs/:jobId/events` — SSE. Source is `--format stream-json` from `runBob`: `tool_use` (which tool, which file/search — "Bob is reading `Sidebar.tsx`…"), `spawn_subagent` (sub-agent started), assistant text deltas collapsed to "writing the walkthrough…", `result` (cost, duration). Stages the backend adds: clone/worktree → N hunks (M auto-skipped) → Bob → validate → repair (if any) → done.
+- Every run writes `data/runs/<stamp>/events.ndjson` (already done by `runBob`). For cached PRs, `GET /api/runs/:owner/:repo/:number/events` replays the recorded file at accelerated speed, so the screen is demoable at $0.
+- Landing page: the URL input already exists (`LandingPage.tsx`) — wire it to `POST /api/analyze` when the PR isn't cached; examples stay one-click.
+- Progress screen: live stage list, current Bob action, running cost `$0.42 / max $4`, elapsed time; on `done` → navigate to the viewer.
+
+**✓ Verify:** replay of #10295's recorded events renders the full stage list and ends in the viewer; SSE survives a page reload (reconnect gets the backlog); with `ANALYZER=cached` no Bob process is spawned.
+
+---
+
+### Sub-Task 6d — GitHub round-trip: "Your review" screen
+
+**Status:** [ ] pending · **Must** · ~2–3 h · 0 Bobcoins
+
+**Intent:** From inside the walkthrough, write a comment on a line or a question to the author, and it appears in the PR on GitHub.
+
+**Today:** the summary screen (`SummaryScreen.tsx`) collects questions into one text with a **Copy as review comment** button — the reviewer pastes it into GitHub by hand.
+
+**Design:**
+- Comment on a code line → PR review comment on that line (`POST /repos/{o}/{r}/pulls/{n}/comments`, `commit_id` = head SHA, `path`, `line`, `side`). Lines outside the diff → a general PR comment with a permalink to the line at head SHA.
+- "Ask the author" on each open question → same path, pre-filled with the question and the step it points to.
+- Backend-only token: fine-grained PAT with **Pull requests: write** on the demo repo only, in `.env` (`GITHUB_TOKEN_WRITE`), never sent to the browser. Without it the button falls back to today's copy-to-clipboard.
+- Demo repo: a fork of excalidraw with the demo PR re-created on it, so posting never touches upstream.
+- Should: a draft review with Submit (Comment / Approve / Request changes) via `POST /pulls/{n}/reviews`.
+- Should: a bot comment on the PR linking to the walkthrough.
+
+**Needs a decision from the user before starting:** which fork/repo, and creating the token (the user creates it and puts it in `.env`).
+
+**✓ Verify:** a line comment and a question posted from the viewer show up on the fork's PR at the right line; with the token unset the UI shows the copy button and nothing errors.
+
+---
+
+### Sub-Task 6e — Agent-verifier ("Try it in the app")
+
+**Status:** ✂ **cut** (Sep 26)
+
+The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: true` for dev servers is confirmed to work) that starts BASE and HEAD, writes a Playwright test and returns before/after screenshots with highlight boxes. Estimated 2–3 h and $3–8 per run.
+
+**Why cut:** the before/after is context for the viewer of the demo video, not part of the product. Two screenshots taken by hand (excalidraw at BASE and HEAD with the sidebar open; the same at mobile width with the menu open, ~30–40 min) give most of the effect. The agent would also push the stage budget past $20.
+
+**Instead:** the two manual screenshots go into the video/README (ST9). The "Try it in the app" chapter and the "Tried N of M scenarios" line are **hidden** in the viewer via `SHOW_TRY_IT = false` in `packages/web/src/features.ts` — flip it to bring the bare scenario checklist back unchanged.
+
+---
+
+### Sub-Task 6f — Public demo on Vercel
+
+**Status:** [ ] pending · **Must** · ~1 h · 0 Bobcoins
+
+**Intent:** Judges open a link and click through the finished walkthroughs themselves, no local setup.
+
+**Design:**
+- Viewer in static mode: walkthrough JSON, narration mp3 and screenshots shipped as static files (`/data/...`); no backend. A build flag (`VITE_STATIC=1`) switches `fetch('/api/walkthroughs/...')` to the static paths; the `/api/context` "show more code" drawer is disabled or served from pre-extracted snippets.
+- Only Excalidraw PRs (MIT). **Outline is not deployed** (licence unverified).
+- Live analysis (ST6c) and GitHub posting (ST6d) are hidden in static mode — the video shows them.
+
+**✓ Verify:** the deployed URL renders #10295 and #8340 with audio, on desktop and at 400 px, with no requests to `/api/*`.
+
+---
+
 ### Sub-Task 7 — Demo data generation and caching
 
 **Status:** [ ] pending
@@ -541,7 +611,8 @@ ANALYZER=cached pnpm dev   # starts both server and web
 |---|---|
 | Plan mode | This plan file; initial architecture design |
 | Agent mode | Implementing each sub-task sequentially |
-| Subagents | Planned for ST10 (not yet verified in the read-only `pr-walkthrough` mode) — do not claim in README unless ST10 confirms it |
+| Subagents | Confirmed: the read-only `pr-walkthrough` mode spawns parallel `explore` sub-agents for searches — #10295 used 2, #8340 used 4, #9403 used 5 (`docs/cost-log-stage2.md`) |
+| Resume | Repairs continue the same Bob session with `bob run --resume <task_id>` instead of a fresh analysis (#8340 repair: $0.34) |
 | Custom mode | `pr-walkthrough` read-only Bob Shell mode written into the checkout (`.bob/custom_modes.yaml`) |
 | Custom skill | `/walkthrough <PR url>` skill for interactive use in the IDE (Could item #12 from brief) |
 | AGENTS.md | Workspace instructions for Bob Shell read-only access, repo layout, dev commands |
@@ -564,22 +635,25 @@ ANALYZER=cached pnpm dev   # starts both server and web
 
 **Expected Outcomes:**
 - `README.md` covers: problem statement, product overview, quick-start (clone + `pnpm install` + `pnpm dev`), env vars, demo mode instructions, Bob 2.0 features used, team, licence.
-- A short demo video (screen recording) showing the viewer with narration for the golden PR.
-- End-to-end smoke test: `pnpm dev` starts server + web; opening `http://localhost:5173/outline/outline/13673` renders the full walkthrough.
+- A short demo video. Structure: **before/after** (two manual screenshots of excalidraw #10295 at BASE and HEAD — replaces the cut ST6e) → **walkthrough** of #10295 with narration → **live analysis** progress screen (ST6c) → **comment lands in GitHub** (ST6d). Only Excalidraw PRs on screen.
+- **Impact experiment:** 2–3 people review the same Excalidraw PR, one half with the walkthrough and one half without (swap PRs between people to avoid learning effects). Measure time to a verdict and comprehension (3 fixed questions about what the PR changes and what could break). Numbers go into the README as-is, small sample stated.
+- End-to-end smoke test: `pnpm dev` starts server + web; opening `http://localhost:5173/excalidraw/excalidraw/10295` renders the full walkthrough; the Vercel link (ST6f) does the same.
 
 **Todo List:**
-1. Complete `README.md`.
-2. Record demo video (screen capture of the viewer + narration playing for the outline PR).
-3. Run end-to-end smoke test.
-4. Fix any final issues.
-5. Verify `bob_sessions/` is committed.
-6. Submit before Sep 27, 15:00 UTC.
+1. Complete `README.md` (incl. the impact experiment numbers and the Vercel link).
+2. Take the two before/after screenshots by hand.
+3. Run the impact experiment.
+4. Record the demo video in the structure above.
+5. Run end-to-end smoke test.
+6. Fix any final issues.
+7. Verify `bob_sessions/` is committed.
+8. Submit before Sep 27, 15:00 UTC.
 
 ---
 
 ### Sub-Task 10 — Analyzer quality iteration
 
-**Status:** [-] in progress — **2 of 2 allowed prompt-edit iterations done on #10295, converged.** #8340 cross-check run intentionally paused (not a technical blocker — budget/priorities call, see below). **Bobcoin budget for this ST: ≤ $10**, of which **~$4.46 spent** (2 iterations: $1.929 + $2.529); stage-2 total cap is $20, ~$10.20 spent overall — see `docs/cost-log-stage2.md`.
+**Status:** [-] nearly done — **2 of 2 allowed prompt-edit iterations done on #10295, converged** (done by Claude Code after Bob IDE hit its limit; do not start ST10 over). #8340 cross-check run intentionally paused (not a technical blocker — budget/priorities call, see below). **Bobcoin budget for this ST: ≤ $10**, of which **~$4.46 spent** (2 iterations: $1.929 + $2.529); stage-2 total cap stays **$20** (no raise needed since ST6e is cut), **$10.20 spent overall** — see `docs/cost-log-stage2.md`.
 
 **Iteration results on #10295** (each is `valid: true, errorCount: 0` immediately, no repair needed):
 
@@ -630,19 +704,22 @@ Iteration 1 fixed the three prompt/schema/checker number mismatches (headline wo
 
 | Question | Answer |
 |---|---|
-| Bob Shell non-interactive invocation | Flags verified against `bob run --help` (v2.0.5); runtime behaviour pending ST5a spike |
+| Bob Shell non-interactive invocation | Verified at runtime (ST5a spike + stage-2 runs): `bob run --format stream-json` with the custom mode, see "Bob Shell Analyzer Design" |
 | Solo or team? | Solo developer, sequential tasks |
-| Outline licence | Unverified — exclude from public demo; use as private test data only |
-| LLM fallback if Bobcoins run out | Claude API (credentials to be configured) |
+| Outline licence | Unverified — not deployed in the public demo (ST6f); private test data only |
+| LLM fallback if Bobcoins run out | ✂ Cut. `CachedAnalyzer` covers the demo; the stage-2 budget guard ($20) prevents running out mid-demo |
 | Narration language | English only |
-| Before/after video for #10295 | Deprioritised — attempt only after all Must items complete |
+| Before/after for #10295 | Two screenshots taken by hand (BASE/HEAD) for the video and README; the agent-verifier (ST6e) is cut |
+| Live GitHub webhook | ✂ Cut. ST6d posts comments via the REST API instead; a bot comment is a "should" |
+| Stage-2 Bobcoin cap | $20, unchanged ($10.20 spent as of Sep 26) |
 
 ---
 
 ## Bob Shell Analyzer Design
 
-Verified against Bob Shell 2.0.5 (`bob run --help`, the bundled mode definitions, and
-bob.ibm.com/docs/shell). Items marked **(spike)** are confirmed only by ST5a.
+Verified against Bob Shell 2.0.5 (`bob run --help`, the bundled mode definitions,
+bob.ibm.com/docs/shell) and confirmed at runtime by the ST5a spike and the stage-2 runs
+(`docs/cost-log.md`, `docs/cost-log-stage2.md`).
 
 **Facts that shaped the design:**
 - Headless command is `bob run [options] [prompt...]`; the prompt can come from stdin.
@@ -655,31 +732,54 @@ bob.ibm.com/docs/shell). Items marked **(spike)** are confirmed only by ST5a.
   `--disable-subagents`, `--disable-tool-groups <g,...>`, `--workspace <path>`.
 - Auth: `BOB_API_KEY` env var with an **Inference**-scoped key (a General key also
   needs `--team-id`). First run needs `--trust --accept-license`.
+- A project-level custom mode in `<workspace>/.bob/custom_modes.yaml` **is** picked up
+  with `--workspace` (confirmed by the `readonly` spike).
+- `--format stream-json` emits one JSON event per line, in real time: `message`
+  (role `user` echoes the full prompt — ignore it; role `assistant` = text deltas),
+  `tool_use` (`tool_name` + parameters, e.g. which file is read; `spawn_subagent` =
+  a sub-agent start), `tool_result`, `error` (`message`), and a final `result` with
+  `stats { task_id, duration_ms, session_costs, max_cost, tool_calls }`. This is the
+  source for the ST6c progress screen.
+- `--resume <task_id>`: the follow-up prompt must be a **trailing positional arg** (stdin
+  is ignored and the transcript is replayed at $0); `--workspace` must be the exact
+  original string; `--max-cost` and `stats` are **cumulative per task**, so a repair's
+  cap is `previous cost + repair budget`.
+- In a mode with `execute`, `execute_command` supports `background: true` (Bob starts a
+  server, gets a pid, can curl it). Processes Bob starts **outlive the session** and keep
+  their port — whoever uses this must kill them after the run. Not used by the analyzer
+  (read-only); was the basis for the cut ST6e.
 
 **Design:**
 1. Read-only via a custom mode written into the checkout as
-   `.bob/custom_modes.yaml`: slug `pr-walkthrough`, `groups: [read]`, reviewer role.
-   No shell, no edit. **(spike: project-level mode picked up with `--workspace`)**
+   `.bob/custom_modes.yaml`: slug `pr-walkthrough`, `groups: [read, subagent]`,
+   `allowedSubagents: ["explore"]`, reviewer role. No shell, no edit.
+   `BOB_SUBAGENTS=0` falls back to `groups: [read]` + `--disable-subagents`.
 2. No shell means no `git`, so the backend writes a sidecar into the checkout:
    `.walkthrough/base/<path>` (changed files at BASE), `.walkthrough/pr.diff`,
    `.walkthrough/commits.txt`. Both `.walkthrough/` and `.bob/` go into
-   `.git/info/exclude`. The prompt (`docs/analyzer-prompt.md`) describes this layout.
-3. Invocation:
+   `.git/info/exclude` (the shared `$GIT_COMMON_DIR` one). The prompt
+   (`docs/analyzer-prompt.md`) describes this layout.
+3. One git worktree per PR (`<cache>/<owner>__<repo>/wt/<headSha>`) on a shared blobless
+   clone, so runs for different PRs can go in parallel and `/api/context` reads the
+   right head.
+4. Invocation:
    ```ts
    spawn("bob", [
-     "run", "--format", "json", "--mode", "pr-walkthrough",
+     "run", "--format", "stream-json", "--mode", "pr-walkthrough",
      "--workspace", repoPath, "--max-cost", MAX_COST, "--max-turns", "40",
      "--disable-mcp", "--trust", "--accept-license",
    ], { cwd: repoPath, timeout: 600_000 });   // prompt written to stdin
    ```
-4. Output: `--format json` prints one JSON object after the session. Its exact shape is
-   undocumented **(spike)**; the extractor walks the envelope, finds the string that
-   contains the walkthrough and parses the first balanced `{…}` object in it.
-5. Backend sets `pr` (and later `hunks`, `coverage`), then runs `validate()`. On
-   failure: one repair run with the structured error list appended (ST5, budget-gated).
-6. Subagents: kept enabled only if the spike shows the `read`-only mode can still spawn
-   the `explore` subagent; otherwise pass `--disable-subagents` and drop the claim
-   from the "Bob features" table.
+   Every event line is saved to `data/runs/<stamp>/events.ndjson`.
+5. Output: the walkthrough is reconstructed from **assistant** text deltas only, then the
+   first balanced `{…}` object is parsed. `normalizeDraft` coerces small type slips
+   (e.g. `minor: "true"`).
+6. Backend sets `pr`, `hunks`, `coverage`, `meta.run` (cost, duration, tool calls,
+   sub-agents, repairs, task id), then runs `validate()`. On failure: one repair via
+   `--resume` with the structured error list, under the cumulative cap and the stage
+   budget guard (`analyzer/budget.ts`, `BOB_BUDGET_USD=20`).
+7. `checkQuality` adds non-blocking warnings (identifiers in plain text, lengths,
+   missing `check`, step budget); used as the free feedback loop in ST10.
 
 Reference implementation: `packages/server/scripts/bob-spike.ts`.
 
@@ -689,13 +789,15 @@ Reference implementation: `packages/server/scripts/bob-spike.ts`.
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Bob Shell wraps / mixes the JSON with prose | Medium | Balanced-brace extractor over the `--format json` envelope; raw output saved in `data/runs/` |
+| Bob Shell wraps / mixes the JSON with prose | Medium | Balanced-brace extractor over assistant `stream-json` deltas; raw events saved in `data/runs/` (open: #9403's repaired answer fails reconstruction ~7.7 KB in) |
 | A run burns more Bobcoins than expected | Medium | Always pass `--max-cost`; `smoke` spike measures the floor cost first |
 | Custom mode not picked up → Bob runs in `agent` mode with edit + shell pre-approved | Medium | `readonly` spike run; checkout lives in a throwaway cache dir, never in this repo |
 | Bob Shell produces invalid JSON or hallucinates code lines | Medium | Validation + one repair retry; golden example in prompt as few-shot reference |
-| Bobcoin budget runs out before demo PRs are generated | Medium | Generate `#10295` first (5 files, +19−7); CachedAnalyzer for demo runs; Claude API fallback |
+| Bobcoin budget runs out before demo PRs are generated | Medium | Generate `#10295` first (5 files, +19−7); CachedAnalyzer for demo runs; stage budget guard refuses runs that could exceed $20 |
 | `outline/outline` licence unverified | Confirmed risk | Exclude from public demo; use only Excalidraw PRs (MIT); outline is private test data |
-| Excalidraw doesn't build at old commits for video | Medium | Attempt only after Must items complete; manual screen recording acceptable per brief §10 |
+| Excalidraw doesn't build at old commits for the before/after screenshots | Medium | Only two manual screenshots are needed (ST6e cut); if BASE won't build, describe the bug in the video with the walkthrough's own "problem" step |
+| GitHub write token leaks or posts to upstream | Low | Fine-grained PAT scoped to the demo fork only, backend-only, `.env` gitignored (ST6d) |
+| Static Vercel build drifts from the API-backed viewer | Low | One code path with a `VITE_STATIC` switch; verify both before submitting (ST6f) |
 | dagre graph layout looks bad for some PRs | Low | Test with golden JSON early; fall back to manual layout hints grid |
 | Solo dev misses `bob_sessions` screenshots | Medium | Take screenshot immediately after each sub-task completes; never batch at end |
 
@@ -746,6 +848,27 @@ ST2  ✓ done (viewer)
 
 **No file conflicts:** `packages/server/` and `packages/web/` share only the read-only types from `packages/shared/` (written in ST1).
 
+### Phase 3 — From Sep 26 (after ST5–ST6b and the ST10 iterations)
+
+```
+ST1–ST6b  ✓ done        ST10  ✓ 2/2 iterations on #10295 ($10.20 of $20 spent)
+     │
+     ▼
+ST6c  Live analysis: job queue + SSE progress screen   (replay at $0)
+     │
+     ▼
+ST6d  GitHub round-trip: line comments / questions → PR (needs fork + token from the user)
+     │
+     ▼
+ST6f  Public demo on Vercel (static, Excalidraw only)
+     │
+     ▼
+ST7   Demo data   →   ST8 / ST9  screenshots, README, impact experiment, video, submit
+
+ST6e  ✂ cut — two manual before/after screenshots instead
+Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #9403 retry
+```
+
 ---
 
 ## Milestones
@@ -763,5 +886,9 @@ ST2  ✓ done (viewer)
 | M6b | Narration audio pre-generated for demo PRs, served from disk | ElevenLabs credits only |
 | M6.5 | ✓ ST5a spike: smoke + readonly + full run on `#10295`, numbers in `docs/cost-log.md` | $3.15 spent |
 | M7 | BobShellAnalyzer (ported from the spike) wired into the server | 0 (verify with cached) |
-| M8 | All demo PRs cached; full stack demo working | ST10 re-runs ~$6 + #10013 ~$5–10 |
-| M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |
+| M7.5 | ✓ ST10: 2 prompt iterations on #10295, 8 → 1 quality warnings; #10295 and #8340 valid and cached | $10.20 of $20 spent (stage 2) |
+| M7.6 | ST6c: live analysis with SSE progress screen (replay works at $0) | 0 (one real run optional) |
+| M7.7 | ST6d: comment/question from the viewer appears on the demo fork's PR | 0 |
+| M7.8 | ST6f: public Vercel link renders the Excalidraw walkthroughs with audio | 0 |
+| M8 | All demo PRs cached; full stack demo working | #8340 confirmation ~$1–2; #9403 retry if budget allows |
+| M9 | Submission: bob_sessions, README (incl. impact experiment), demo video, smoke test | 0 |

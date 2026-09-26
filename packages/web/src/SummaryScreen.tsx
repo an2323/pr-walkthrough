@@ -4,6 +4,7 @@
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
+import { SHOW_TRY_IT } from './features';
 
 interface Props {
   walkthrough: Walkthrough;
@@ -82,7 +83,7 @@ export function SummaryScreen({
             </div>
           );
         })}
-        {scenarios.length > 0 && (
+        {SHOW_TRY_IT && scenarios.length > 0 && (
           <div className="sum-item">
             <span className={`m ${tried === scenarios.length ? 'ok' : 'no'}`}>
               {tried === scenarios.length ? '✓' : '○'}

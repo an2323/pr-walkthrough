@@ -9,6 +9,7 @@ import { StepScreen } from './StepScreen';
 import { SummaryScreen } from './SummaryScreen';
 import { Drawer } from './Drawer';
 import { LandingPage } from './LandingPage';
+import { SHOW_TRY_IT } from './features';
 import './styles.css';
 import './v2.css';
 
@@ -71,8 +72,10 @@ export default function App() {
   const { data: walkthrough } = walkthroughState;
   const plain = buildPlainData(walkthrough);
 
-  // flow = non-minor steps only
-  const flow: Step[] = walkthrough.steps.filter((s) => !plain.steps[s.id]?.minor);
+  // flow = non-minor steps only (and no "Try it" chapter while it's switched off)
+  const flow: Step[] = walkthrough.steps.filter(
+    (s) => !plain.steps[s.id]?.minor && (SHOW_TRY_IT || plain.steps[s.id]?.ch !== 'check')
+  );
   const minors: Step[] = walkthrough.steps.filter((s) => !!plain.steps[s.id]?.minor);
 
   const END = flow.length; // summary screen index
