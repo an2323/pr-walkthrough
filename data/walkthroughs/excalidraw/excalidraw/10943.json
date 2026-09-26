@@ -137,7 +137,11 @@
           "type": "commit_message",
           "ref": "fix(editor): arrowhead picker overflowing viewport"
         }
-      ]
+      ],
+      "evidence": {
+        "source": "ablation",
+        "verdict": "not-separable"
+      }
     },
     {
       "id": "s2",
@@ -309,7 +313,11 @@
           "type": "code",
           "ref": "packages/excalidraw/components/IconPicker.scss (base), line 11"
         }
-      ]
+      ],
+      "evidence": {
+        "source": "ablation",
+        "verdict": "not-separable"
+      }
     },
     {
       "id": "s3",
@@ -378,7 +386,11 @@
           "type": "inference",
           "ref": "two-layer structure analysis"
         }
-      ]
+      ],
+      "evidence": {
+        "source": "ablation",
+        "verdict": "not-separable"
+      }
     },
     {
       "id": "s4",
@@ -501,7 +513,11 @@
           "type": "diff",
           "ref": "packages/excalidraw/components/IconPicker.tsx#3"
         }
-      ]
+      ],
+      "evidence": {
+        "source": "ablation",
+        "verdict": "fixes-alone"
+      }
     },
     {
       "id": "s5",
@@ -573,7 +589,11 @@
           "type": "diff",
           "ref": "packages/excalidraw/components/IconPicker.scss#1"
         }
-      ]
+      ],
+      "evidence": {
+        "source": "ablation",
+        "verdict": "no-effect"
+      }
     },
     {
       "id": "s6",
@@ -799,12 +819,12 @@
       "raw": "before.png",
       "highlights": [
         {
-          "x": 0.37857142857142856,
-          "y": 0.6671428571428571,
-          "w": 0.6214285714285714,
-          "h": 0.16428571428571426,
-          "label": "Picker overflows right edge",
-          "pair": "picker"
+          "x": 0.053125,
+          "y": 0.63,
+          "w": 0.140625,
+          "h": 0.08875,
+          "label": "picker div is absolute-positioned inner ",
+          "pair": "picker-popup"
         }
       ]
     },
@@ -813,21 +833,81 @@
       "raw": "after.png",
       "highlights": [
         {
-          "x": 0.37857142857142856,
-          "y": 0.6671428571428571,
-          "w": 0.6214285714285714,
-          "h": 0.16428571428571426,
-          "label": "Picker stays in view",
-          "pair": "picker"
+          "x": 0.053125,
+          "y": 0.63,
+          "w": 0.140625,
+          "h": 0.08875,
+          "label": "picker is directly on Radix element (col",
+          "pair": "picker-popup"
         }
       ]
     },
-    "caption": "Arrowhead picker stays inside viewport",
+    "caption": "Arrowhead picker stays inside the screen",
     "by": "bob-verifier",
     "run": {
-      "costUsd": 2.619812,
-      "durationMs": 395867,
-      "toolCalls": 36
+      "costUsd": 0.596356,
+      "durationMs": 81239,
+      "toolCalls": 14
+    }
+  },
+  "verification": {
+    "status": "passed",
+    "scenario": [],
+    "ablation": {
+      "units": [
+        "packages/excalidraw/components/IconPicker.scss#1",
+        "packages/excalidraw/components/IconPicker.tsx#2",
+        "packages/excalidraw/components/IconPicker.tsx#3"
+      ],
+      "runs": [
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.scss#1"
+          ],
+          "mode": "alone",
+          "verdict": "bug"
+        },
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.tsx#2"
+          ],
+          "mode": "alone",
+          "verdict": "broken",
+          "detail": "Command failed: node /Users/andrii/projects/ai-review-walkthrough-2026/data/verify/excalidraw/excalidraw/10943/repro.cjs http://127.0.0.1:60652/\nnode:internal/process/promises:324\n    triggerUncaughtException(err, true /* fromPromise */);\n    ^\n\npage.waitForSelector: Timeout 10000ms exceeded.\nCall l"
+        },
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.tsx#3"
+          ],
+          "mode": "alone",
+          "verdict": "fixed"
+        },
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.tsx#2",
+            "packages/excalidraw/components/IconPicker.tsx#3"
+          ],
+          "mode": "all-but-one",
+          "verdict": "fixed"
+        },
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.scss#1",
+            "packages/excalidraw/components/IconPicker.tsx#3"
+          ],
+          "mode": "all-but-one",
+          "verdict": "fixed"
+        },
+        {
+          "unitIds": [
+            "packages/excalidraw/components/IconPicker.scss#1",
+            "packages/excalidraw/components/IconPicker.tsx#2"
+          ],
+          "mode": "all-but-one",
+          "verdict": "broken",
+          "detail": "Command failed: node /Users/andrii/projects/ai-review-walkthrough-2026/data/verify/excalidraw/excalidraw/10943/repro.cjs http://127.0.0.1:60857/\nnode:internal/process/promises:324\n    triggerUncaughtException(err, true /* fromPromise */);\n    ^\n\npage.waitForSelector: Timeout 10000ms exceeded.\nCall l"
+        }
+      ]
     }
   }
 }

@@ -23,3 +23,4 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-26 21:10 | excalidraw/excalidraw#10943 | full | 4 | 0.701 | 124s | 13 | 1 | 0 | yes |  |
 | 2026-09-26 21:43 | excalidraw/excalidraw#10943 | pr-verifier | 2 | 2.064 | 265s | 34 | 0 | 0 | no | The task reached the cost limit of 2.00 (spent: 2.06). |
 | 2026-09-26 21:56 | excalidraw/excalidraw#10943 | pr-verifier | 2.5 | 2.620 | 396s | 36 | 0 | 0 | yes | screenshots taken |
+| 2026-09-26 22:59 | excalidraw/excalidraw#10943 | pr-verifier | 3 | 0.596 | 81s | 14 | 0 | 0 | yes | repro confirmed true@BASE/false@HEAD, screenshots taken |

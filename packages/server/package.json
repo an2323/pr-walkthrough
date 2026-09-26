@@ -16,7 +16,8 @@
     "verify-shots": "tsx scripts/verify-shots.ts",
     "bob:verify-shots": "tsx scripts/bob-verify-shots.ts",
     "annotate-shots": "tsx scripts/annotate-shots.ts",
-    "annotate-lines": "tsx scripts/annotate-lines.ts"
+    "annotate-lines": "tsx scripts/annotate-lines.ts",
+    "bob:revise": "tsx scripts/bob-revise.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",

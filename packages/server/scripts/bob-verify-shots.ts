@@ -17,8 +17,12 @@ import { fileURLToPath } from "node:url";
 
 import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
 import { verifyShots } from "../src/verify/bob-verifier.js";
+import { runAblation, verdictForStep } from "../src/verify/ablation.js";
+import { recipeFor } from "../src/verify/recipes.js";
+import { prepareWorkspace } from "../src/git/workspace.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 
 const spec = process.argv[2] ?? "";
 const apply = process.argv.includes("--apply");
@@ -47,5 +51,39 @@ if (result.status === "skipped") {
     wt.shots = result.shots;
     await saveWalkthrough(wt);
     console.log("walkthrough.shots updated");
+  }
+
+  // ST12-D, $0: only with --ablate, since it's several more app starts on top
+  // of an already-paid verifier run.
+  if (process.argv.includes("--ablate")) {
+    const recipe = recipeFor(owner, repo);
+    if (!recipe || !wt.pr.baseSha) {
+      console.log("ablation skipped: no recipe or baseSha");
+    } else {
+      console.log("\nrunning ablation…");
+      const workspace = await prepareWorkspace(`https://github.com/${owner}/${repo}`, wt.pr.headSha!, wt.pr.baseSha, wt.pr.number, GIT_CACHE_DIR);
+      const diff = await workspace.diff();
+      const ablation = await runAblation({
+        mainPath: path.join(GIT_CACHE_DIR, `${owner}__${repo}`),
+        baseSha: wt.pr.baseSha,
+        diff,
+        hunks: wt.hunks,
+        skippedHunks: wt.skippedHunks,
+        recipe,
+        reproPath: result.reproPath,
+        onProgress: (m) => console.log("  •", m),
+      });
+      console.log(JSON.stringify(ablation, null, 2));
+      for (const step of wt.steps) {
+        const verdict = verdictForStep(ablation, step.hunkIds);
+        console.log(`  ${step.id}: ${verdict ?? "(no verdict)"}`);
+        if (apply && verdict) step.evidence = { source: "ablation", verdict };
+      }
+      if (apply) {
+        wt.verification = { ...wt.verification, status: "passed", scenario: wt.verification?.scenario ?? [], ablation };
+        await saveWalkthrough(wt);
+        console.log("walkthrough.verification.ablation + step.evidence saved");
+      }
+    }
   }
 }
