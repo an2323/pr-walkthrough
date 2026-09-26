@@ -25,7 +25,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseHunks, type Hunk, type PullRequestMeta } from "@pr-walkthrough/shared";
+import { parseHunks, type Hunk, type PullRequestMeta, type SkippedHunk } from "@pr-walkthrough/shared";
 import type { AnalyzerInput, WalkthroughDraft } from "../src/analyzer/interface.js";
 import type { RepoWorkspace } from "../src/git/workspace.js";
 import { prepareWorkspace, gitCommonDir } from "../src/git/workspace.js";
@@ -201,14 +201,22 @@ function runBob(
   opts: { resumeTaskId?: string } = {}
 ): Promise<BobRun> {
   const subagentsEnabled = process.env.BOB_SUBAGENTS !== "0";
+  // Confirmed empirically (a $0.02 direct CLI test): `--resume` does NOT read
+  // a follow-up prompt from stdin — it silently replays the ORIGINAL
+  // session's cached transcript and exits at $0. The follow-up must be a
+  // trailing positional argument instead; stdin is closed empty in that case
+  // so the process doesn't wait on it. Also confirmed: `--workspace` must be
+  // the exact same string as the original run (no symlink resolution, e.g.
+  // macOS's /tmp vs /private/tmp) or Bob rejects it as "does not belong to".
   const args = [
     "run", "--format", "stream-json",
     ...(opts.resumeTaskId ? ["--resume", opts.resumeTaskId] : ["--mode", MODE_SLUG]),
     "--workspace", repoPath, "--max-cost", maxCost, "--max-turns", process.env.MAX_TURNS ?? "40",
     "--disable-mcp", "--trust", "--accept-license",
     ...(subagentsEnabled ? [] : ["--disable-subagents"]),
+    ...(opts.resumeTaskId ? [prompt] : []),
   ];
-  console.log(`$ bob ${args.join(" ")}  < prompt.md`);
+  console.log(`$ bob ${args.slice(0, -1).join(" ")}${opts.resumeTaskId ? " <prompt as arg>" : "  < prompt.md"}`);
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const child = spawn("bob", args, { cwd: repoPath, env: process.env, timeout: 600_000 });
@@ -234,7 +242,7 @@ function runBob(
       await writeFile(path.join(runDir, "events.ndjson"), events.map((e) => JSON.stringify(e)).join("\n"));
       resolve(run);
     });
-    child.stdin.end(prompt);
+    child.stdin.end(opts.resumeTaskId ? "" : prompt);
   });
 }
 
@@ -324,8 +332,9 @@ function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | u
  */
 function normalizeDraft(draft: Record<string, unknown>): number {
   let fixed = 0;
-  for (const step of (draft.steps as { beats?: { code?: { file: string; revision: string }[] }[] }[]) ?? []) {
-    for (const beat of step.beats ?? []) {
+  for (const step of (draft.steps as Record<string, unknown>[]) ?? []) {
+    const beats = (step.beats as { code?: { file: string; revision: string }[] }[]) ?? [];
+    for (const beat of beats) {
       for (const block of beat.code ?? []) {
         if (block.file.startsWith(".walkthrough/base/")) {
           block.file = block.file.slice(".walkthrough/base/".length);
@@ -333,6 +342,17 @@ function normalizeDraft(draft: Record<string, unknown>): number {
           fixed++;
         }
       }
+    }
+    // See bob-shell.ts's twin: Bob sometimes writes an explanation into
+    // `minor` instead of a boolean flag — coerce it rather than fail/repair.
+    if (typeof step.minor !== "boolean" && step.minor) {
+      const note = typeof step.minor === "string" ? step.minor : undefined;
+      step.minor = true;
+      if (note) {
+        const notes = Array.isArray(step.notes) ? (step.notes as string[]) : [];
+        if (!notes.includes(note)) step.notes = [...notes, note];
+      }
+      fixed++;
     }
   }
   return fixed;
@@ -350,9 +370,19 @@ interface RunInfo {
 
 async function validateDraft(
   draft: Record<string, unknown>, repoPath: string, diff: string, hunks: Hunk[],
-  runDir: string, summary: Record<string, unknown>, runInfo?: RunInfo
+  runDir: string, summary: Record<string, unknown>, runInfo?: RunInfo, autoSkipped: SkippedHunk[] = []
 ): Promise<void> {
   summary.normalizedBlocks = normalizeDraft(draft);
+  // Merge classifyHunks' auto-skipped mechanical hunks into skippedHunks —
+  // they were never sent to the analyzer, so it couldn't have listed them
+  // itself. Missing this made every run with auto-skipped hunks report them
+  // as "uncovered" (a bug in this script, not in Bob's output — confirmed on
+  // a real #9403 run: 36 false "uncovered hunks" errors, matching exactly
+  // classifyHunks' own auto-skip list logged a few lines above).
+  if (autoSkipped.length > 0) {
+    const existing = (draft.skippedHunks as SkippedHunk[] | undefined) ?? [];
+    draft.skippedHunks = [...existing, ...autoSkipped];
+  }
   // The backend owns `pr`; the analyzer is told to omit it.
   const full = { ...draft, pr: PR } as unknown as WalkthroughDraft;
   const workspace: RepoWorkspace = {
@@ -420,7 +450,7 @@ async function main(): Promise<void> {
     const src = path.resolve(process.argv[3] ?? "");
     const draft = JSON.parse(await readFile(path.join(src, "walkthrough.draft.json"), "utf-8"));
     const summary: Record<string, unknown> = { mode, source: src };
-    await validateDraft(draft, repoPath, diff, hunks, src, summary);
+    await validateDraft(draft, repoPath, diff, hunks, src, summary, undefined, autoSkipped);
     console.log("\n" + JSON.stringify(summary, null, 2));
     return;
   }
@@ -458,7 +488,7 @@ async function main(): Promise<void> {
       await validateDraft(draft, repoPath, diff, hunks, runDir, summary, {
         durationMs: run.ms, sessionCost: run.sessionCost, maxCost: Number(maxCost),
         toolCalls: run.toolCalls, subagents: run.subagents, repairs: 1, taskId: run.taskId,
-      });
+      }, autoSkipped);
     }
     await recordSpend({
       pr: `${PR.repo}#${PR.number}`, mode: "repair", maxCost: Number(maxCost), actualCost: run.sessionCost,
@@ -514,7 +544,7 @@ async function main(): Promise<void> {
       await validateDraft(draft, repoPath, diff, hunks, runDir, summary, {
         durationMs: run.ms, sessionCost: run.sessionCost, maxCost: Number(maxCost),
         toolCalls: run.toolCalls, subagents: run.subagents, repairs: 0, taskId: run.taskId,
-      });
+      }, autoSkipped);
     }
   }
 

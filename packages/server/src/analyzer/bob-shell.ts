@@ -213,6 +213,13 @@ export function runBob(
   opts: { resumeTaskId?: string } = {}
 ): Promise<BobRun> {
   const subagentsEnabled = process.env.BOB_SUBAGENTS !== "0";
+  // Confirmed empirically (a $0.02 direct CLI test): `--resume` does NOT read
+  // a follow-up prompt from stdin — it silently replays the ORIGINAL
+  // session's cached transcript and exits at $0. The follow-up must be a
+  // trailing positional argument instead; stdin is closed empty in that case
+  // so the process doesn't wait on it. Also confirmed: `--workspace` must be
+  // the exact same string as the original run (no symlink resolution, e.g.
+  // macOS's /tmp vs /private/tmp) or Bob rejects it as "does not belong to".
   const args = [
     "run", "--format", "stream-json",
     ...(opts.resumeTaskId ? ["--resume", opts.resumeTaskId] : ["--mode", MODE_SLUG]),
@@ -220,8 +227,9 @@ export function runBob(
     "--max-turns", process.env.MAX_TURNS ?? "40",
     "--disable-mcp", "--trust", "--accept-license",
     ...(subagentsEnabled ? [] : ["--disable-subagents"]),
+    ...(opts.resumeTaskId ? [prompt] : []),
   ];
-  console.log(`[bob-shell] $ bob ${args.join(" ")}`);
+  console.log(`[bob-shell] $ bob ${args.slice(0, -1).join(" ")}${opts.resumeTaskId ? " <prompt as arg>" : ""}`);
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const child = spawn("bob", args, { cwd: repoPath, env: process.env, timeout: 600_000 });
@@ -243,7 +251,7 @@ export function runBob(
         });
       resolve({ code, stdout, stderr, ms: Date.now() - started, events, ...summarizeEvents(events) });
     });
-    child.stdin.end(prompt);
+    child.stdin.end(opts.resumeTaskId ? "" : prompt);
   });
 }
 
@@ -363,8 +371,9 @@ export function findWalkthroughInEvents(events: unknown[]): Record<string, unkno
  */
 export function normalizeDraft(draft: Record<string, unknown>): number {
   let fixed = 0;
-  for (const step of (draft.steps as { beats?: { code?: { file: string; revision: string }[] }[] }[]) ?? []) {
-    for (const beat of step.beats ?? []) {
+  for (const step of (draft.steps as Record<string, unknown>[]) ?? []) {
+    const beats = (step.beats as { code?: { file: string; revision: string }[] }[]) ?? [];
+    for (const beat of beats) {
       for (const block of beat.code ?? []) {
         if (block.file.startsWith(".walkthrough/base/")) {
           block.file = block.file.slice(".walkthrough/base/".length);
@@ -372,6 +381,21 @@ export function normalizeDraft(draft: Record<string, unknown>): number {
           fixed++;
         }
       }
+    }
+    // Bob sometimes writes an explanation into `minor` instead of a boolean
+    // flag — e.g. `"minor": "Rename only; no behavioral change..."`, seen on
+    // a real #8340 run. Coerce any truthy non-boolean value to `true` and
+    // keep the explanation as a note, rather than failing schema validation
+    // (or worse, spending a --resume repair) over a field that clearly meant
+    // "yes, this is minor".
+    if (typeof step.minor !== "boolean" && step.minor) {
+      const note = typeof step.minor === "string" ? step.minor : undefined;
+      step.minor = true;
+      if (note) {
+        const notes = Array.isArray(step.notes) ? (step.notes as string[]) : [];
+        if (!notes.includes(note)) step.notes = [...notes, note];
+      }
+      fixed++;
     }
   }
   return fixed;
