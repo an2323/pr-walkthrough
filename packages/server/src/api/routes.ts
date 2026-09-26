@@ -9,6 +9,8 @@
  *   GET  /api/runs/:owner/:repo/:number/events?speed=N         — SSE replay of a recorded run ($0 demo)
  *   GET  /api/context/:owner/:repo/:number                    — read file lines from checkout
  *   GET  /api/audio/:owner/:repo/:number/:stepId/:n.mp3       — serve/generate TTS sentence
+ *   GET  /api/review/:owner/:repo/:number                     — can comments be posted, and where
+ *   POST /api/review/:owner/:repo/:number/comments { body, anchor? } — post a comment to the demo PR
  */
 
 import { Router, type Request, type Response } from "express";
@@ -21,6 +23,7 @@ import type { ProgressEvent } from "@pr-walkthrough/shared";
 import { splitSentences, sentenceHash, generateSentenceAudio } from "../tts/elevenlabs.js";
 import { loadWalkthrough } from "../storage.js";
 import { parsePRUrl } from "../github/client.js";
+import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob } from "./jobs.js";
 import { runAnalyzeJob } from "./analyze-pipeline.js";
 
@@ -417,5 +420,83 @@ router.get(
     createReadStream(outPath).pipe(res);
   }
 );
+
+// ---------------------------------------------------------------------------
+// GET  /api/review/:owner/:repo/:number
+// POST /api/review/:owner/:repo/:number/comments  { body, anchor? }
+//
+// ST6d: comments go to the demo PR (github/review.ts), never upstream. Without
+// GITHUB_TOKEN_WRITE the GET says { enabled: false } and the viewer falls back
+// to copy-to-clipboard.
+// ---------------------------------------------------------------------------
+
+const MAX_COMMENT_CHARS = 10_000;
+
+router.get("/review/:owner/:repo/:number", async (req: Request, res: Response): Promise<void> => {
+  const { owner, repo, number } = req.params as Record<string, string>;
+  const wt = await loadWalkthrough(owner, repo, parseInt(number, 10));
+  if (!wt) {
+    res.status(404).json({ error: `No walkthrough for ${owner}/${repo}#${number}` });
+    return;
+  }
+  const target = await resolveTarget(wt);
+  if ("disabled" in target) {
+    res.json({ enabled: false, reason: target.disabled });
+    return;
+  }
+  res.json({ enabled: true, target: { repo: target.repo, number: target.number, url: target.url } });
+});
+
+function isAnchor(a: unknown): a is CommentAnchor {
+  if (!a || typeof a !== "object") return false;
+  const x = a as Record<string, unknown>;
+  return (
+    typeof x.file === "string" &&
+    (x.revision === "base" || x.revision === "head" || x.revision === "diff") &&
+    Array.isArray(x.lines) &&
+    x.lines.length <= 500 &&
+    x.lines.every((l) => l && typeof l === "object" && typeof (l as CommentAnchor["lines"][number]).text === "string" && typeof (l as CommentAnchor["lines"][number]).kind === "string") &&
+    typeof x.index === "number" &&
+    Number.isInteger(x.index) &&
+    x.index >= 0 &&
+    x.index < x.lines.length
+  );
+}
+
+router.post("/review/:owner/:repo/:number/comments", async (req: Request, res: Response): Promise<void> => {
+  const { owner, repo, number } = req.params as Record<string, string>;
+  const { body, anchor } = req.body as { body?: unknown; anchor?: unknown };
+  if (typeof body !== "string" || !body.trim() || body.length > MAX_COMMENT_CHARS) {
+    res.status(400).json({ error: `body must be a non-empty string up to ${MAX_COMMENT_CHARS} chars` });
+    return;
+  }
+  if (anchor !== undefined && !isAnchor(anchor)) {
+    res.status(400).json({ error: "Invalid anchor" });
+    return;
+  }
+
+  const wt = await loadWalkthrough(owner, repo, parseInt(number, 10));
+  if (!wt) {
+    res.status(404).json({ error: `No walkthrough for ${owner}/${repo}#${number}` });
+    return;
+  }
+  // The anchor's file must be one this PR touches — no probing arbitrary paths.
+  if (anchor && !wt.hunks.some((h) => h.file === anchor.file)) {
+    res.status(400).json({ error: `File not in this PR: ${anchor.file}` });
+    return;
+  }
+  const target = await resolveTarget(wt);
+  if ("disabled" in target) {
+    res.status(503).json({ error: `Posting is off: ${target.disabled}` });
+    return;
+  }
+
+  try {
+    res.json(await postComment(target, body.trim(), anchor));
+  } catch (err) {
+    console.error("[review] posting failed:", err instanceof Error ? err.message : err);
+    res.status(502).json({ error: "GitHub rejected the comment — see server log" });
+  }
+});
 
 export default router;

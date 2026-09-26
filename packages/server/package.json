@@ -10,7 +10,8 @@
     "test": "vitest run",
     "spike": "tsx scripts/bob-spike.ts",
     "tts:pregen": "tsx scripts/tts-pregen.ts",
-    "make-replay": "tsx scripts/make-replay.ts"
+    "make-replay": "tsx scripts/make-replay.ts",
+    "review:dryrun": "tsx scripts/review-dryrun.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",
