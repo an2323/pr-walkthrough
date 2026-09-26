@@ -508,17 +508,18 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 **Today:** the summary screen (`SummaryScreen.tsx`) collects questions into one text with a **Copy as review comment** button — the reviewer pastes it into GitHub by hand.
 
+**Demo repo — done (Sep 26):** [an2323/excalidraw](https://github.com/an2323/excalidraw), forked from `excalidraw/excalidraw`. PR **[an2323/excalidraw#1](https://github.com/an2323/excalidraw/pull/1)** re-creates #10295 exactly: branches `demo-10295-base`/`demo-10295-head` point at the same `baseSha`/`headSha` the cached walkthrough already uses (no rebasing, no diff drift — both commits already existed in the fork's shared object network, so this took two `git/refs` calls and a `pr create`, no push). `GITHUB_DEMO_REPO=an2323/excalidraw` and `GITHUB_DEMO_PR=1` are in `.env.example`.
+
 **Design:**
-- Comment on a code line → PR review comment on that line (`POST /repos/{o}/{r}/pulls/{n}/comments`, `commit_id` = head SHA, `path`, `line`, `side`). Lines outside the diff → a general PR comment with a permalink to the line at head SHA.
+- Comment on a code line → PR review comment on that line (`POST /repos/{o}/{r}/pulls/{n}/comments`, `commit_id` = head SHA, `path`, `line`, `side`). Lines outside the diff → a general PR comment (`POST /repos/{o}/{r}/issues/{n}/comments` — a PR is an issue for this endpoint) with a permalink to the line at head SHA.
 - "Ask the author" on each open question → same path, pre-filled with the question and the step it points to.
-- Backend-only token: fine-grained PAT with **Pull requests: write** on the demo repo only, in `.env` (`GITHUB_TOKEN_WRITE`), never sent to the browser. Without it the button falls back to today's copy-to-clipboard.
-- Demo repo: a fork of excalidraw with the demo PR re-created on it, so posting never touches upstream.
+- Backend-only token: fine-grained PAT, "Only select repositories" → `an2323/excalidraw`, **Pull requests: Read and write** + **Issues: Read and write** (the general-comment fallback needs Issues, not just Pull requests). `.env`'s `GITHUB_TOKEN_WRITE`, never sent to the browser. Without it the button falls back to today's copy-to-clipboard. Short expiration (7–14 days) is enough for the hackathon.
 - Should: a draft review with Submit (Comment / Approve / Request changes) via `POST /pulls/{n}/reviews`.
 - Should: a bot comment on the PR linking to the walkthrough.
 
-**Needs a decision from the user before starting:** which fork/repo, and creating the token (the user creates it and puts it in `.env`).
+**Waiting on:** the user is creating `GITHUB_TOKEN_WRITE` now (permissions above) and will drop it into `.env`.
 
-**✓ Verify:** a line comment and a question posted from the viewer show up on the fork's PR at the right line; with the token unset the UI shows the copy button and nothing errors.
+**✓ Verify:** a line comment and a question posted from the viewer show up on an2323/excalidraw#1 at the right line; with the token unset the UI shows the copy button and nothing errors.
 
 ---
 
@@ -564,7 +565,7 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 **Todo List:**
 1. `ANALYZER=cached pnpm dev` → open #10295, #8340 and Outline; all steps render, no console errors.
 2. With the user's go-ahead only: #8340 ST10 confirmation run (~$1–2); #9403 retry once the extractor bug is root-caused.
-3. With the user's go-ahead only: regenerate ElevenLabs narration for #10295 (text changed in ST10) and generate it for #8340 (`tts:pregen`).
+3. **Deliberately left for last** (Sep 26 decision): regenerate ElevenLabs narration for #10295 (text changed in ST10) and generate it for #8340 (`tts:pregen`) — only once all step text across ST6c/6d/6f/7 is final, so it isn't regenerated twice. With the user's go-ahead only.
 
 ---
 
