@@ -20,3 +20,5 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-26 16:19 | excalidraw/excalidraw#10295 | full | 3 | 1.929 | 242s | 21 | 2 | 0 | yes |  |
 | 2026-09-26 16:25 | excalidraw/excalidraw#10295 | full | 3 | 2.529 | 283s | 36 | 2 | 0 | yes |  |
 | 2026-09-26 20:38 | excalidraw/excalidraw#10295 | pr-verifier | 5 | 0.389 | 79s | 17 | 0 | 0 | yes | PNGs written to 10295-bob-trial; before.png; after.png; result.json; annotated |
+| 2026-09-26 21:10 | excalidraw/excalidraw#10943 | full | 4 | 0.701 | 124s | 13 | 1 | 0 | yes |  |
+| 2026-09-26 21:43 | excalidraw/excalidraw#10943 | pr-verifier | 2 | 2.064 | 265s | 34 | 0 | 0 | no | The task reached the cost limit of 2.00 (spent: 2.06). |

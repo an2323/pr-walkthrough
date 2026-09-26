@@ -1,0 +1,712 @@
+{
+  "schemaVersion": 1,
+  "summary": {
+    "problem": "The arrowhead picker popup could overflow off the edge of the screen, especially near the right or bottom viewport edges, because its inner wrapper had position:absolute styling and Radix's collision avoidance could not see the wrapper as the popup surface.",
+    "solution": "Move all styling props (class, role, aria attributes) directly onto the Radix Popover.Content element and remove position:absolute from the inner wrapper, so Radix measures and repositions the real popup boundary and the picker never escapes the editor container."
+  },
+  "plain": {
+    "title": "Arrowhead picker stays inside the screen",
+    "problem": "The arrowhead picker could slide off the edge of the screen because the built-in collision-avoidance system didn't know where the visible edge of the popup was.",
+    "fix": "The popup surface is now the single element that Radix measures, so it correctly nudges the picker back into view whenever it would overflow."
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "iconpicker",
+        "label": "IconPicker",
+        "sublabel": "arrowhead picker",
+        "file": "packages/excalidraw/components/IconPicker.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "popovercontent",
+        "label": "Popover.Content",
+        "sublabel": "Radix popup wrapper",
+        "kind": "module",
+        "layout": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "pickerdiv",
+        "label": "Inner div.picker",
+        "sublabel": "visual popup surface",
+        "kind": "module",
+        "layout": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "iconpicker_scss",
+        "label": "IconPicker.scss",
+        "sublabel": ".picker styles",
+        "file": "packages/excalidraw/components/IconPicker.scss",
+        "kind": "file",
+        "layout": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "container",
+        "label": "Editor container",
+        "sublabel": "collision boundary",
+        "kind": "runtime",
+        "layout": {
+          "col": 0,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "from": "popovercontent",
+        "to": "pickerdiv",
+        "label": "wraps",
+        "plainLabel": "wraps inner div",
+        "kind": "props",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 3
+      },
+      {
+        "id": "e2",
+        "from": "popovercontent",
+        "to": "container",
+        "label": "collisionBoundary",
+        "plainLabel": "avoids overflow against",
+        "kind": "props",
+        "state": "unchanged"
+      },
+      {
+        "id": "e3",
+        "from": "iconpicker_scss",
+        "to": "pickerdiv",
+        "label": "position:absolute",
+        "plainLabel": "positions the div",
+        "kind": "data",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 3
+      },
+      {
+        "id": "e4",
+        "from": "popovercontent",
+        "to": "iconpicker_scss",
+        "label": "className=picker",
+        "plainLabel": "styles applied directly",
+        "kind": "props",
+        "state": "after",
+        "visibleFrom": 4
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "kind": "symptom",
+      "routeLabel": "Symptom",
+      "title": "Arrowhead picker overflows the viewport edge",
+      "headline": "The picker slides off the screen edge",
+      "say": "When you open the arrowhead picker near the edge of the screen, the popup disappears past the viewport boundary instead of shifting to stay visible.",
+      "focusNode": "iconpicker",
+      "tag": "commit_history",
+      "narration": "When a user opens the arrowhead style picker near the edge of the editor, the popup overflows out of view instead of nudging itself to stay on screen. Radix has built-in collision avoidance for exactly this scenario, so something must be stopping it from working correctly.",
+      "beats": [],
+      "hunkIds": [],
+      "visual": {
+        "type": "symptoms",
+        "items": [
+          "Arrowhead picker popup is clipped or invisible near viewport edges",
+          "Popup appears to slide outside the editor boundary"
+        ]
+      },
+      "sources": [
+        {
+          "type": "pr_title",
+          "ref": "fix(editor): arrowhead picker overflowing viewport"
+        },
+        {
+          "type": "commit_message",
+          "ref": "fix(editor): arrowhead picker overflowing viewport"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "kind": "cause",
+      "routeLabel": "The wrapper mismatch",
+      "title": "Radix measures the wrong element for collision",
+      "headline": "Radix measured the wrong element for collision",
+      "say": "The visible popup box was a plain inner div, not the element Radix tracks. Radix only corrects the position of its own element — the invisible outer wrapper — so the inner box still overflowed.",
+      "focusNode": "popovercontent",
+      "tag": "fact",
+      "narration": "Radix Popover places its content element in the DOM and watches its bounding box to decide whether to flip or shift the popup to avoid the viewport edge. Before this change, the Radix element had no visual appearance of its own — all the background, border, and padding belonged to a plain inner div. Because Radix only repositions its own element, it was nudging an invisible box while the real visible box kept overflowing.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it was structured",
+          "text": "The `Popover.Content` had no class, no background, no visual style. The visual popup surface was an inner `div.picker` with the background and shadow.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.tsx",
+              "revision": "base",
+              "label": "before the change",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "    <Popover.Content",
+                  "annotation": "Radix tracks this element for collision avoidance — but it has no visual style.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "      side={isMobile ? \"right\" : \"bottom\"}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      align=\"start\""
+                },
+                {
+                  "kind": "context",
+                  "text": "      sideOffset={isMobile ? 8 : 12}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      onKeyDown={handleKeyDown}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      collisionBoundary={container ?? undefined}"
+                },
+                {
+                  "kind": "context",
+                  "text": "    >"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      <div",
+                  "annotation": "The visible popup surface: all visual appearance lives on this child div.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "focus",
+                  "text": "        className={`picker`}"
+                },
+                {
+                  "kind": "context",
+                  "text": "        role=\"dialog\""
+                },
+                {
+                  "kind": "context",
+                  "text": "        aria-modal=\"true\""
+                },
+                {
+                  "kind": "context",
+                  "text": "        aria-label={label}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      >"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "problem",
+          "heading": "What breaks",
+          "text": "Radix detects that `Popover.Content` (the invisible outer box) overflows and repositions it — but the `.picker` div inside it has `position: absolute` in CSS, which lets it escape that repositioned boundary and continue overflowing.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.scss",
+              "revision": "base",
+              "label": "before the change",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  .picker {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    padding: 0.5rem;"
+                },
+                {
+                  "kind": "context",
+                  "text": "    background: var(--popup-bg-color);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    border-radius: 4px;"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    position: absolute;",
+                  "annotation": "The inner div positions itself absolutely, decoupling it from the Radix element that collision logic actually repositions.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "code",
+          "ref": "packages/excalidraw/components/IconPicker.tsx (base), line 254-287"
+        },
+        {
+          "type": "code",
+          "ref": "packages/excalidraw/components/IconPicker.scss (base), line 11"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "kind": "constraint",
+      "routeLabel": "Why not just fix CSS",
+      "title": "Removing position:absolute alone is not enough",
+      "headline": "The positioning fix alone is not enough",
+      "say": "Simply removing the absolute positioning would leave the visual styling on a wrapper div that Radix still does not measure. The right fix is to collapse the two layers into one — so the next step does exactly that.",
+      "focusNode": "pickerdiv",
+      "tag": "inferred",
+      "narration": "You might think just removing position absolute from the inner div would fix it. But the core problem is the two-layer structure itself: Radix measures the outer element it owns, and the visual popup lives on the inner div. Even without absolute positioning, Radix would still be repositioning an unstyled box while the visible content inside it could behave unpredictably. The right fix is to make those two elements one, which the next step does.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "The constraint",
+          "text": "The inner div carries the `picker` class with all its visual styles — `background`, `box-shadow`, `border-radius`, `padding`. The Radix element (`Popover.Content`) has none of these.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.scss",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  .picker {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    padding: 0.5rem;"
+                },
+                {
+                  "kind": "context",
+                  "text": "    background: var(--popup-bg-color);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    border-radius: 4px;"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    position: absolute;",
+                  "annotation": "All popup visuals live here, on a div Radix does not track. Simply removing this line would leave the two-element mismatch in place.",
+                  "annotationTag": "inferred"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "notes": [
+        "That removing position:absolute alone is not sufficient is the analyzer's inference from the structure. The author fixed both the CSS and the DOM structure together."
+      ],
+      "sources": [
+        {
+          "type": "inference",
+          "ref": "two-layer structure analysis"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "kind": "change",
+      "routeLabel": "Collapse to one element",
+      "title": "Move all visual props onto Popover.Content, drop the inner wrapper",
+      "headline": "Popup surface collapsed to one element",
+      "say": "The picker class, the accessibility role, and all visual styling are moved directly onto the Radix element. The inner wrapper div is deleted, so Radix now measures the exact same element the user sees.",
+      "focusNode": "popovercontent",
+      "tag": "fact",
+      "narration": "The fix collapses two elements into one. The class name, the dialog role, the aria attributes, and an alignment offset all move onto the Radix Content element directly. The inner div is gone. Now when Radix decides the popup needs to shift to avoid overflowing, it is moving the visible popup surface itself — not an invisible ghost element around it.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "All visual and semantic attributes move onto `Popover.Content`; the inner `div.picker` wrapper is removed. An `alignOffset` of 12 is also added to nudge the picker slightly inward from its trigger.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.tsx",
+              "revision": "head",
+              "label": "after the change",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  return ("
+                },
+                {
+                  "kind": "focus",
+                  "text": "    <Popover.Content",
+                  "annotation": "The Radix element is now also the visual popup surface — collision avoidance acts on the correct box.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      className=\"picker\"",
+                  "annotation": "`picker` class moved here from the deleted inner div, giving Radix the background, shadow, and padding directly.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "      role=\"dialog\""
+                },
+                {
+                  "kind": "context",
+                  "text": "      aria-modal=\"true\""
+                },
+                {
+                  "kind": "context",
+                  "text": "      aria-label={label}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      side={\"bottom\"}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      align=\"start\""
+                },
+                {
+                  "kind": "context",
+                  "text": "      sideOffset={12}"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      alignOffset={12}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      style={{ zIndex: \"var(--zIndex-ui-styles-popup)\" }}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      onKeyDown={handleKeyDown}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      collisionBoundary={container ?? undefined}"
+                },
+                {
+                  "kind": "context",
+                  "text": "    >"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      <div className=\"picker-sections\">"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "packages/excalidraw/components/IconPicker.tsx#3"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "packages/excalidraw/components/IconPicker.tsx#3"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "kind": "change",
+      "routeLabel": "Remove position:absolute",
+      "title": "Remove position:absolute now the inner div is gone",
+      "headline": "Stray absolute positioning removed from styles",
+      "say": "With the inner div deleted, its absolute positioning rule in the stylesheet is no longer needed and is removed.",
+      "focusNode": "iconpicker_scss",
+      "tag": "fact",
+      "minor": true,
+      "narration": "With the inner wrapper gone, its absolute-positioning CSS rule would target nothing — or worse, accidentally target some other element with the picker class. So it is removed.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "`position: absolute` is removed from `.picker` in the stylesheet. The Radix element uses its own positioning mechanism and does not need this.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.scss",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  .picker {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    padding: 0.5rem;"
+                },
+                {
+                  "kind": "context",
+                  "text": "    background: var(--popup-bg-color);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    border: 0 solid color.adjust(#fff, $alpha: -0.75);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    box-shadow: var(--shadow-island-stronger);"
+                },
+                {
+                  "kind": "context",
+                  "text": "    border-radius: 4px;"
+                },
+                {
+                  "kind": "removed",
+                  "text": "    position: absolute;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "packages/excalidraw/components/IconPicker.scss#1"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "packages/excalidraw/components/IconPicker.scss#1"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "kind": "change",
+      "routeLabel": "Drop mobile layout",
+      "title": "Mobile-specific side direction and offset removed",
+      "headline": "Mobile layout branch removed from picker",
+      "say": "The picker previously opened to the right on phones to avoid an overflow that the collision-avoidance system was failing to prevent. With collision avoidance now working correctly, the side and offset no longer need to vary by form factor.",
+      "focusNode": "iconpicker",
+      "tag": "inferred",
+      "narration": "Before this PR, on mobile the picker was configured to open to the right of its trigger, rather than below it, and with a smaller gap. This looks like a workaround for the same overflow bug on small screens — pointing the popup sideways so it had more room. Now that Radix properly shifts the popup to stay in bounds, the picker can always open downward and Radix will handle the rest. The mobile-specific code and the dependency on the editor-interface hook are both removed.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it was before",
+          "text": "On mobile the popup opened to the `right` at a smaller `sideOffset`, presumably to avoid overflowing the narrow screen. This required reading the editor interface to detect the phone form factor.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const editorInterface = useEditorInterface();",
+                  "annotation": "Only used to derive `isMobile`. Dropped along with the branch.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "  const isMobile = editorInterface.formFactor === \"phone\";",
+                  "annotation": "Drives the conditional `side` and `sideOffset` below.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      side={isMobile ? \"right\" : \"bottom\"}"
+                },
+                {
+                  "kind": "context",
+                  "text": "      align=\"start\""
+                },
+                {
+                  "kind": "focus",
+                  "text": "      sideOffset={isMobile ? 8 : 12}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "The mobile branch is gone. `side` is always `\"bottom\"`, `sideOffset` is always `12`, and the `useEditorInterface` import and call are removed.",
+          "code": [
+            {
+              "file": "packages/excalidraw/components/IconPicker.tsx",
+              "revision": "head",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  return ("
+                },
+                {
+                  "kind": "context",
+                  "text": "    <Popover.Content"
+                },
+                {
+                  "kind": "focus",
+                  "text": "      side={\"bottom\"}",
+                  "annotation": "Always opens downward; Radix's collision avoidance handles the rest on all screen sizes.",
+                  "annotationTag": "inferred"
+                },
+                {
+                  "kind": "context",
+                  "text": "      align=\"start\""
+                },
+                {
+                  "kind": "focus",
+                  "text": "      sideOffset={12}"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "packages/excalidraw/components/IconPicker.tsx#2"
+      ],
+      "notes": [
+        "That the mobile `side=\"right\"` was a workaround for the same overflow bug is the analyzer's inference. The author did not say this explicitly in the commit message."
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "packages/excalidraw/components/IconPicker.tsx#2"
+        },
+        {
+          "type": "inference",
+          "ref": "mobile branch as overflow workaround"
+        }
+      ]
+    }
+  ],
+  "skippedHunks": [
+    {
+      "hunkId": "packages/excalidraw/components/IconPicker.tsx#1",
+      "reason": "removed unused import of useEditorInterface (cleanup after s6 removes the only call site)"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "q1",
+      "stepId": "s6",
+      "question": "Was `side=\"right\"` on mobile actually a deliberate UX choice rather than a workaround — and if so, should the picker still open to the right on phones?",
+      "short": "Was the mobile right-side layout intentional UX or a workaround?",
+      "why": "The author removes it without comment. If it was an intentional design (e.g. thumb reach), removing it changes mobile UX.",
+      "tag": "inferred"
+    },
+    {
+      "id": "q2",
+      "stepId": "s4",
+      "question": "Is `alignOffset={12}` the right value? It shifts the popup 12 px along the alignment axis, which could misalign it with its trigger on some trigger sizes.",
+      "short": "Is alignOffset 12 the right amount for all trigger sizes?",
+      "why": "`alignOffset` is a new prop not present in the base code. Its value was chosen without an explanation in the commit, and the trigger button size may vary.",
+      "tag": "inferred"
+    }
+  ],
+  "meta": {
+    "analyzer": "bob-shell",
+    "generatedAt": "2026-09-26T21:10:06.688Z",
+    "language": "en",
+    "durationMs": 123948,
+    "run": {
+      "costUsd": 0.701268,
+      "maxCostUsd": 4,
+      "durationMs": 123948,
+      "toolCalls": 13,
+      "subagents": 1,
+      "repairs": 0,
+      "taskId": "67cc66b828e6c7cbb7db5c10f450f4bb"
+    }
+  },
+  "pr": {
+    "repo": "excalidraw/excalidraw",
+    "number": 10943,
+    "title": "fix(editor): arrowhead picker overflowing viewport",
+    "url": "https://github.com/excalidraw/excalidraw/pull/10943",
+    "author": "dwelle",
+    "mergedAt": "2026-03-12T15:08:46Z",
+    "baseSha": "816c81c12e41537373193140c1858fc10a871dae",
+    "headSha": "0b88803aa4dac8bb43acb736baf2594ef1ded112",
+    "filesChanged": 2,
+    "additions": 24,
+    "deletions": 30,
+    "commitTitles": [
+      "fix(editor): arrowhead picker overflowing viewport",
+      "fix lint"
+    ]
+  },
+  "hunks": [
+    {
+      "id": "packages/excalidraw/components/IconPicker.scss#1",
+      "file": "packages/excalidraw/components/IconPicker.scss",
+      "header": "@@ -8,7 +8,6 @@",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "packages/excalidraw/components/IconPicker.tsx#1",
+      "file": "packages/excalidraw/components/IconPicker.tsx",
+      "header": "@@ -8,7 +8,7 @@ import { atom, useAtom } from \"../editor-jotai\";",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "id": "packages/excalidraw/components/IconPicker.tsx#2",
+      "file": "packages/excalidraw/components/IconPicker.tsx",
+      "header": "@@ -79,7 +79,6 @@ function Picker<T>({",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "packages/excalidraw/components/IconPicker.tsx#3",
+      "file": "packages/excalidraw/components/IconPicker.tsx",
+      "header": "@@ -248,41 +247,37 @@ function Picker<T>({",
+      "added": 23,
+      "removed": 27
+    }
+  ],
+  "coverage": {
+    "totalHunks": 4,
+    "explained": 3,
+    "skipped": 1,
+    "uncoveredHunkIds": []
+  }
+}

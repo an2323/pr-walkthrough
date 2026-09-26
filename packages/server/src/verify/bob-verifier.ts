@@ -96,22 +96,27 @@ ${scenario}
 ${recipe.hints}
 
 ## Your job
-1. Pick ONE short scenario (at most 6 UI actions) that makes the difference visible in a
-   ${width}×${height} screenshot. Read the changed source to find reliable selectors — do not guess.
+1. Pick ONE short scenario (at most 6 UI actions) that makes the difference visible. Start with a
+   ${width}×${height} viewport; if the change is about small screens, overflow or layout limits, use
+   the viewport where it shows (e.g. 390×844 phone, or a shorter window) — same viewport for BASE
+   and HEAD. Read the changed source to find reliable selectors — do not guess.
 2. If the change is not visible in a screenshot (performance, internal refactor, types, tests,
    build config), do not force it: write \`{"skip": "<one sentence why>"}\` to
    \`.walkthrough/verify/result.json\`, print it and stop.
-3. Write ONE CommonJS Playwright script \`.walkthrough/verify/shoot.cjs\`. Load Playwright with
-   \`const { chromium } = require(${JSON.stringify(PLAYWRIGHT)});\`. For BASE and then HEAD: launch
-   chromium headless with viewport ${width}×${height}, open the URL, run the scenario (≤ 30 s per
+3. Write ONE CommonJS Playwright script \`.walkthrough/verify/shoot.cjs\`. A tested helper is
+   already there — use it, do not look for browsers or Playwright yourself:
+   \`const { launch } = require("./pw.cjs"); const browser = await launch();\`
+   For BASE and then HEAD: open a page with your viewport, go to the URL, run the scenario (≤ 30 s per
    action), save the full viewport to \`.walkthrough/verify/before.png\` / \`after.png\`, and measure
    \`getBoundingClientRect()\` of the 1–3 elements that show the difference, as fractions of the
    viewport. Also assert in the script that the problem is present on BASE and gone on HEAD
    (visibility, \`document.elementFromPoint\` for stacking, text) and print what you found.
 4. Run it: \`node .walkthrough/verify/shoot.cjs\`. If it fails or the assertions don't show the
-   difference, fix it and retry — at most 3 runs in total.
+   difference, fix it and retry — at most 3 runs of any script in total (probes included). Your
+   budget is small: if the difference still isn't visible after that, write a skip result saying
+   what you tried instead of exploring further.
 5. Write \`.walkthrough/verify/result.json\`:
-   {"caption": "<what you did, plain words, ≤ 12 words>",
+   {"caption": "<what you did, plain words, ≤ 12 words>", "viewport": {"width": 0, "height": 0},
     "before": {"file": "before.png", "highlights": [{"x":0,"y":0,"w":0,"h":0,"label":"…","pair":"…"}]},
     "after":  {"file": "after.png",  "highlights": [ … ]}}
    - 1–3 boxes per side, fractions 0..1 of the image. Labels: plain words, ≤ 5 words, no code names.
@@ -120,7 +125,8 @@ ${recipe.hints}
      (e.g. "sidebar"); the backend then draws them the same size.
 
 ## Rules
-- Write files ONLY under \`.walkthrough/verify/\`. Never edit the repository's source.
+- Write files ONLY under \`.walkthrough/verify/\` — not \`/tmp\`, not anywhere else. Never edit the
+  repository's source.
 - Do not install packages. No network access except the two app URLs above.
 - Final answer: print the content of result.json only.
 `;
@@ -182,6 +188,19 @@ async function runBobVerifier(
   });
 }
 
+async function assertBrowserWorks(): Promise<void> {
+  const { chromium } = await import("playwright");
+  try {
+    const browser = await chromium.launch({ headless: true });
+    await browser.close();
+  } catch (err) {
+    const first = (err instanceof Error ? err.message : String(err)).split("\n")[0];
+    throw new Error(
+      `headless browser can't start (${first.slice(0, 160)}) — run: pnpm --filter @pr-walkthrough/server exec playwright install chromium-headless-shell`
+    );
+  }
+}
+
 /** Resolve a file Bob named, refusing anything outside the verify dir. */
 function insideDir(dir: string, name: unknown): string | undefined {
   if (typeof name !== "string") return undefined;
@@ -207,6 +226,10 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
   const headInstall = await ensureInstalled(recipe, headWt);
   console.log(`[verify] dependencies: BASE ${baseInstall}, HEAD ${headInstall}`);
 
+  // Fail fast for $0 if the headless browser can't start (e.g. Playwright updated without
+  // `playwright install`) — otherwise Bob burns its budget working around it.
+  await assertBrowserWorks();
+
   const servers: AppServer[] = [];
   const modePath = path.join(headWt, ".bob", "custom_modes.yaml");
   const previousMode = existsSync(modePath) ? await readFile(modePath, "utf-8") : undefined;
@@ -223,6 +246,13 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
 
     await rm(verifyDir, { recursive: true, force: true });
     await mkdir(verifyDir, { recursive: true });
+    await writeFile(
+      path.join(verifyDir, "pw.cjs"),
+      `// Written by the backend: Playwright from the walkthrough server, launch already verified.\n` +
+        `const { chromium } = require(${JSON.stringify(PLAYWRIGHT)});\n` +
+        `exports.chromium = chromium;\n` +
+        `exports.launch = (opts = {}) => chromium.launch({ headless: true, ...opts });\n`
+    );
     await mkdir(path.dirname(modePath), { recursive: true });
     await writeFile(modePath, modeYaml());
     await mkdir(runDir, { recursive: true });
