@@ -31,7 +31,10 @@ function makeStep(overrides: Partial<Step> = {}): Step {
     focusNode: "n1",
     tag: "fact",
     narration: "This changes how the value is stored, so the header can read it.",
-    beats: [{ kind: "change", heading: "What we change", text: "Moves the value.", code: [] }],
+    beats: [{
+      kind: "change", heading: "What we change", text: "Moves the value.",
+      code: [{ file: "a.ts", revision: "head", lines: [{ kind: "added", text: "const x = 1;" }] }],
+    }],
     hunkIds: ["a.ts#1"],
     sources: [],
     ...overrides,
@@ -102,14 +105,28 @@ describe("checkQuality", () => {
     expect(checkQuality(w).map((x) => x.code)).toContain("say-too-long");
   });
 
-  it("flags a non-minor change/decision step with no check", () => {
+  it("flags a non-minor decision/cause/constraint step with no visual", () => {
     const w = makeWalkthrough({ steps: [makeStep({ kind: "decision" })] });
-    expect(checkQuality(w).map((x) => x.code)).toContain("missing-check");
+    expect(checkQuality(w).map((x) => x.code)).toContain("missing-visual");
   });
 
-  it("does not require a check on a minor step or a symptom step", () => {
-    const w = makeWalkthrough({ steps: [makeStep({ kind: "change", minor: true }), makeStep({ id: "s2", kind: "symptom" })] });
-    expect(checkQuality(w).map((x) => x.code)).not.toContain("missing-check");
+  it("does not require a visual on a change step or a minor step", () => {
+    const w = makeWalkthrough({ steps: [makeStep({ kind: "change" }), makeStep({ id: "s2", kind: "cause", minor: true })] });
+    expect(checkQuality(w).map((x) => x.code)).not.toContain("missing-visual");
+  });
+
+  it("flags a non-symptom step that quotes no code", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep({ kind: "constraint", visual: { type: "flow", rows: [] }, beats: [{ kind: "problem", heading: "h", text: "t" }] })],
+    });
+    expect(checkQuality(w).map((x) => x.code)).toContain("step-without-code");
+  });
+
+  it("does not require code on a symptom step", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep({ kind: "symptom", visual: { type: "symptoms", items: ["x"] }, beats: [{ kind: "problem", heading: "h", text: "t" }] })],
+    });
+    expect(checkQuality(w).map((x) => x.code)).not.toContain("step-without-code");
   });
 
   it("flags a step that quotes a test file", () => {

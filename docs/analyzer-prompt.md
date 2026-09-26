@@ -191,10 +191,8 @@ Fill these fields on each step:
   the new code compiles." — three sentences AND identifiers. INSTEAD, one sentence,
   no identifiers, or mark the step `minor` and skip `say` detail entirely: "A
   supporting type change needed for the new check to compile."
-- `check` (1 sentence): **required** on every non-minor `change` or `decision` step —
-  one concrete, verifiable thing a reviewer can go test (a value, a boundary, an
-  interaction). If you genuinely can't name one, the step is probably `minor` or the
-  wrong kind, not a `change`/`decision` missing a `check`. Optional on other kinds.
+- Do NOT fill `check` (the reviewer UI no longer shows it; the golden example still
+  has it — ignore that part).
 - `minor: true` on a step that exists only for completeness (a supporting one-liner
   with no real decision) — it will be listed in the summary, not shown as its own
   screen. Prefer this, or folding the hunk into another step, over giving a
@@ -211,6 +209,45 @@ identifiers rule as `headline`/`say`. Cover what was wrong, what was changed, an
 what to watch for.
 
 The golden example below shows these fields in use. Match their tone and length.
+
+## Visuals (required)
+
+Every non-minor step gets exactly one `visual` — the picture the reviewer looks at
+while reading `say`. The only exception is a `change` step whose point is the edit
+itself (the code is its picture); but when a change is about values, order or a chain
+of events (a z-index, a priority, who handles a click), it still gets a `layers` or
+`flow` visual. Labels follow the same no-identifiers rule as `headline`/`say`
+(plain words, ≤ 6 words per label). Pick the type by what the step is about:
+
+- `symptoms` — the first step: 1–3 things the user sees go wrong, as a user would
+  describe them.
+- `layers` — anything about order or priority: z-index / stacking, middleware or
+  plugin order, precedence of config sources. `before` and `after` are lists of
+  `[label, value, cls?]`, top of the list = wins / drawn last. Values are the REAL
+  values from the code (e.g. `["Sidebar", 80, "bad"]` → `["Sidebar", 120, "hl"]`),
+  and include the neighbours it is compared against (e.g. the toolbar at 100).
+  `cls`: `"bad"` for the item that causes the problem, `"hl"` for the one that changed.
+- `flow` — a chain of events or data: a click and who handles it, a value passing
+  through functions, a request through layers. `rows` is 1–2 rows of 2–4
+  `[label, cls]` nodes; `cls` is `"bad"` (the wrong outcome), `"good"` (the fixed
+  outcome), `"old"` (a path the PR removes) or `""`. For a before/after contrast use
+  two rows ("Before: …", "After: …"). Prefer this for `cause`, `constraint` and
+  `decision` steps.
+- `map` — only when the step is about how modules are wired together; it shows the
+  graph at this step. At most 1 in 4 steps.
+
+If a beat already has `traces`, the `flow` visual should tell the same story in plain
+words (traces are the precise version, the visual is the one a reviewer reads).
+
+## Every step is tied to code
+
+A non-minor step other than `symptom` must quote at least one code block. A
+`constraint` or `cause` step ("we can't just remove X, because Y") quotes the BASE
+code of Y — the thing that makes the constraint true — in a `current` beat. Its `say`
+ends by linking it to the step that resolves it ("…so the next step handles this
+first."), so the reader knows why the step is there.
+
+Do not return `shots` — before/after screenshots are produced by the backend.
 
 ## Output
 

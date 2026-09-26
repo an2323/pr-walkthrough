@@ -452,7 +452,7 @@
       "routeLabel": "Can't just remove it",
       "title": "Simply removing the attribute would break the menu's own toggle behaviour",
       "headline": "Why the flag could not simply be deleted",
-      "say": "The flag also protected the menu from itself. Without it, tapping the menu button while the menu is open counts as a tap outside the menu: the menu closes, then the button’s click opens it again, so the button seems to do nothing. The next steps solve this first, and only then remove the flag.",
+      "say": "Without the flag, tapping the menu button while the menu is open counts as a tap outside the menu, so it closes and the same click opens it again — the button seems to do nothing. That is why the next steps protect the menu first, and only then remove the flag.",
       "focusNode": "content",
       "tag": "inferred",
       "narration": "The dropdown menu content has its own `useOutsideClick` registration. When the menu is open and the user taps the trigger, the content's handler fires because the trigger is outside the menu panel's ref. Without the global suppress attribute, `onClickOutside` fires and closes the menu — on the same pointer-down that the button's own click handler will use to toggle the menu open. The result is a toggle that immediately undoes itself. The attribute existed to prevent this.",

@@ -109,8 +109,13 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       }
     }
 
-    if (!step.minor && !step.check && (step.kind === "change" || step.kind === "decision")) {
-      warn("missing-check", `Step ${step.id} (${step.kind}) has no \`check\` — the reviewer gets nothing concrete to verify.`, step.id);
+    if (!step.minor && !step.visual && step.kind !== "verification" && step.kind !== "change") {
+      warn("missing-visual", `Step ${step.id} (${step.kind}) has no \`visual\` — the reviewer gets a wall of text.`, step.id);
+    }
+
+    const hasCode = step.beats.some((b) => (b.code ?? []).length > 0);
+    if (!step.minor && !hasCode && step.kind !== "symptom" && step.kind !== "verification") {
+      warn("step-without-code", `Step ${step.id} (${step.kind}) quotes no code — the reviewer can't tell what it refers to.`, step.id);
     }
 
     for (const beat of step.beats) {

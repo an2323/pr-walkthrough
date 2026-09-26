@@ -50,9 +50,14 @@ a reviewer under time pressure, so:
 - **No identifiers, no file names, no code syntax.** `headline` ≤ 9 words; `say` is
   one or two short sentences. Both describe intent ("close the sidebar when the menu
   opens"), never restate the diff.
-- `step.check` — required on every `change` or `decision` step: one concrete thing a
-  human reviewer can verify (a value, a boundary, a "does X still work when Y").
-  Absent on `symptom`/`cause`/`verification` steps, where there's nothing new to check.
+- `step.check` — no longer produced (Sep 26): the viewer hides "Your check" cards
+  (`SHOW_CHECKS = false`); a reviewer reading a PR shouldn't be sent to click around
+  the app.
+- `step.visual` — required on every non-minor step except `change` steps whose point
+  is the edit itself; `symptoms` for the first step, `layers` for order/priority
+  values, `flow` for chains of events (see analyzer-prompt.md → Visuals).
+- Every non-minor step except `symptom`/`verification` quotes code; a `constraint`/
+  `cause` step quotes the BASE code that makes it true.
 - `step.minor` — true for a step that exists only for completeness (a supporting
   one-liner); minor steps are listed in the summary, never shown as their own screen.
 - `narration` (the field that already existed) is written to be **heard**, not read:
@@ -107,7 +112,10 @@ count, for the step-budget check):
   `step.headline`, or `step.say`.
 - `step.headline` longer than 9 words.
 - `step.say` with more than two sentences.
-- A non-minor `change` or `decision` step with no `check`.
+- A non-minor step with no `visual` (`change` and `verification` exempt) —
+  `missing-visual`.
+- A non-minor step quoting no code (`symptom` and `verification` exempt) —
+  `step-without-code`.
 - Step count outside the size-based budget above.
 - More than ~30% of steps using `visual.map`.
 - A step whose beats quote a test/snapshot file (the prompt says never to).
