@@ -45,6 +45,7 @@ export default function App() {
   // ---- Drawer state ----
   const [drawerStepId, setDrawerStepId] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [mapFocusNode, setMapFocusNode] = useState<string | undefined>(undefined);
 
   // ---- Voice state ----
   const [isPlaying, setIsPlaying] = useState(false);
@@ -113,6 +114,8 @@ export default function App() {
       setDrawerStepId={setDrawerStepId}
       mapOpen={mapOpen}
       setMapOpen={setMapOpen}
+      mapFocusNode={mapFocusNode}
+      setMapFocusNode={setMapFocusNode}
       isPlaying={isPlaying}
       setIsPlaying={setIsPlaying}
       tokenRef={tokenRef}
@@ -144,6 +147,8 @@ interface InnerProps {
   setDrawerStepId: (id: string | null) => void;
   mapOpen: boolean;
   setMapOpen: (v: boolean) => void;
+  mapFocusNode: string | undefined;
+  setMapFocusNode: (v: string | undefined) => void;
   isPlaying: boolean;
   setIsPlaying: (v: boolean) => void;
   tokenRef: React.MutableRefObject<number>;
@@ -170,6 +175,8 @@ function AppInner({
   setDrawerStepId,
   mapOpen,
   setMapOpen,
+  mapFocusNode,
+  setMapFocusNode,
   isPlaying,
   setIsPlaying,
   tokenRef,
@@ -291,11 +298,12 @@ function AppInner({
       } else if (e.key === 'Escape') {
         setDrawerStepId(null);
         setMapOpen(false);
+        setMapFocusNode(undefined);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [go, isPlaying, listen, stopListen, setDrawerStepId, setMapOpen]);
+  }, [go, isPlaying, listen, stopListen, setDrawerStepId, setMapOpen, setMapFocusNode]);
 
   // Scroll stage to top on screen change
   const stageRef = useRef<HTMLElement>(null);
@@ -325,6 +333,15 @@ function AppInner({
   // Current step screen data
   const currentStep = screenIndex >= 0 && screenIndex < END ? flow[screenIndex] : null;
 
+  const openMap = () => {
+    setMapFocusNode(currentStep?.focusNode);
+    setMapOpen(true);
+  };
+  const closeMap = () => {
+    setMapOpen(false);
+    setMapFocusNode(undefined);
+  };
+
   return (
     <ReviewProvider repo={walkthrough.pr.repo} number={walkthrough.pr.number}>
     <div className="v2app">
@@ -334,7 +351,7 @@ function AppInner({
         flow={flow}
         screenIndex={screenIndex}
         onGo={(i) => go(i)}
-        onOpenMap={() => setMapOpen(true)}
+        onOpenMap={openMap}
       />
 
       <main className="v2stage" ref={stageRef}>
@@ -345,14 +362,22 @@ function AppInner({
             flow={flow}
             onStart={() => go(0)}
             onListenAll={() => { go(0); listen(true); }}
-            onOpenMap={() => setMapOpen(true)}
+            onOpenMap={openMap}
           />
         )}
 
         {currentStep && (() => {
           const p = plain.steps[currentStep.id];
-          const chSteps = flow.filter((s) => plain.steps[s.id]?.ch === p?.ch);
+          const parts = walkthrough.parts ?? [];
+          const part = parts.find((x) => x.stepIds.includes(currentStep.id));
+          const partSteps = part
+            ? part.stepIds.map((id) => flow.find((s) => s.id === id)).filter((s): s is Step => !!s)
+            : null;
+          const chSteps = partSteps ?? flow.filter((s) => plain.steps[s.id]?.ch === p?.ch);
           const stepInChapter = chSteps.indexOf(currentStep) + 1;
+          const chapterLabel = part
+            ? `Part ${(parts.indexOf(part) + 1)} · ${part.title}`
+            : undefined;
           return (
             <StepScreen
               key={currentStep.id}
@@ -360,6 +385,7 @@ function AppInner({
               stepIndex={screenIndex + 1}
               stepInChapter={stepInChapter}
               chapterTotal={chSteps.length}
+              chapterLabel={chapterLabel}
               walkthrough={walkthrough}
               plain={plain}
               checked={!!checks[currentStep.id]}
@@ -384,7 +410,8 @@ function AppInner({
             verifiedItems={verifiedItems}
             onGoToStep={(i) => go(i)}
             onOpenDrawer={(id) => setDrawerStepId(id)}
-            onOpenMap={() => setMapOpen(true)}
+            onOpenMap={openMap}
+            onBackToStart={() => go(-1)}
           />
         )}
       </main>
@@ -414,7 +441,8 @@ function AppInner({
         <MapModal
           walkthrough={walkthrough}
           edgesPlain={plain.edges}
-          onClose={() => setMapOpen(false)}
+          focusNode={mapFocusNode}
+          onClose={closeMap}
         />
       )}
     </div>

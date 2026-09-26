@@ -1,5 +1,6 @@
 /**
- * SummaryScreen — final screen with check list, asked questions, minor steps, skipped hunks.
+ * SummaryScreen — short "Done" outro after the last step.
+ * Problem/fix recap, optional asked questions, links back out.
  */
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
@@ -19,6 +20,7 @@ interface Props {
   onGoToStep: (i: number) => void;
   onOpenDrawer: (stepId: string) => void;
   onOpenMap?: () => void;
+  onBackToStart?: () => void;
 }
 
 export function SummaryScreen({
@@ -32,6 +34,7 @@ export function SummaryScreen({
   onGoToStep,
   onOpenDrawer,
   onOpenMap,
+  onBackToStart,
 }: Props) {
   const withCheck = flow.filter((s) => plain.steps[s.id]?.check);
   const doneChecks = withCheck.filter((s) => checks[s.id]);
@@ -81,46 +84,50 @@ export function SummaryScreen({
     }
   }
 
+  const prUrl = walkthrough.pr.url;
+
   return (
     <div className="v2card">
-      <div className="v2eyebrow"><b>Your review</b></div>
-      <h1 className="v2h1">
-        {!SHOW_CHECKS
-          ? plain.title
-          : withCheck.every((s) => checks[s.id]) && withCheck.length > 0
-          ? 'All checks done'
-          : `${doneChecks.length} of ${withCheck.length} checks done`}
-      </h1>
+      <div className="v2eyebrow"><b>Done</b></div>
+      <h1 className="v2h1">{plain.title}</h1>
 
-      <div className="sum-list">
-        {SHOW_CHECKS && withCheck.map((s) => {
-          const done = !!checks[s.id];
-          return (
-            <div className="sum-item" key={s.id}>
-              <span className={`m ${done ? 'ok' : 'no'}`}>{done ? '✓' : '○'}</span>
-              <button
-                className="link-btn"
-                style={{ textAlign: 'left' }}
-                onClick={() => onGoToStep(flow.indexOf(s))}
-              >
-                {plain.steps[s.id]?.check}
-              </button>
-            </div>
-          );
-        })}
-        {SHOW_TRY_IT && scenarios.length > 0 && (
-          <div className="sum-item">
-            <span className={`m ${tried === scenarios.length ? 'ok' : 'no'}`}>
-              {tried === scenarios.length ? '✓' : '○'}
-            </span>
-            <span>Tried {tried} of {scenarios.length} scenarios in the app</span>
-          </div>
-        )}
+      <div className="outro-recap">
+        <p className="v2say"><span className="outro-label">Problem</span> {plain.problem}</p>
+        <p className="v2say"><span className="outro-label">Fix</span> {plain.fix}</p>
       </div>
 
-      <h2 className="v2h2">Questions for the author</h2>
-      {comment ? (
+      {SHOW_CHECKS && withCheck.length > 0 && (
+        <div className="sum-list">
+          {withCheck.map((s) => {
+            const done = !!checks[s.id];
+            return (
+              <div className="sum-item" key={s.id}>
+                <span className={`m ${done ? 'ok' : 'no'}`}>{done ? '✓' : '○'}</span>
+                <button
+                  className="link-btn"
+                  style={{ textAlign: 'left' }}
+                  onClick={() => onGoToStep(flow.indexOf(s))}
+                >
+                  {plain.steps[s.id]?.check}
+                </button>
+              </div>
+            );
+          })}
+          {SHOW_TRY_IT && scenarios.length > 0 && (
+            <div className="sum-item">
+              <span className={`m ${tried === scenarios.length ? 'ok' : 'no'}`}>
+                {tried === scenarios.length ? '✓' : '○'}
+              </span>
+              <span>Tried {tried} of {scenarios.length} scenarios in the app</span>
+            </div>
+          )}
+          <p className="note">{doneChecks.length} of {withCheck.length} checks done</p>
+        </div>
+      )}
+
+      {comment && (
         <>
+          <h2 className="v2h2">Questions for the author</h2>
           <pre className="comment" id="v2-comment">{comment}</pre>
           <div className="cta">
             {status.enabled && (
@@ -144,12 +151,6 @@ export function SummaryScreen({
           )}
           {postError && <p className="note" style={{ color: 'var(--bad)' }}>{postError}</p>}
         </>
-      ) : (
-        <p className="note">
-          None added.{' '}
-          {Object.keys(plain.questions ?? {}).length > 0 &&
-            `The analysis suggested ${Object.keys(plain.questions!).length}; add them with "Add to review" on the steps.`}
-        </p>
       )}
 
       {(minors.length > 0 || (walkthrough.skippedHunks ?? []).length > 0) && (
@@ -205,22 +206,23 @@ export function SummaryScreen({
         </>
       )}
 
-      {minors.length === 0 && (walkthrough.skippedHunks ?? []).length === 0 && (
-        <p className="note">Nothing else.</p>
-      )}
-
-      {onOpenMap && (
-        <p className="note">
-          <button type="button" className="link-btn" onClick={onOpenMap}>
-            How the pieces connect
+      <div className="outro-links">
+        {prUrl && (
+          <a className="v2btn primary" href={prUrl} target="_blank" rel="noopener noreferrer">
+            Open PR ↗
+          </a>
+        )}
+        {onOpenMap && (
+          <button type="button" className="v2btn" onClick={onOpenMap}>
+            Diagram
           </button>
-          {' — see what changed between before and after.'}
-        </p>
-      )}
-
-      <p className="note">
-        All {walkthrough.coverage?.totalHunks ?? walkthrough.hunks.length} changes in the diff are covered by the steps above.
-      </p>
+        )}
+        {onBackToStart && (
+          <button type="button" className="v2btn" onClick={onBackToStart}>
+            ← Back to start
+          </button>
+        )}
+      </div>
     </div>
   );
 }

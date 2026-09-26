@@ -1,10 +1,8 @@
 /**
  * LandingPage — shown at "/" when no PR URL is present in the path.
  *
- * Provides:
- *  - A GitHub PR URL input that navigates to /:owner/:repo/:number
- *  - Three example cards; cards without a cached walkthrough show
- *    "not analysed yet" instead of a broken link.
+ * Static demo: primary CTA for #10295, quieter secondary for #8340.
+ * Non-static: GitHub PR URL input that starts analysis.
  */
 
 import { useState, useEffect } from 'react';
@@ -16,6 +14,7 @@ interface ExampleCard {
   number: number;
   title: string;
   description: string;
+  primary?: boolean;
   /** Whether a recorded analysis run exists at data/events/{owner}/{repo}/{number}.ndjson (ST6c). */
   hasReplay?: boolean;
 }
@@ -27,14 +26,8 @@ const EXAMPLES: ExampleCard[] = [
     number: 10295,
     title: 'excalidraw / excalidraw #10295',
     description: 'Small fix: floating sidebar closes when the main menu opens (+19 −7)',
+    primary: true,
     hasReplay: true,
-  },
-  {
-    owner: 'excalidraw',
-    repo: 'excalidraw',
-    number: 9403,
-    title: 'excalidraw / excalidraw #9403',
-    description: 'Medium fix: keep the original element in place on Alt-duplication',
   },
   {
     owner: 'excalidraw',
@@ -140,11 +133,15 @@ export function LandingPage() {
       <div className="landing-hero">
         <h1 className="landing-title">PR Walkthrough</h1>
         {STATIC ? (
-          <p className="landing-sub">
-            Narrated, step-by-step walkthroughs of pull requests, written by IBM Bob 2.0
-            with the whole repository in view. This public demo shows finished walkthroughs;
-            analysing a new PR and posting review comments back to GitHub run locally.
-          </p>
+          <>
+            <p className="landing-sub">
+              A narrated tour of a pull request — what broke, why, and how the fix lands —
+              written by IBM Bob 2.0 with the whole repository in view.
+            </p>
+            <p className="landing-note">
+              This demo ships finished walkthroughs; paste-a-PR needs a local/server build.
+            </p>
+          </>
         ) : (
           <p className="landing-sub">
             Paste a GitHub pull request URL to get a narrated, step-by-step walkthrough
@@ -172,21 +169,21 @@ export function LandingPage() {
       </div>
 
       <div className="landing-examples">
-        <h2 className="landing-examples-h">Example walkthroughs</h2>
+        <h2 className="landing-examples-h">Try a walkthrough</h2>
         <div className="landing-cards">
           {EXAMPLES.map((card) => {
             const key = cardHref(card);
             const ready = availability[key];   // true | false | undefined (loading)
             if (STATIC && ready === false) return null;
             return (
-              <div className="landing-card" key={key}>
+              <div className={`landing-card${card.primary ? ' landing-card-primary' : ''}`} key={key}>
                 <div className="landing-card-title">{card.title}</div>
                 <div className="landing-card-desc">{card.description}</div>
                 <div className="landing-card-footer">
                   {ready === undefined ? (
                     <span className="landing-status loading">Checking…</span>
                   ) : ready ? (
-                    <a className="landing-card-link" href={key}>
+                    <a className={`landing-card-link${card.primary ? ' landing-card-cta' : ''}`} href={key}>
                       Open walkthrough →
                     </a>
                   ) : (

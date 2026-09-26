@@ -1,6 +1,6 @@
 /**
- * MapModal — on-demand "How the pieces connect" (ST6g).
- * Before / After / Both; Both shows problem + fix edges together.
+ * MapModal — on-demand "How the pieces connect".
+ * Before / After / Both; optional focusNode = "you are here" when opened from a step.
  */
 
 import { useEffect, useState } from 'react';
@@ -12,6 +12,7 @@ type Mode = 'before' | 'after' | 'both';
 interface Props {
   walkthrough: Walkthrough;
   edgesPlain?: Record<string, string>;
+  focusNode?: string;
   onClose: () => void;
 }
 
@@ -25,7 +26,7 @@ function edgesFor(w: Walkthrough, mode: Mode): GraphEdge[] {
   });
 }
 
-export function MapModal({ walkthrough, edgesPlain = {}, onClose }: Props) {
+export function MapModal({ walkthrough, edgesPlain = {}, focusNode, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('both');
 
   useEffect(() => {
@@ -37,6 +38,9 @@ export function MapModal({ walkthrough, edgesPlain = {}, onClose }: Props) {
   }, [onClose]);
 
   const edges = edgesFor(walkthrough, mode);
+  const focusLabel = focusNode
+    ? walkthrough.graph.nodes.find((n) => n.id === focusNode)?.label
+    : undefined;
 
   return (
     <div className="map-layer" role="dialog" aria-modal="true" aria-label="How the pieces connect">
@@ -61,12 +65,16 @@ export function MapModal({ walkthrough, edgesPlain = {}, onClose }: Props) {
               </button>
             ))}
           </div>
+          {focusLabel && (
+            <p className="map-here">This step · {focusLabel}</p>
+          )}
         </div>
         <div className="map-modal-body">
           <MapSvg
             graph={walkthrough.graph}
             edges={edges}
             allNodes={true}
+            focusNode={focusNode}
             edgesPlain={edgesPlain}
           />
           <MapLegend />

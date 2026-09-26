@@ -61,6 +61,13 @@ export interface Shots {
   caption?: string;
 }
 
+/** Optional story arcs when a PR has ≥2 independent mechanisms (TopBar shows Part 1 / Part 2). */
+export interface WalkthroughPart {
+  id: string;
+  title: string;
+  stepIds: string[];
+}
+
 /** Visual types for step screens. */
 export type Visual =
   | { type: "flow"; rows: [string, string][][] }
@@ -68,7 +75,8 @@ export type Visual =
   | { type: "map"; caption?: string }
   | { type: "layers"; before: [string, number, string?][]; after: [string, number, string?][] }
   | { type: "try" }
-  | { type: "shots"; before: ShotSide; after: ShotSide; caption?: string };
+  | { type: "shots"; before: ShotSide; after: ShotSide; caption?: string }
+  | { type: "shot"; side: ShotSide; tone?: "bad" | "good"; caption?: string };
 
 export interface Walkthrough {
   schemaVersion: 1;
@@ -83,6 +91,8 @@ export interface Walkthrough {
   plain?: PlainLayer;
   /** Before/after screenshots shown on the start screen under Problem / Fix. */
   shots?: Shots;
+  /** Independent fix arcs (≥2). Viewer shows Part labels only when this has 2+ entries. */
+  parts?: WalkthroughPart[];
   /** Parsed by the BACKEND from the diff, never invented by the analyzer. */
   hunks: Hunk[];
   graph: Graph;

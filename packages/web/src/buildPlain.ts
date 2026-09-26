@@ -2,8 +2,8 @@
  * Builds a PlainData object from a Walkthrough.
  * Uses step.headline, step.say, step.check, step.minor, step.visual when present.
  * Falls back to step.routeLabel and first sentence of step.narration.
- * Chapter is derived from the step index — first half = "problem", rest = "fix",
- * last step with kind="verification" or "open_question" = "check".
+ * Chapter is by step kind: symptom/cause/constraint/data_origin → problem;
+ * change/decision/dead_end/alternative_rejected → fix; verification/open_question → check.
  */
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
@@ -14,15 +14,16 @@ function firstSentence(text: string): string {
   return m ? m[0].trim() : text.split('\n')[0].trim();
 }
 
-function stepChapter(step: Step, allSteps: Step[]): string {
-  // last step is verification → "check"
-  const idx = allSteps.indexOf(step);
+function stepChapter(step: Step): string {
   if (step.kind === 'verification' || step.kind === 'open_question') return 'check';
-  // Steps before the first "change" or "decision" kind are problem steps
-  const firstFix = allSteps.findIndex(
-    (s) => s.kind === 'decision' || s.kind === 'change' || s.kind === 'alternative_rejected'
-  );
-  if (firstFix < 0 || idx < firstFix) return 'problem';
+  if (
+    step.kind === 'symptom' ||
+    step.kind === 'cause' ||
+    step.kind === 'constraint' ||
+    step.kind === 'data_origin'
+  ) {
+    return 'problem';
+  }
   return 'fix';
 }
 
@@ -56,6 +57,9 @@ function stepVisual(step: Step): PlainVisual | undefined {
   if (v.type === 'shots') {
     return { type: 'shots', before: v.before, after: v.after, caption: v.caption };
   }
+  if (v.type === 'shot') {
+    return { type: 'shot', side: v.side, tone: v.tone, caption: v.caption };
+  }
   return undefined;
 }
 
@@ -67,7 +71,6 @@ function isEmptySymptom(step: Step, visual: PlainVisual | undefined): boolean {
 }
 
 export function buildPlainData(w: Walkthrough): PlainData {
-  // If the walkthrough has a plain overlay already, use it
   const plain = w.plain;
   const title = plain?.title ?? w.pr.title;
   const problem = plain?.problem ?? w.summary.problem;
@@ -76,13 +79,12 @@ export function buildPlainData(w: Walkthrough): PlainData {
   const steps: Record<string, PlainStep> = {};
 
   for (const step of w.steps) {
-    const ch = stepChapter(step, w.steps);
+    const ch = stepChapter(step);
     const head = step.headline ?? step.routeLabel;
     const say = step.say ?? firstSentence(step.narration);
     const detour = step.isDeadEnd ?? step.kind === 'dead_end';
     const visual = stepVisual(step);
     const check = step.check;
-    // Covered by start screen (problem text ± shots) — list nowhere, not even as a minor.
     const skip = isEmptySymptom(step, visual);
     const minor = skip ? true : (step.minor ?? false);
 

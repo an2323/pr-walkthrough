@@ -27,6 +27,8 @@ interface Props {
   stepIndex: number; // 1-based position in flow
   stepInChapter: number; // 1-based position within the chapter
   chapterTotal: number;
+  /** When set (e.g. Part 1 · Stacking), replaces the chapter name in the eyebrow. */
+  chapterLabel?: string;
   walkthrough: Walkthrough;
   plain: PlainData;
   checked: boolean;
@@ -43,6 +45,7 @@ export function StepScreen({
   stepIndex,
   stepInChapter,
   chapterTotal,
+  chapterLabel,
   walkthrough,
   plain,
   checked,
@@ -58,7 +61,7 @@ export function StepScreen({
 
   if (!p) return null;
 
-  const ch = CH_LABEL[p.ch] ?? p.ch;
+  const ch = chapterLabel ?? CH_LABEL[p.ch] ?? p.ch;
   const question = walkthrough.openQuestions.find((q) => q.stepId === step.id);
   const questionText = question?.short ?? question?.question;
 

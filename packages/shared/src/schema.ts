@@ -113,6 +113,12 @@ export const ShotsSchema = z.object({
   caption: z.string().optional(),
 });
 
+export const WalkthroughPartSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  stepIds: z.array(z.string()).min(1),
+});
+
 export const VisualSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("flow"),
@@ -135,6 +141,12 @@ export const VisualSchema = z.discriminatedUnion("type", [
     type: z.literal("try"),
   }),
   ShotsSchema.extend({ type: z.literal("shots") }),
+  z.object({
+    type: z.literal("shot"),
+    side: ShotSideSchema,
+    tone: z.enum(["bad", "good"]).optional(),
+    caption: z.string().optional(),
+  }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -288,6 +300,7 @@ export const WalkthroughSchema = z.object({
   plain: PlainLayerSchema.optional(),
   /** Before/after screenshots shown on the start screen under Problem / Fix. */
   shots: ShotsSchema.optional(),
+  parts: z.array(WalkthroughPartSchema).optional(),
   hunks: z.array(HunkSchema),
   graph: GraphSchema,
   steps: z.array(StepSchema),

@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { Shots } from '@pr-walkthrough/shared';
+import type { Shots, ShotSide } from '@pr-walkthrough/shared';
 import { shotUrl } from './staticMode';
 
 type Side = 'before' | 'after';
@@ -109,3 +109,70 @@ export function ShotsVisual({ shots, owner, repo, number }: Props) {
     </div>
   );
 }
+
+interface SingleShotProps {
+  side: ShotSide;
+  tone?: 'bad' | 'good';
+  caption?: string;
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+/** One screenshot as Problem evidence (`visual.type === "shot"`). */
+export function SingleShotVisual({ side, tone, caption, owner, repo, number }: SingleShotProps) {
+  const [open, setOpen] = useState(false);
+  const label = tone === 'good' ? 'After' : tone === 'bad' ? 'Before' : 'Screenshot';
+  const toneClass = tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'bad';
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [open]);
+
+  return (
+    <div className="visual shots">
+      {caption && <div className="map-cap">{caption}</div>}
+      <div className="shots-pair shots-pair-single">
+        <figure className="shot-frame">
+          <figcaption className={`shot-cap shot-cap--${toneClass}`}>{label}</figcaption>
+          <button
+            type="button"
+            className="shot-img-wrap"
+            onClick={() => setOpen(true)}
+            aria-label={`${label} screenshot — open full size`}
+          >
+            <img
+              src={shotUrl(owner, repo, number, side.src)}
+              alt={`${label} screenshot`}
+              className="shot-img"
+            />
+          </button>
+          <span className="shot-hint">Click to enlarge</span>
+        </figure>
+      </div>
+      {open && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label={`${label} screenshot`}>
+          <button type="button" className="lightbox-scrim" aria-label="Close" onClick={() => setOpen(false)} />
+          <div className="lightbox-body">
+            <div className="lightbox-h">
+              <span className={`shot-cap shot-cap--${toneClass}`} style={{ margin: 0 }}>{label}</span>
+              <button type="button" className="x-btn" onClick={() => setOpen(false)} aria-label="Close">×</button>
+            </div>
+            <img
+              className="lightbox-img"
+              src={shotUrl(owner, repo, number, side.src)}
+              alt={`${label} screenshot`}
+            />
+            {caption && <p className="lightbox-cap">{caption}</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

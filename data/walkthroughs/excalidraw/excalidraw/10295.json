@@ -159,8 +159,8 @@
       "kind": "symptom",
       "routeLabel": "Symptom",
       "title": "Buttons appear above the sidebar, and clicking them doesn't close it",
-      "headline": "Toolbar buttons sit on top of the open sidebar",
-      "say": "When the sidebar is open, buttons in the top-right corner overlap it, and tapping the hamburger button does not close the sidebar.",
+      "headline": "Toolbar buttons draw over the sidebar",
+      "say": "With the library sidebar open, the top-right controls sit on top of it, and tapping the menu button leaves the sidebar open.",
       "focusNode": "sidebar",
       "tag": "fact",
       "narration": "The editor has a floating sidebar on the right edge showing the element library. When the sidebar is open, all top-right toolbar buttons — including the hamburger icon — are drawn on top of it, obscuring part of the panel. Clicking those buttons also has no effect on the sidebar, so on mobile both the sidebar and the main menu end up open simultaneously.",
@@ -214,101 +214,31 @@
           "ref": "packages/excalidraw/css/styles.scss (base) and Sidebar.scss z-index usage"
         }
       ],
-      "minor": true
-    },
-    {
-      "id": "s2",
-      "kind": "change",
-      "routeLabel": "Raise sidebar z-index",
-      "title": "Sidebar z-index raised above the top-right toolbar",
-      "headline": "Sidebar z-index leapfrogs the toolbar buttons",
-      "say": "One number change gives the sidebar a higher stacking order than all toolbar UI, so buttons no longer overlap the panel.",
-      "check": "Open the sidebar, then check that top-right buttons (library trigger, collaborator avatars) appear behind the sidebar panel, not in front of it.",
-      "focusNode": "zindex",
-      "tag": "fact",
-      "narration": "The simplest part of the fix: raise `--zIndex-ui-library` from 80 to 120, which puts it above `--zIndex-ui-top` at 100. The sidebar now draws in front of every top-right toolbar button. The declaration is also moved later in the stylesheet list to reflect the new order.",
-      "beats": [
-        {
-          "kind": "change",
-          "heading": "What we change",
-          "text": "`--zIndex-ui-library` moves from 80 (below `--zIndex-ui-top: 100`) to 120 (above it). The declaration is repositioned in the variable list to match.",
-          "code": [
+      "minor": false,
+      "visual": {
+        "type": "shot",
+        "tone": "bad",
+        "caption": "Open the library sidebar, then open the main menu.",
+        "side": {
+          "src": "before-annotated.png",
+          "raw": "before.png",
+          "highlights": [
             {
-              "file": "packages/excalidraw/css/styles.scss",
-              "revision": "diff",
-              "lines": [
-                {
-                  "kind": "context",
-                  "text": "  --zIndex-ui-bottom: 60;"
-                },
-                {
-                  "kind": "removed",
-                  "text": "  --zIndex-ui-library: 80;"
-                },
-                {
-                  "kind": "context",
-                  "text": "  --zIndex-ui-context-menu: 90;"
-                },
-                {
-                  "kind": "context",
-                  "text": "  --zIndex-ui-styles-popup: 100;"
-                },
-                {
-                  "kind": "context",
-                  "text": "  --zIndex-ui-top: 100;"
-                },
-                {
-                  "kind": "added",
-                  "text": "  --zIndex-ui-library: 120;",
-                  "annotation": "120 > 100: the sidebar now renders above the top-right toolbar in the same stacking context.",
-                  "annotationTag": "fact"
-                }
-              ]
+              "x": 0.008,
+              "y": 0.014,
+              "w": 0.192,
+              "h": 0.89,
+              "label": "Main menu opened"
+            },
+            {
+              "x": 0.77,
+              "y": 0.004,
+              "w": 0.226,
+              "h": 0.99,
+              "label": "Sidebar is still open"
             }
           ]
         }
-      ],
-      "hunkIds": [
-        "packages/excalidraw/css/styles.scss#1"
-      ],
-      "sources": [
-        {
-          "type": "diff",
-          "ref": "packages/excalidraw/css/styles.scss#1"
-        }
-      ],
-      "visual": {
-        "type": "layers",
-        "before": [
-          [
-            "Top-right toolbar",
-            100
-          ],
-          [
-            "Context menu",
-            90
-          ],
-          [
-            "Sidebar",
-            80,
-            "bad"
-          ]
-        ],
-        "after": [
-          [
-            "Sidebar",
-            120,
-            "hl"
-          ],
-          [
-            "Top-right toolbar",
-            100
-          ],
-          [
-            "Context menu",
-            90
-          ]
-        ]
       }
     },
     {
@@ -316,7 +246,7 @@
       "kind": "cause",
       "routeLabel": "Sidebar stays open",
       "title": "The hamburger tap was shielded from the sidebar's outside-click detector",
-      "headline": "The hamburger button was invisible to the sidebar's close logic",
+      "headline": "The menu button was invisible to the sidebar",
       "say": "The sidebar listens for taps outside itself to close. But the hamburger button told that listener to ignore it — so tapping the button never closed the sidebar.",
       "focusNode": "outsideclick",
       "tag": "fact",
@@ -543,6 +473,101 @@
       }
     },
     {
+      "id": "s2",
+      "kind": "change",
+      "routeLabel": "Raise sidebar z-index",
+      "title": "Sidebar z-index raised above the top-right toolbar",
+      "headline": "Sidebar stacking order moves above the toolbar",
+      "say": "One number change puts the sidebar above every toolbar control, so those buttons no longer cover the panel.",
+      "check": "Open the sidebar, then check that top-right buttons (library trigger, collaborator avatars) appear behind the sidebar panel, not in front of it.",
+      "focusNode": "zindex",
+      "tag": "fact",
+      "narration": "The simplest part of the fix: raise `--zIndex-ui-library` from 80 to 120, which puts it above `--zIndex-ui-top` at 100. The sidebar now draws in front of every top-right toolbar button. The declaration is also moved later in the stylesheet list to reflect the new order.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "`--zIndex-ui-library` moves from 80 (below `--zIndex-ui-top: 100`) to 120 (above it). The declaration is repositioned in the variable list to match.",
+          "code": [
+            {
+              "file": "packages/excalidraw/css/styles.scss",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  --zIndex-ui-bottom: 60;"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  --zIndex-ui-library: 80;"
+                },
+                {
+                  "kind": "context",
+                  "text": "  --zIndex-ui-context-menu: 90;"
+                },
+                {
+                  "kind": "context",
+                  "text": "  --zIndex-ui-styles-popup: 100;"
+                },
+                {
+                  "kind": "context",
+                  "text": "  --zIndex-ui-top: 100;"
+                },
+                {
+                  "kind": "added",
+                  "text": "  --zIndex-ui-library: 120;",
+                  "annotation": "120 > 100: the sidebar now renders above the top-right toolbar in the same stacking context.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "packages/excalidraw/css/styles.scss#1"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "packages/excalidraw/css/styles.scss#1"
+        }
+      ],
+      "visual": {
+        "type": "layers",
+        "before": [
+          [
+            "Top-right toolbar",
+            100
+          ],
+          [
+            "Context menu",
+            90
+          ],
+          [
+            "Sidebar",
+            80,
+            "bad"
+          ]
+        ],
+        "after": [
+          [
+            "Sidebar",
+            120,
+            "hl"
+          ],
+          [
+            "Top-right toolbar",
+            100
+          ],
+          [
+            "Context menu",
+            90
+          ]
+        ]
+      }
+    },
+    {
       "id": "s5",
       "kind": "decision",
       "routeLabel": "Wrap in container",
@@ -746,7 +771,7 @@
       "kind": "change",
       "routeLabel": "Remove suppress attribute",
       "title": "The suppress-click attribute is removed from the trigger button",
-      "headline": "Tap the menu button to close the sidebar",
+      "headline": "Tapping the menu button closes the sidebar",
       "say": "With the targeted container check protecting the menu, the global suppress flag on the trigger button is removed. The sidebar's close handler now fires when the button is tapped.",
       "check": "Open the sidebar, then tap the hamburger trigger. The sidebar should close and the main menu should open — not both remain visible.",
       "focusNode": "trigger",
@@ -996,5 +1021,23 @@
         }
       ]
     }
-  }
+  },
+  "parts": [
+    {
+      "id": "stacking",
+      "title": "Stacking order",
+      "stepIds": [
+        "s2"
+      ]
+    },
+    {
+      "id": "outside-click",
+      "title": "Menu closes the sidebar",
+      "stepIds": [
+        "s5",
+        "s6",
+        "s7"
+      ]
+    }
+  ]
 }

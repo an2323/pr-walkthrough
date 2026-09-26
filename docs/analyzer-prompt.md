@@ -218,6 +218,12 @@ a small or obvious PR may have no visuals at all, a PR with a subtle mechanism m
 have several. The golden example is visual-heavy because that PR is a long reasoning
 chain — do not copy its count.
 
+**Problem chapter needs evidence.** Steps of kind `symptom`, `cause`, `constraint`,
+or `data_origin` belong to Problem. At least one Problem step must carry evidence the
+reviewer can look at: a `symptoms` list, a `layers`/`flow` diagram, BASE code, or
+(when the backend has produced screenshots) a single `shot`. Never make a Problem
+screen that only restates `plain.problem` in one sentence with no visual and no code.
+
 Add a visual when the point of the step is:
 - a relation between values that no single code block shows (two numbers in
   different places compared, an order or priority between several items);
@@ -229,14 +235,16 @@ Leave it out when:
 - it would only restate `say` in boxes;
 - the code block already shows the point (a line removed, a wrapper added, a
   condition changed in one place);
-- the symptoms are already clear from `say` / `plain.problem` — then skip a
-  `symptom` step entirely (or mark it `minor`) rather than making a screen with
-  only one sentence and no visual. The start screen already shows the problem.
+- the symptoms are already clear from `say` / `plain.problem` **and** another
+  Problem step already carries the evidence — then mark a thin `symptom` `minor`
+  rather than an empty screen.
 
 Labels follow the same no-identifiers rule as `headline`/`say` (plain words, ≤ 6
 words per label). Types:
 
 - `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them.
+- `shot` — one screenshot (usually the broken Before state) as Problem evidence.
+  Prefer this only when screenshots already exist; do not invent image paths.
 - `layers` — order or priority: z-index / stacking, middleware or
   plugin order, precedence of config sources. `before` and `after` are lists of
   `[label, value, cls?]`, top of the list = wins / drawn last. Values are the REAL
@@ -256,6 +264,15 @@ If you give a beat `traces`, you judged the chain important — then also give t
 a `flow` visual telling the same story in plain words (the viewer shows the visual;
 traces are the precise version behind "How the analysis got here").
 
+## Parts (only when the PR has two independent fixes)
+
+When the PR clearly contains **two or more independent mechanisms** (e.g. a stacking
+fix and a separate click-handling fix with little shared code), set root
+`parts: [{ id, title, stepIds }, …]` with ≥2 entries. Titles are plain words
+(≤ 5 words). Put only Fix-chapter step ids in `stepIds`; shared Problem steps stay
+outside parts. **Omit `parts` entirely** for a normal single-mechanism PR — do not
+invent Parts for structure's sake.
+
 ## Every step is tied to code
 
 A non-minor step other than `symptom` must quote at least one code block. A
@@ -264,7 +281,9 @@ code of Y — the thing that makes the constraint true — in a `current` beat. 
 ends by linking it to the step that resolves it ("…so the next step handles this
 first."), so the reader knows why the step is there.
 
-Do not return `shots` — before/after screenshots are produced by the backend.
+Do not return top-level `shots` (before/after pair on the start screen) — those are
+produced by the backend. You may reference existing shot filenames in a step
+`visual: { type: "shot", … }` only when they already exist.
 
 ## Output
 
