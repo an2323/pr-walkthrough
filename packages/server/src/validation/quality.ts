@@ -109,6 +109,18 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       }
     }
 
+    // Narration is read aloud by TTS: code names come out garbled, so the same
+    // no-identifiers rule as `say` applies — and 2–4 sentences.
+    if (step.narration) {
+      if (looksLikeIdentifier(step.narration)) {
+        warn("identifier-in-narration", `Step ${step.id}'s narration looks like it contains an identifier or file name — TTS will read it aloud: "${step.narration}"`, step.id);
+      }
+      const sentences = sentenceCount(step.narration);
+      if (sentences > 4) {
+        warn("narration-too-long", `Step ${step.id}'s narration has ${sentences} sentences (limit 4).`, step.id);
+      }
+    }
+
     if (!step.minor && !step.visual && step.beats.some((b) => (b.traces ?? []).length > 0)) {
       warn("traces-without-visual", `Step ${step.id} has event traces but no \`visual\` — the reviewer sees the raw trace instead of a plain-words flow.`, step.id);
     }

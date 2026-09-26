@@ -26,8 +26,9 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Screenshots / static demo assets under data/ (same paths as VITE_STATIC build).
-app.use("/data", express.static(path.join(ROOT, "data"), { fallthrough: false, maxAge: "1h" }));
+// Before/after screenshots (same URLs as the VITE_STATIC build). Only data/shots is
+// public: data/runs holds raw Bob transcripts and prompts, which stay server-side.
+app.use("/data/shots", express.static(path.join(ROOT, "data/shots"), { fallthrough: false, maxAge: "1h" }));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

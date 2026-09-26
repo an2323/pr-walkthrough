@@ -45,6 +45,12 @@ export interface ShotHighlight {
   w: number;
   h: number;
   label?: string;
+  /**
+   * Boxes that mark the SAME spot on Before and After share a `pair` id; the
+   * backend then gives both the same rectangle (the union of the two), so the
+   * eye compares one place. Unpaired boxes keep their own rectangle.
+   */
+  pair?: string;
 }
 
 export interface ShotSide {
@@ -59,6 +65,10 @@ export interface Shots {
   before: ShotSide;
   after: ShotSide;
   caption?: string;
+  /** Who produced the screenshots — shown to the reader, so it must be true. */
+  by?: "bob-verifier" | "playwright" | "manual";
+  /** Bob verifier run stats (backend-filled). */
+  run?: { costUsd: number; durationMs: number; toolCalls: number };
 }
 
 /** Optional story arcs when a PR has ≥2 independent mechanisms (TopBar shows Part 1 / Part 2). */

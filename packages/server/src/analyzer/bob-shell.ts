@@ -183,7 +183,7 @@ export interface BobRun {
  * no persistent per-subagent id in the stream, so this counts spawns, not
  * distinct agents (fine: each `spawn_subagent` call is one sub-agent run).
  */
-function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents" | "errorMessage"> {
+export function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents" | "errorMessage"> {
   let taskId: string | undefined;
   let sessionCost = 0;
   let toolCalls = 0;

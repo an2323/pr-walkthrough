@@ -401,9 +401,11 @@ router.get(
     const audioDir = path.join(ROOT, "data/audio", owner, repo, number);
     const outPath = path.join(audioDir, `${stepId}-${sentenceIndex}-${hash}.mp3`);
 
-    // Pre-generated files are served even without a key; only new audio needs one.
-    if (!existsSync(outPath) && !apiKey) {
-      res.status(503).json({ error: "TTS not configured" });
+    // Pre-generated files are served even without a key. New audio costs
+    // ElevenLabs credits, so it is only generated on demand with TTS_GENERATE=1
+    // (otherwise the viewer falls back to Web Speech); `tts:pregen` is unaffected.
+    if (!existsSync(outPath) && (!apiKey || process.env.TTS_GENERATE !== "1")) {
+      res.status(503).json({ error: apiKey ? "On-demand TTS is off (set TTS_GENERATE=1)" : "TTS not configured" });
       return;
     }
 

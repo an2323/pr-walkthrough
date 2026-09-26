@@ -166,3 +166,21 @@ export async function prepareWorkspace(
 
   return workspace;
 }
+
+/**
+ * Add (or reuse) a detached worktree at `<mainPath>/wt/<sha>` for any commit
+ * already fetched into the shared clone — e.g. a PR's BASE, which the
+ * screenshot verifier needs next to the analyzer's HEAD worktree.
+ */
+export async function ensureWorktree(mainPath: string, sha: string): Promise<string> {
+  const dest = path.join(mainPath, "wt", sha);
+  await withRepoLock(mainPath, async () => {
+    if (existsSync(path.join(dest, ".git"))) return;
+    await git(mainPath, ["cat-file", "-e", `${sha}^{commit}`]).catch(() =>
+      git(mainPath, ["fetch", "--quiet", "origin", sha])
+    );
+    await mkdir(path.join(mainPath, "wt"), { recursive: true });
+    await git(mainPath, ["worktree", "add", "--detach", "--quiet", dest, sha]);
+  });
+  return dest;
+}

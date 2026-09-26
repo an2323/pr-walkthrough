@@ -102,6 +102,7 @@ const ShotSideSchema = z.object({
         w: z.number().min(0).max(1),
         h: z.number().min(0).max(1),
         label: z.string().optional(),
+        pair: z.string().optional(),
       })
     )
     .optional(),
@@ -111,6 +112,10 @@ export const ShotsSchema = z.object({
   before: ShotSideSchema,
   after: ShotSideSchema,
   caption: z.string().optional(),
+  by: z.enum(["bob-verifier", "playwright", "manual"]).optional(),
+  run: z
+    .object({ costUsd: z.number(), durationMs: z.number(), toolCalls: z.number() })
+    .optional(),
 });
 
 export const WalkthroughPartSchema = z.object({

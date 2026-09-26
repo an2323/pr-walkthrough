@@ -18,6 +18,7 @@ import { prepareWorkspace } from "../git/workspace.js";
 import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
 import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
+import { canVerify, verifyShots } from "../verify/bob-verifier.js";
 import { validate, checkQuality } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 
@@ -138,6 +139,33 @@ export async function runAnalyzeJob(
     await saveWalkthrough(result.walkthrough);
     const qualityWarnings = checkQuality(result.walkthrough);
 
+    // Before/after screenshots (ST6e) — only for repos with an app recipe, and
+    // never fatal: the walkthrough is already saved and viewable without them.
+    let verifierCost = 0;
+    if (process.env.VERIFY_SHOTS !== "0" && canVerify(result.walkthrough.pr.repo)) {
+      const verifierEvents = createProgressNormalizer(started, emit);
+      try {
+        const vr = await verifyShots({
+          walkthrough: result.walkthrough,
+          outDir: path.join(ROOT, "data/shots", owner, repo, String(number)),
+          onStage: (stage, label) => emit({ kind: "stage", t: elapsed(), stage, label }),
+          onEvent: (raw) => verifierEvents.handle(raw, Date.now()),
+        });
+        verifierCost = vr.costUsd;
+        if (vr.status === "ok") {
+          result.walkthrough.shots = vr.shots;
+          await saveWalkthrough(result.walkthrough);
+          emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Screenshots taken by Bob" });
+        } else {
+          emit({ kind: "stage", t: elapsed(), stage: "shots", label: `Screenshots skipped: ${vr.reason}` });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("[analyze-pipeline] screenshot verifier failed:", message);
+        emit({ kind: "stage", t: elapsed(), stage: "shots", label: `Screenshots failed: ${message.slice(0, 160)}` });
+      }
+    }
+
     // Cost/tool/subagent totals come from BobShellAnalyzer's own accounting
     // (draft.meta.run — it tracks the cumulative task across a repair, which
     // the raw event stream alone can't tell us), not re-derived here.
@@ -148,7 +176,7 @@ export async function runAnalyzeJob(
       t: elapsed(),
       walkthroughUrl,
       durationMs: elapsed(),
-      costUsd: run?.costUsd,
+      costUsd: run?.costUsd !== undefined ? run.costUsd + verifierCost : undefined,
       toolCalls: run?.toolCalls,
       subagents: run?.subagents,
     });

@@ -17,6 +17,8 @@
  *   {"type":"result","stats":{session_costs,max_cost,tool_calls,...}}
  */
 
+import path from "node:path";
+
 import type { ProgressEvent } from "@pr-walkthrough/shared";
 
 /** Collapse assistant text deltas into at most one "writing" event per second. */
@@ -52,6 +54,17 @@ function toolTarget(toolName: string, params: Record<string, unknown>): string {
         .replace(/\s+/g, " ")
         .trim();
       return `Sub-agent: ${desc.slice(0, 80)}${desc.length > 80 ? "…" : ""}`;
+    }
+    case "write_to_file":
+    case "write_file":
+      return `Writing ${path.basename(String(params["path"] ?? "a file"))}`;
+    case "execute_command": {
+      // Screenshot verifier: show the command, minus absolute paths.
+      const cmd = String(params["command"] ?? "")
+        .replace(/\/\S*\/(?:wt\/[0-9a-f]+|\.walkthrough\/verify)\/?/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return `Running \`${cmd.slice(0, 70)}${cmd.length > 70 ? "…" : ""}\``;
     }
     default:
       return toolName.replace(/_/g, " ");

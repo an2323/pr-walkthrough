@@ -131,7 +131,11 @@ Do not annotate imports, renames, types or boilerplate.
 - `narration`: 2–4 sentences that will be SPOKEN by text-to-speech while the reviewer
   looks at the code. Plain language. No identifiers, no file names, no symbols. Explain
   intent ("we need to keep the count somewhere the header can read it"), never read
-  the code aloud.
+  the code aloud. **Hard rule: no backticks and no code names in `narration`** — a
+  voice reads it, and `useOutsideClick` comes out as noise. Bad: "Without the
+  attribute, `onClickOutside` fires and closes the menu." Good: "Without that marker,
+  the menu treats the tap on its own button as a click outside, and closes itself."
+  Count the sentences: more than 4 is too long.
 - `text` and `annotation`: precise, may use identifiers in backticks.
 
 ## Honesty tags (mandatory)

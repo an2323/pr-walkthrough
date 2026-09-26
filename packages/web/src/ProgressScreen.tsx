@@ -26,7 +26,12 @@ const STAGES: { stage: ProgressStage; label: string }[] = [
   { stage: 'validating', label: 'Validating' },
   { stage: 'repairing', label: 'Repairing' },
   { stage: 'saving', label: 'Saving' },
+  { stage: 'app', label: 'Starting app' },
+  { stage: 'shots', label: 'Screenshots' },
 ];
+
+/** Stages that only some runs have — shown once they actually start. */
+const OPTIONAL_STAGES: ReadonlySet<ProgressStage> = new Set(['repairing', 'app', 'shots']);
 
 /** How long to show the "Done" state before auto-navigating to the viewer. */
 const AUTO_NAVIGATE_MS = 1500;
@@ -169,7 +174,7 @@ export function ProgressScreen({ owner, repo, number }: Props) {
 
   const seenStages = new Set(events.filter(isKind('stage')).map((e) => e.stage));
   const currentStageIdx = lastStage ? STAGES.findIndex((s) => s.stage === lastStage.stage) : -1;
-  const visibleStages = STAGES.filter((s) => s.stage !== 'repairing' || seenStages.has('repairing'));
+  const visibleStages = STAGES.filter((s) => !OPTIONAL_STAGES.has(s.stage) || seenStages.has(s.stage));
 
   return (
     <div className="progress-screen">

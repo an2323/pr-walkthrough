@@ -17,7 +17,9 @@ export type ProgressStage =
   | "analyzing" // the analyzer (Bob Shell or cached lookup) is running
   | "validating" // schema + verbatim + coverage checks
   | "repairing" // one repair attempt via --resume after a failed validation
-  | "saving"; // writing the walkthrough JSON to disk
+  | "saving" // writing the walkthrough JSON to disk
+  | "app" // installing and starting the app at BASE and HEAD (screenshot verifier)
+  | "shots"; // Bob reproduces the scenario and takes before/after screenshots
 
 export type ProgressEvent =
   /** A pipeline stage started. */

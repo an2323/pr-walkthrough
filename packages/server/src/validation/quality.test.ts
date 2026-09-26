@@ -90,6 +90,15 @@ describe("checkQuality", () => {
     expect(checkQuality(w).map((x) => x.code)).toContain("identifier-in-say");
   });
 
+  it("flags an identifier in narration and a narration over 4 sentences", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep({ narration: "The `onClickOutside` handler fires. A. B. C. D.", check: "x" })],
+    });
+    const codes = checkQuality(w).map((x) => x.code);
+    expect(codes).toContain("identifier-in-narration");
+    expect(codes).toContain("narration-too-long");
+  });
+
   it("flags a headline longer than 9 words", () => {
     const w = makeWalkthrough({ steps: [makeStep({ headline: "one two three four five six seven eight nine ten", check: "x" })] });
     expect(checkQuality(w).map((x) => x.code)).toContain("headline-too-long");
