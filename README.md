@@ -41,15 +41,12 @@ Pre-generated walkthroughs are in `data/walkthroughs/`.
 
 | Feature | Where |
 |---|---|
-| Plan mode | Architecture design, this plan |
-| Agent mode | Implementing each sub-task |
-| Subagents | Inside Bob Shell analysis runs for parallel symbol searches |
-| Bob Shell | `BobShellAnalyzer` — core analyzer, non-interactive |
-| AGENTS.md | Workspace instructions for Bob Shell read-only access |
-| Parallel tasks | Session A (server) + Session B (viewer) ran simultaneously |
-| Custom skill | `/walkthrough <PR url>` for interactive IDE use |
-| Rollback | Used when sub-task implementations broke tests |
-| Document understanding | Bob read the golden JSON and schema during planning |
+| **Plan mode** | Produced the full implementation plan (`pr-walkthrough-plan.md`) — architecture, sub-task ordering, verify steps |
+| **Agent mode** | Implemented every sub-task (ST1–ST6b): monorepo scaffold, diff parser, validation pipeline, GitHub adapter, React viewer, TTS narration |
+| **Bob Shell** | `BobShellAnalyzer` invokes `bob run --format json --mode pr-walkthrough` headless; the analyzer reads the full repo checkout and returns a structured `Walkthrough` JSON. Confirmed live on excalidraw/excalidraw#10295 (174 s, 43 tool calls) |
+| **Custom mode** | The backend writes a `pr-walkthrough` mode to `<checkout>/.bob/custom_modes.yaml` with `groups: [read]` before each Bob Shell run — sandboxing the analyzer to read-only file access with no shell, no edits, no network |
+| **AGENTS.md** | `AGENTS.md` at the workspace root carries the schema contract, budget rules, and tool constraints; Bob Shell reads it at the start of every analysis run |
+| **Document understanding** | Bob read and extracted structure from the prototype viewer HTML, the golden walkthrough JSON, and the Zod schema during planning and implementation |
 
 ## Licence
 
