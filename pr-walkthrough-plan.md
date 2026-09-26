@@ -343,7 +343,8 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 
 **Relevant Context:**
 - Bob Shell invocation: see "Bob Shell Analyzer Design" below.
-- **Blocked on the spike (ST5a)** for the exact `--format json` envelope shape; until then the extractor searches every string in the envelope.
+- Envelope (confirmed by ST5a): `{ type, timestamp, status, stats: { task_id, duration_ms, session_costs, max_cost, tool_calls }, last_message }`. The walkthrough is inside `last_message`, usually wrapped in a ```json fence after a line of prose.
+- Port `normalizeDraft()` too: Bob sometimes cites `.walkthrough/base/<path>` as a code block's `file`. Backend sets `meta.generatedAt`/`durationMs` (Bob invents them).
 - Prompt template: [`docs/analyzer-prompt.md`](docs/analyzer-prompt.md); inject full `walkthrough.ts` and golden JSON at fill time.
 - Subagents: instruct Bob Shell in the prompt to spawn subagents for independent symbol searches (e.g. "spawn a subagent to find all usages of this function").
 
@@ -351,7 +352,9 @@ curl -s http://localhost:3000/api/walkthroughs/outline/outline/13673 | node -e \
 
 ### Sub-Task 5a — Bob Shell spike on #10295 (run by the user, needs Bobcoins)
 
-**Status:** [ ] pending — needs a Bob Shell account with an Inference API key
+**Status:** [x] done (Sep 26) — smoke, readonly and full runs passed; see `docs/cost-log.md`
+
+**Results:** key works headless; custom mode picked up and blocks writes; full run on #10295 = 174 s, $3.13 (`session_costs` is USD), 43 tool calls, 10 steps, 5/5 hunks, valid after path normalisation. Output stored at `data/walkthroughs/excalidraw/excalidraw/10295.json` — use it as real test data for UI and backend work.
 
 **Intent:** Answer the open questions about Bob Shell with real runs before building on them. Five numbers decide the rest: time, Bobcoins before/after, did the JSON parse, what the validator said, and did read-only hold.
 
@@ -513,6 +516,22 @@ ANALYZER=cached pnpm dev   # starts both server and web
 4. Fix any final issues.
 5. Verify `bob_sessions/` is committed.
 6. Submit before Sep 27, 15:00 UTC.
+
+---
+
+### Sub-Task 10 — Analyzer quality iteration (LAST, after ST6–ST9 work end-to-end)
+
+**Status:** [ ] pending — deliberately deferred: build UI + backend on the current valid output first.
+
+**Intent:** Structure of Bob's output is already right; the gap is depth of the causal explanation. Iterate the prompt only once the product works end-to-end.
+
+**Known gap (from ST5a on #10295):** the PR's key mechanism lives outside the diff — `Sidebar.tsx` closes the floating sidebar via its own `useOutsideClick` → `closeLibrary()`, and the hook skips targets with `[data-prevent-outside-click]`. Removing that attribute from the menu trigger IS the fix; the `.dropdown-menu-container` wrapper only stops the menu from closing itself. Bob's s8 called the removal "redundant" (tagged `fact`), s5 narration misplaces the close logic, and `Sidebar.tsx` is never quoted. Open question 1 (inner `.dropdown-menu-container`) is a false alarm — those elements are below `menuRef`, not ancestors.
+
+**Prompt changes to try:**
+1. For every behaviour the PR title/description claims, find and quote the code that produces it; if no hunk does, it is outside the diff — locate it.
+2. For removed code (attributes, guards, handlers), find who relied on it and what now fires differently.
+
+**Acceptance checklist for #10295 (quality metric):** a step quotes `Sidebar.tsx` `useOutsideClick` → `closeLibrary()`; attribute removal is presented as the decision, not cleanup; no factual error in narration. Budget: ≤ 2 re-runs (~$3 each), then #10013.
 
 ---
 
