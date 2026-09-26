@@ -4,7 +4,8 @@
 
 An interactive PR walkthrough tool. Given a GitHub PR URL, it analyses the full repository with IBM Bob Shell and produces a narrated, annotated route through the reviewer's reasoning — not just a diff summary, but *why* the code changed.
 
-**Public demo (static):** https://pr-walkthrough-bob.vercel.app
+**Public demo (static):** https://pr-walkthrough-bob.vercel.app  
+**Source:** https://github.com/an2323/pr-walkthrough
 
 ## Problem
 
@@ -53,9 +54,12 @@ Before/after screenshots on step 1 of #10295: `data/shots/…` (highlight boxes 
 
 ```bash
 pnpm build:static
-# then: cd packages/web/dist && npx vercel link --yes --project pr-walkthrough && npx vercel deploy --prod --yes
-# alias: npx vercel alias set <deployment-url> pr-walkthrough-bob.vercel.app
+# local preview: npx serve packages/web/dist
 ```
+
+Push to `master` on GitHub deploys to Vercel (project `pr-walkthrough`, alias `pr-walkthrough-bob.vercel.app`). Build settings are in root `vercel.json` (`pnpm build:static` → `packages/web/dist`).
+
+One-time: connect the GitHub repo in [Vercel → pr-walkthrough → Settings → Git](https://vercel.com/andriis-projects-4c05ce44/pr-walkthrough/settings/git) and grant the Vercel GitHub App access to `an2323/pr-walkthrough` if prompted.
 
 ## How we used IBM Bob 2.0
 
