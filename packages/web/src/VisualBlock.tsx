@@ -119,9 +119,7 @@ export function VisualBlock({
     const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
     return (
       <ShotsVisual
-        before={visual.before}
-        after={visual.after}
-        caption={visual.caption}
+        shots={{ before: visual.before, after: visual.after, caption: visual.caption }}
         owner={owner}
         repo={repo}
         number={walkthrough.pr.number}

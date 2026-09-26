@@ -1,104 +1,111 @@
 /**
- * ShotsVisual — before/after screenshots with viewer-drawn highlight boxes (ST6g).
- * Desktop: side by side. Narrow screens: Before/After toggle.
+ * Before/after screenshots. Highlight boxes are drawn into the image files
+ * (packages/server/src/shots/annotate.ts); click an image to see it full size.
  */
 
-import { useState } from 'react';
-import type { ShotHighlight, ShotSide } from '@pr-walkthrough/shared';
+import { useEffect, useState } from 'react';
+import type { Shots } from '@pr-walkthrough/shared';
 import { shotUrl } from './staticMode';
 
+type Side = 'before' | 'after';
+
+const LABEL: Record<Side, string> = { before: 'Before', after: 'After' };
+
+interface ShotImageProps {
+  shots: Shots;
+  side: Side;
+  owner: string;
+  repo: string;
+  number: number;
+  onOpen: (side: Side) => void;
+}
+
+export function ShotImage({ shots, side, owner, repo, number, onOpen }: ShotImageProps) {
+  const tone = side === 'before' ? 'bad' : 'good';
+  return (
+    <figure className="shot-frame">
+      <figcaption className={`shot-cap shot-cap--${tone}`}>{LABEL[side]}</figcaption>
+      <button
+        type="button"
+        className="shot-img-wrap"
+        onClick={() => onOpen(side)}
+        aria-label={`${LABEL[side]} screenshot — open full size`}
+      >
+        <img src={shotUrl(owner, repo, number, shots[side].src)} alt={`${LABEL[side]} screenshot`} className="shot-img" />
+      </button>
+      <span className="shot-hint">Click to enlarge</span>
+    </figure>
+  );
+}
+
+interface LightboxProps {
+  shots: Shots;
+  side: Side;
+  owner: string;
+  repo: string;
+  number: number;
+  onClose: () => void;
+}
+
+export function ShotLightbox({ shots, side: initial, owner, repo, number, onClose }: LightboxProps) {
+  const [side, setSide] = useState<Side>(initial);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.stopPropagation();
+        setSide((s) => (s === 'before' ? 'after' : 'before'));
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
+  return (
+    <div className="lightbox" role="dialog" aria-modal="true" aria-label={`${LABEL[side]} screenshot`}>
+      <button type="button" className="lightbox-scrim" aria-label="Close" onClick={onClose} />
+      <div className="lightbox-body">
+        <div className="lightbox-h">
+          <div className="seg" role="group" aria-label="Before or after">
+            {(['before', 'after'] as const).map((s) => (
+              <button key={s} type="button" aria-pressed={side === s} onClick={() => setSide(s)}>
+                {LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="x-btn" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <img
+          className="lightbox-img"
+          src={shotUrl(owner, repo, number, shots[side].src)}
+          alt={`${LABEL[side]} screenshot`}
+        />
+        {shots.caption && <p className="lightbox-cap">{shots.caption}</p>}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
-  before: ShotSide;
-  after: ShotSide;
-  caption?: string;
+  shots: Shots;
   owner: string;
   repo: string;
   number: number;
 }
 
-function HighlightBoxes({ highlights, tone }: { highlights?: ShotHighlight[]; tone: 'bad' | 'good' }) {
-  if (!highlights?.length) return null;
-  return (
-    <>
-      {highlights.map((h, i) => (
-        <div
-          key={i}
-          className={`shot-hl shot-hl--${tone}`}
-          style={{
-            left: `${h.x * 100}%`,
-            top: `${h.y * 100}%`,
-            width: `${h.w * 100}%`,
-            height: `${h.h * 100}%`,
-          }}
-        >
-          {h.label && <span className="shot-hl-label">{h.label}</span>}
-        </div>
-      ))}
-    </>
-  );
-}
-
-function ShotFrame({
-  side,
-  label,
-  tone,
-  src,
-}: {
-  side: ShotSide;
-  label: string;
-  tone: 'bad' | 'good';
-  src: string;
-}) {
-  return (
-    <figure className="shot-frame">
-      <figcaption className={`shot-cap shot-cap--${tone}`}>{label}</figcaption>
-      <div className="shot-img-wrap">
-        <img src={src} alt={label} className="shot-img" />
-        <HighlightBoxes highlights={side.highlights} tone={tone} />
-      </div>
-    </figure>
-  );
-}
-
-export function ShotsVisual({ before, after, caption, owner, repo, number }: Props) {
-  const [mode, setMode] = useState<'before' | 'after'>('before');
-  const beforeSrc = shotUrl(owner, repo, number, before.src);
-  const afterSrc = shotUrl(owner, repo, number, after.src);
-
+/** Side-by-side pair, used when a step's visual is `shots`. */
+export function ShotsVisual({ shots, owner, repo, number }: Props) {
+  const [open, setOpen] = useState<Side | null>(null);
+  const common = { shots, owner, repo, number };
   return (
     <div className="visual shots">
-      {caption && <div className="map-cap">{caption}</div>}
-
+      {shots.caption && <div className="map-cap">{shots.caption}</div>}
       <div className="shots-pair">
-        <ShotFrame side={before} label="Before" tone="bad" src={beforeSrc} />
-        <ShotFrame side={after} label="After" tone="good" src={afterSrc} />
+        <ShotImage {...common} side="before" onOpen={setOpen} />
+        <ShotImage {...common} side="after" onOpen={setOpen} />
       </div>
-
-      <div className="shots-toggle" role="group" aria-label="Before or after">
-        <button
-          type="button"
-          className={mode === 'before' ? 'on' : ''}
-          aria-pressed={mode === 'before'}
-          onClick={() => setMode('before')}
-        >
-          Before
-        </button>
-        <button
-          type="button"
-          className={mode === 'after' ? 'on' : ''}
-          aria-pressed={mode === 'after'}
-          onClick={() => setMode('after')}
-        >
-          After
-        </button>
-      </div>
-      <div className="shots-one">
-        {mode === 'before' ? (
-          <ShotFrame side={before} label="Before" tone="bad" src={beforeSrc} />
-        ) : (
-          <ShotFrame side={after} label="After" tone="good" src={afterSrc} />
-        )}
-      </div>
+      {open && <ShotLightbox {...common} side={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

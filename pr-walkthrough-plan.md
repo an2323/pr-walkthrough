@@ -580,7 +580,15 @@ Wiring the verifier into the live analysis pipeline (`POST /api/analyze`) is che
 
 ### Sub-Task 6g — Before/after screenshots in the first step; map on demand
 
-**Status:** [x] done (Sep 26) — screenshots taken from local BASE/HEAD; shots UI + map modal + label clamp shipped; #10295 step 1 uses `visual: shots`.
+**Status:** [x] done (Sep 26) — screenshots taken from local BASE/HEAD; shots UI + map modal + label clamp shipped.
+
+**Revised after user review (Sep 26 evening) — supersedes the decisions below where they conflict:**
+- Screenshots moved from step 1 to the **start screen**: Problem text → Before image → Fix text → After image (stacked). Stored as top-level `walkthrough.shots` (`{ before, after, caption }`, each side `{ src, raw, highlights }`). Step 1 is back to a `symptoms` visual.
+- **Highlights are drawn into the PNG**, not overlaid by the viewer: `packages/server/src/shots/annotate.ts` (Playwright) renders `raw` + boxes + labels into `src` (`*-annotated.png`). Re-run with `pnpm --filter @pr-walkthrough/server annotate-shots owner/repo#n` after editing coordinates. Clicking an image opens a full-size lightbox with a Before/After toggle.
+- Start-screen stats row and the "Your check" cards (steps + summary checklist) are hidden via `SHOW_HERO_STATS` / `SHOW_CHECKS` in `features.ts`.
+- Symptom steps don't show code; other steps' "Show the code" button shows **all** code snippets of the step, not only the first.
+- Step visuals restored on #10295 (hand-authored, as in the v2 prototype): s2 z-index layers (80 → 120 vs toolbar 100), flows on s3–s7; s4 rewritten in plain words and given the menu's base `useOutsideClick` code. Steps with no visual now draw the analyzer's `traces` as a flow (e.g. #8340 s2).
+- Map button renamed "Diagram"; fixed the modal closing on any click (the global `.scrim { z-index: 25 }` sat above the modal body). Footer no longer moves between steps (`.v2app` uses `100dvh`; the bar is a 3-column grid).
 
 **Intent:** The reviewer should *see* the bug before reading about it, and the start screen should only answer "what is this PR". The architecture map is an orientation aid, not a review step, so it moves out of the main flow.
 

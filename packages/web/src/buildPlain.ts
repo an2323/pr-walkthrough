@@ -26,8 +26,20 @@ function stepChapter(step: Step, allSteps: Step[]): string {
   return 'fix';
 }
 
+/** The analyzer's event traces (e.g. "tap → handler → result"), drawn as a flow when a step has no visual. */
+function tracesVisual(step: Step): PlainVisual | undefined {
+  const traces = step.beats.flatMap((b) => b.traces ?? []);
+  if (traces.length === 0) return undefined;
+  return {
+    type: 'flow',
+    rows: traces.map((t) =>
+      t.map((x): [string, string] => [x.label, x.status === 'bad' ? 'bad' : x.status === 'ok' ? 'good' : ''])
+    ),
+  };
+}
+
 function stepVisual(step: Step): PlainVisual | undefined {
-  if (!step.visual) return undefined;
+  if (!step.visual) return tracesVisual(step);
   const v = step.visual;
   if (v.type === 'flow') {
     return { type: 'flow', rows: v.rows as [string, string][][] };

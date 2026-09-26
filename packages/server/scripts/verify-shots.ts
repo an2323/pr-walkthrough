@@ -4,16 +4,17 @@
  *   pnpm --filter @pr-walkthrough/server verify-shots excalidraw/excalidraw#10295
  *
  * Uses local git worktrees + Playwright (no Bob). Only Excalidraw #10295 is wired today.
- * Writes data/shots/{owner}/{repo}/{number}/{before,after}.png and patches the first
- * Problem step's visual to type "shots".
+ * Writes data/shots/{owner}/{repo}/{number}/{before,after}.png, the annotated copies with
+ * highlight boxes drawn in, and walkthrough.shots (shown on the start screen).
  */
 import "../src/env.js";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
+import { annotateShot } from "../src/shots/annotate.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const GIT_CACHE = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
@@ -139,26 +140,27 @@ try {
   headProc.kill("SIGTERM");
 }
 
-// Patch first problem / symptom step with shots visual
-const first = wt.steps.find((s) => s.kind === "symptom") ?? wt.steps[0];
-first.visual = {
-  type: "shots",
+wt.shots = {
   caption: "Open the library sidebar, then open the main menu.",
   before: {
-    src: "before.png",
+    src: "before-annotated.png",
+    raw: "before.png",
     highlights: [
-      { x: 0.01, y: 0.06, w: 0.26, h: 0.62, label: "Main menu opens" },
-      { x: 0.77, y: 0.0, w: 0.23, h: 1.0, label: "Sidebar still covers the UI" },
+      { x: 0.008, y: 0.014, w: 0.192, h: 0.89, label: "Main menu opened" },
+      { x: 0.77, y: 0.004, w: 0.226, h: 0.99, label: "Sidebar is still open" },
     ],
   },
   after: {
-    src: "after.png",
+    src: "after-annotated.png",
+    raw: "after.png",
     highlights: [
-      { x: 0.01, y: 0.06, w: 0.26, h: 0.62, label: "Main menu is clear" },
-      { x: 0.78, y: 0.0, w: 0.2, h: 0.08, label: "Sidebar closed with the menu" },
+      { x: 0.008, y: 0.014, w: 0.192, h: 0.89, label: "Main menu opened" },
+      { x: 0.77, y: 0.004, w: 0.226, h: 0.99, label: "Sidebar closed by itself" },
     ],
   },
 };
+await annotateShot(beforePath, path.join(shotsDir, wt.shots.before.src), wt.shots.before.highlights!, "bad");
+await annotateShot(afterPath, path.join(shotsDir, wt.shots.after.src), wt.shots.after.highlights!, "good");
 await saveWalkthrough(wt);
 
 // Recipe note for ST6e / Bob verifier
@@ -181,4 +183,4 @@ After: opening the menu closes the undocked sidebar (fix).
 
 console.log(`wrote ${beforePath}`);
 console.log(`wrote ${afterPath}`);
-console.log(`updated walkthrough step ${first.id} visual → shots`);
+console.log(`updated walkthrough.shots (annotated images written)`);

@@ -36,8 +36,8 @@ export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo, onOpenMa
       </div>
       <div className="v2top-right">
         {onOpenMap && (
-          <button type="button" className="map-btn" onClick={onOpenMap}>
-            Map
+          <button type="button" className="map-btn" onClick={onOpenMap} title="How the pieces connect">
+            Diagram
           </button>
         )}
         <nav className="v2chapters" aria-label="Progress">

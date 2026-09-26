@@ -1,7 +1,7 @@
 /**
  * StepScreen — one screen per non-minor step.
- * Eyebrow, h1, say, visual, code (optionally hidden behind "Show the code change"),
- * check card, ask row (open question), "How the analysis got here" link.
+ * Eyebrow, h1, say, visual, code (behind "Show the code" when there is a visual),
+ * check card (SHOW_CHECKS), ask row (open question), "How the analysis got here" link.
  */
 
 import { useState } from 'react';
@@ -9,6 +9,7 @@ import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
 import { VisualBlock } from './VisualBlock';
 import { CodeFold } from './CodeFold';
+import { SHOW_CHECKS } from './features';
 
 const CH_LABEL: Record<string, string> = {
   problem: 'Problem',
@@ -63,9 +64,22 @@ export function StepScreen({
   const question = walkthrough.openQuestions.find((q) => q.stepId === step.id);
   const questionText = question?.short ?? question?.question;
 
-  // Find the first code block from the step's beats (for "Show the code change")
-  const firstCodeBeat = step.beats.find((b) => b.code && b.code.length > 0);
-  const firstCode = firstCodeBeat?.code?.[0];
+  // Symptom steps describe what the user sees; their "code" is background context, not a change.
+  const codeBlocks = step.kind === 'symptom' ? [] : step.beats.flatMap((b) => b.code ?? []);
+  const codeView = (
+    <div className="visual code-stack">
+      {codeBlocks.map((block, i) => (
+        <CodeFold
+          key={i}
+          block={block}
+          prRepo={pr.repo}
+          baseSha={pr.baseSha}
+          headSha={pr.headSha}
+          prUrl={pr.url}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className="v2card">
@@ -104,40 +118,17 @@ export function StepScreen({
         />
       )}
 
-      {/* Code block */}
-      {firstCode && !p.visual && (
-        <div className="visual">
-          <CodeFold
-            block={firstCode}
-            prRepo={pr.repo}
-            baseSha={pr.baseSha}
-            headSha={pr.headSha}
-            prUrl={pr.url}
-          />
-        </div>
-      )}
+      {codeBlocks.length > 0 && !p.visual && codeView}
 
-      {/* Code behind "Show the code change" when there's also a visual */}
-      {firstCode && p.visual && (
-        showCode ? (
-          <div className="visual">
-            <CodeFold
-              block={firstCode}
-              prRepo={pr.repo}
-              baseSha={pr.baseSha}
-              headSha={pr.headSha}
-              prUrl={pr.url}
-            />
-          </div>
-        ) : (
+      {codeBlocks.length > 0 && p.visual && (
+        showCode ? codeView : (
           <button className="more" onClick={() => setShowCode(true)}>
-            Show the code change
+            Show the code{codeBlocks.length > 1 ? ` (${codeBlocks.length} snippets)` : ''}
           </button>
         )
       )}
 
-      {/* Check card */}
-      {p.check && (
+      {SHOW_CHECKS && p.check && (
         <label className={`check${checked ? ' done' : ''}`}>
           <input
             type="checkbox"

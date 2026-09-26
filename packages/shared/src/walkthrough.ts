@@ -48,9 +48,17 @@ export interface ShotHighlight {
 }
 
 export interface ShotSide {
-  /** Path relative to data/shots/{owner}/{repo}/{number}/, e.g. "before.png". */
+  /** Path relative to data/shots/{owner}/{repo}/{number}/; highlights are already drawn into this image. */
   src: string;
+  /** The unannotated screenshot `src` was drawn from. */
+  raw?: string;
   highlights?: ShotHighlight[];
+}
+
+export interface Shots {
+  before: ShotSide;
+  after: ShotSide;
+  caption?: string;
 }
 
 /** Visual types for step screens. */
@@ -73,6 +81,8 @@ export interface Walkthrough {
   };
   /** Plain-language overlay. When present, the v2 viewer uses it; otherwise falls back. */
   plain?: PlainLayer;
+  /** Before/after screenshots shown on the start screen under Problem / Fix. */
+  shots?: Shots;
   /** Parsed by the BACKEND from the diff, never invented by the analyzer. */
   hunks: Hunk[];
   graph: Graph;

@@ -4,6 +4,8 @@
  * with the PLAINS fallback values embedded in the walkthrough or hard-coded.
  */
 
+import type { Shots } from '@pr-walkthrough/shared';
+
 export interface PlainStep {
   /** Chapter this step belongs to ("problem" | "fix" | "check") */
   ch: string;
@@ -29,12 +31,7 @@ export type PlainVisual =
   | { type: 'map'; caption?: string }
   | { type: 'layers'; before: [string, number, string?][]; after: [string, number, string?][] }
   | { type: 'try' }
-  | {
-      type: 'shots';
-      before: { src: string; highlights?: { x: number; y: number; w: number; h: number; label?: string }[] };
-      after: { src: string; highlights?: { x: number; y: number; w: number; h: number; label?: string }[] };
-      caption?: string;
-    };
+  | ({ type: 'shots' } & Shots);
 
 export interface PlainData {
   title: string;

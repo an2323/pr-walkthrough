@@ -13,7 +13,8 @@
     "make-replay": "tsx scripts/make-replay.ts",
     "review:dryrun": "tsx scripts/review-dryrun.ts",
     "export-static": "tsx scripts/export-static.ts",
-    "verify-shots": "tsx scripts/verify-shots.ts"
+    "verify-shots": "tsx scripts/verify-shots.ts",
+    "annotate-shots": "tsx scripts/annotate-shots.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",

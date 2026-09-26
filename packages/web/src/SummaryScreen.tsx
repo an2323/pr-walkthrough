@@ -5,7 +5,7 @@
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
 import { useState } from 'react';
-import { SHOW_TRY_IT } from './features';
+import { SHOW_TRY_IT, SHOW_CHECKS } from './features';
 import { useReview, targetLabel } from './review';
 
 interface Props {
@@ -85,13 +85,15 @@ export function SummaryScreen({
     <div className="v2card">
       <div className="v2eyebrow"><b>Your review</b></div>
       <h1 className="v2h1">
-        {withCheck.every((s) => checks[s.id]) && withCheck.length > 0
+        {!SHOW_CHECKS
+          ? plain.title
+          : withCheck.every((s) => checks[s.id]) && withCheck.length > 0
           ? 'All checks done'
           : `${doneChecks.length} of ${withCheck.length} checks done`}
       </h1>
 
       <div className="sum-list">
-        {withCheck.map((s) => {
+        {SHOW_CHECKS && withCheck.map((s) => {
           const done = !!checks[s.id];
           return (
             <div className="sum-item" key={s.id}>

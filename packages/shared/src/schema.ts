@@ -91,6 +91,28 @@ export const PlainLayerSchema = z.object({
 
 const FlowRowItemSchema = z.tuple([z.string(), z.string()]);
 
+const ShotSideSchema = z.object({
+  src: z.string(),
+  raw: z.string().optional(),
+  highlights: z
+    .array(
+      z.object({
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+        w: z.number().min(0).max(1),
+        h: z.number().min(0).max(1),
+        label: z.string().optional(),
+      })
+    )
+    .optional(),
+});
+
+export const ShotsSchema = z.object({
+  before: ShotSideSchema,
+  after: ShotSideSchema,
+  caption: z.string().optional(),
+});
+
 export const VisualSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("flow"),
@@ -112,38 +134,7 @@ export const VisualSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("try"),
   }),
-  z.object({
-    type: z.literal("shots"),
-    before: z.object({
-      src: z.string(),
-      highlights: z
-        .array(
-          z.object({
-            x: z.number().min(0).max(1),
-            y: z.number().min(0).max(1),
-            w: z.number().min(0).max(1),
-            h: z.number().min(0).max(1),
-            label: z.string().optional(),
-          })
-        )
-        .optional(),
-    }),
-    after: z.object({
-      src: z.string(),
-      highlights: z
-        .array(
-          z.object({
-            x: z.number().min(0).max(1),
-            y: z.number().min(0).max(1),
-            w: z.number().min(0).max(1),
-            h: z.number().min(0).max(1),
-            label: z.string().optional(),
-          })
-        )
-        .optional(),
-    }),
-    caption: z.string().optional(),
-  }),
+  ShotsSchema.extend({ type: z.literal("shots") }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -295,6 +286,8 @@ export const WalkthroughSchema = z.object({
   }),
   /** Plain-language overlay used by the v2 viewer. */
   plain: PlainLayerSchema.optional(),
+  /** Before/after screenshots shown on the start screen under Problem / Fix. */
+  shots: ShotsSchema.optional(),
   hunks: z.array(HunkSchema),
   graph: GraphSchema,
   steps: z.array(StepSchema),

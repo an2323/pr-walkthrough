@@ -24,6 +24,7 @@ export type {
   Visual,
   ShotHighlight,
   ShotSide,
+  Shots,
 } from "./walkthrough.js";
 
 // Zod schemas (for runtime validation)
@@ -32,6 +33,7 @@ export {
   StepKindSchema,
   PlainLayerSchema,
   VisualSchema,
+  ShotsSchema,
   PullRequestMetaSchema,
   HunkSchema,
   SkippedHunkSchema,
