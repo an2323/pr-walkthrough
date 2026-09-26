@@ -1,0 +1,14 @@
+{
+  "name": "pr-walkthrough",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "pnpm --filter '@pr-walkthrough/*' build",
+    "dev": "concurrently \"pnpm --filter @pr-walkthrough/server dev\" \"pnpm --filter @pr-walkthrough/web dev\"",
+    "lint": "pnpm --filter '@pr-walkthrough/*' lint",
+    "test": "pnpm --filter '@pr-walkthrough/*' test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

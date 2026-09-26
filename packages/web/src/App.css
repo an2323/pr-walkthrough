@@ -1,0 +1,22 @@
+.wrap {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 0;
+  min-height: calc(100vh - 150px);
+}
+
+main {
+  padding: 18px 28px 40px;
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .route-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

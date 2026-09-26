@@ -1,0 +1,1312 @@
+{
+  "schemaVersion": 1,
+  "pr": {
+    "repo": "outline/outline",
+    "number": 13673,
+    "title": "fix: History changes indicator missing on load and stuck on \"N changes\"",
+    "url": "https://github.com/outline/outline/pull/13673",
+    "author": "Tom Moor",
+    "mergedAt": "2026-09-07",
+    "headSha": "70ef12b",
+    "filesChanged": 6,
+    "additions": 71,
+    "deletions": 44,
+    "commitTitles": [
+      "fix: History changes indicator missing on load and stuck on \"N changes\"",
+      "fix: Match changes param check to RevisionViewer",
+      "fix: Disable change nav buttons until Diff extension is available",
+      "fix: Reset changes count only on unmount to avoid flicker"
+    ]
+  },
+  "summary": {
+    "problem": "In document history, the header's changes counter didn't appear on load and got stuck, because it read the count through a non-reactive editor ref that is set late and replaced on remount.",
+    "solution": "Compute the count from the changeset where it is already built, publish it through the observable DocumentContext, and make the editor reference observable too."
+  },
+  "hunks": [
+    {
+      "id": "app/components/DocumentContext.tsx#1",
+      "file": "app/components/DocumentContext.tsx",
+      "header": "@@ -14,7 +14,12 @@ class DocumentContext {",
+      "added": 6,
+      "removed": 1
+    },
+    {
+      "id": "app/components/DocumentContext.tsx#2",
+      "file": "app/components/DocumentContext.tsx",
+      "header": "@@ -67,6 +72,11 @@ class DocumentContext {",
+      "added": 5,
+      "removed": 0
+    },
+    {
+      "id": "app/scenes/Document/components/ChangesNavigation.tsx#1",
+      "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+      "header": "@@ -6,32 +6,24 @@ import { CaretDownIcon, CaretUpIcon } from \"outline-icons\";",
+      "added": 5,
+      "removed": 13
+    },
+    {
+      "id": "app/scenes/Document/components/ChangesNavigation.tsx#2",
+      "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+      "header": "@@ -50,14 +42,16 @@ export const ChangesNavigation = observer(function ChangesNavigation_({",
+      "added": 4,
+      "removed": 2
+    },
+    {
+      "id": "app/scenes/Document/components/Document.tsx#1",
+      "file": "app/scenes/Document/components/Document.tsx",
+      "header": "@@ -365,7 +365,6 @@ function DocumentScene({",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#1",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -21,7 +21,6 @@ import Flex from \"~/components/Flex\";",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#2",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -44,7 +43,6 @@ import { SearchHighlightChip } from \"./SearchHighlightChip\";",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#3",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -62,7 +60,6 @@ type Props = {",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#4",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -263,7 +260,7 @@ function DocumentHeader({",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/RevisionViewer.tsx#1",
+      "file": "app/scenes/Document/components/RevisionViewer.tsx",
+      "header": "@@ -44,7 +44,7 @@ type Props = Omit<EditorProps, \"extensions\"> & {",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/RevisionViewer.tsx#2",
+      "file": "app/scenes/Document/components/RevisionViewer.tsx",
+      "header": "@@ -80,22 +80,38 @@ function RevisionViewer(props: Props, ref: React.Ref<TEditor>) {",
+      "added": 25,
+      "removed": 9
+    },
+    {
+      "id": "shared/editor/extensions/Diff.ts#1",
+      "file": "shared/editor/extensions/Diff.ts",
+      "header": "@@ -36,6 +36,29 @@ type DiffOptions = {",
+      "added": 23,
+      "removed": 0
+    },
+    {
+      "id": "shared/editor/extensions/Diff.ts#2",
+      "file": "shared/editor/extensions/Diff.ts",
+      "header": "@@ -82,19 +105,7 @@ export default class Diff extends Extension<DiffOptions> {",
+      "added": 1,
+      "removed": 13
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "doc",
+        "label": "Document",
+        "sublabel": "page",
+        "file": "app/scenes/Document/components/Document.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "header",
+        "label": "Header",
+        "sublabel": "revision header",
+        "file": "app/scenes/Document/components/Header.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "cn",
+        "label": "ChangesNavigation",
+        "sublabel": "the counter",
+        "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "ctx",
+        "label": "DocumentContext",
+        "sublabel": "shared state",
+        "file": "app/components/DocumentContext.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "rv",
+        "label": "RevisionViewer",
+        "sublabel": "diff editor",
+        "file": "app/scenes/Document/components/RevisionViewer.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "diff",
+        "label": "Diff",
+        "sublabel": "editor extension",
+        "file": "shared/editor/extensions/Diff.ts",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "from": "doc",
+        "to": "header",
+        "label": "editorRef",
+        "kind": "props",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 9
+      },
+      {
+        "id": "e2",
+        "from": "header",
+        "to": "cn",
+        "label": "editorRef",
+        "kind": "props",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 9
+      },
+      {
+        "id": "e3",
+        "from": "rv",
+        "to": "ctx",
+        "label": "setEditor",
+        "kind": "data",
+        "state": "unchanged",
+        "visibleUntil": 6
+      },
+      {
+        "id": "e4",
+        "from": "rv",
+        "to": "ctx",
+        "label": "setEditor + setTotalChanges",
+        "kind": "data",
+        "state": "after",
+        "visibleFrom": 7
+      },
+      {
+        "id": "e5",
+        "from": "rv",
+        "to": "diff",
+        "label": "new Diff(...)",
+        "kind": "call",
+        "state": "unchanged"
+      },
+      {
+        "id": "e6",
+        "from": "cn",
+        "to": "ctx",
+        "label": "useDocumentContext",
+        "kind": "data",
+        "state": "after",
+        "visibleFrom": 10
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "kind": "symptom",
+      "routeLabel": "Symptom",
+      "title": "The changes counter is missing or stuck",
+      "focusNode": "cn",
+      "tag": "fact",
+      "narration": "When you look at an older version of a document, the header shows how many changes it contains and lets you jump between them. According to the pull request, that counter often doesn't appear at all, and when it does, it gets stuck instead of showing which change you're on. The counter is drawn in the header, so that's where we start.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "`ChangesNavigation` renders the counter in the revision header. It decides whether to render from the URL, then reads the count from the editor's Diff extension.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "base",
+              "label": "before the change",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = query.get(\"changes\");",
+                  "annotation": "Turns the whole counter on or off based on the URL.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "  if (!showChanges) {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    return null;"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                },
+                {
+                  "kind": "context",
+                  "text": ""
+                },
+                {
+                  "kind": "focus",
+                  "text": "  const diffExtension = editorRef.current?.extensions.extensions.find(",
+                  "annotation": "The count lives inside the editor: ref → editor → extensions → Diff.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "    (ext) => ext instanceof Diff"
+                },
+                {
+                  "kind": "context",
+                  "text": "  ) as Diff | undefined;"
+                },
+                {
+                  "kind": "focus",
+                  "text": "  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "      {totalChanges > 0 && (",
+                  "annotation": "With a count of 0 the counter renders nothing.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "pr_title",
+          "ref": "fix: History changes indicator missing on load and stuck on \"N changes\""
+        },
+        {
+          "type": "code",
+          "ref": "app/scenes/Document/components/ChangesNavigation.tsx (base)"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "kind": "cause",
+      "routeLabel": "URL flag mismatch",
+      "title": "Small cause: get() versus has()",
+      "focusNode": "cn",
+      "tag": "commit_history",
+      "narration": "First, a small mismatch. Two parts of the page check the same flag in the address bar, but in different ways. If the flag is present without a value, one part says yes and the other says no, so the changes are highlighted in the text while the counter stays hidden.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "The same `changes` URL parameter is read in two places, with two different methods.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = query.get(\"changes\");",
+                  "annotation": "Asks: does the parameter have a non-empty value?",
+                  "annotationTag": "fact"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "label": "unchanged code",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = props.showChanges ?? query.has(\"changes\");",
+                  "annotation": "Asks: is the parameter present at all? Decides whether highlights are built.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "problem",
+          "heading": "What breaks",
+          "text": "With a link like `?changes` (no value) the two checks disagree.",
+          "traces": [
+            [
+              {
+                "label": "URL …?changes"
+              },
+              {
+                "label": "get(\"changes\")"
+              },
+              {
+                "label": "\"\"",
+                "status": "bad"
+              },
+              {
+                "label": "return null",
+                "status": "bad"
+              }
+            ],
+            [
+              {
+                "label": "URL …?changes"
+              },
+              {
+                "label": "has(\"changes\")"
+              },
+              {
+                "label": "true",
+                "status": "ok"
+              },
+              {
+                "label": "highlights built",
+                "status": "ok"
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "Both places now ask the same question, so highlights and counter switch on together.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "  const showChanges = query.get(\"changes\");"
+                },
+                {
+                  "kind": "added",
+                  "text": "  const showChanges = query.has(\"changes\");"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/ChangesNavigation.tsx#1"
+      ],
+      "notes": [
+        "That links of the form ?changes (without a value) exist in the app is inferred from the commit title; the analyzer did not locate where they are generated."
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Match changes param check to RevisionViewer"
+        },
+        {
+          "type": "diff",
+          "ref": "app/scenes/Document/components/ChangesNavigation.tsx#1"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "kind": "cause",
+      "routeLabel": "Ref passed as prop",
+      "title": "How the header gets the editor",
+      "focusNode": "header",
+      "tag": "fact",
+      "narration": "The header reaches the editor through a reference that is handed down from the page, through the header, into the counter. The catch is that updating such a reference never tells anyone to redraw. So the header only notices the editor when it happens to redraw for some unrelated reason.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "`editorRef` is prop-drilled from `Document` through `Header` into `ChangesNavigation`. Setting `ref.current` does not re-render, and MobX `observer` cannot track it.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/Document.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "            <Header"
+                },
+                {
+                  "kind": "focus",
+                  "text": "              editorRef={editorRef}"
+                },
+                {
+                  "kind": "context",
+                  "text": "              document={document}"
+                },
+                {
+                  "kind": "context",
+                  "text": "              revision={revision}"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/Header.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "                <ChangesNavigation revision={revision} editorRef={editorRef} />",
+                  "annotation": "The counter reads the editor from a ref, which is not reactive.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "code",
+          "ref": "app/scenes/Document/components/Document.tsx, app/scenes/Document/components/Header.tsx (base)"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "kind": "constraint",
+      "routeLabel": "Late editor",
+      "title": "The editor appears late, and more than once",
+      "focusNode": "rv",
+      "tag": "inferred",
+      "narration": "The editor that draws the highlighted text is loaded lazily, and it is rebuilt from scratch when the older version it compares against finishes loading. So on the first draw the header sees no editor at all, and after the rebuild it keeps looking at the old one.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "This was already documented in a code comment: the editor is remounted via `key` whenever the diff configuration or the comparison data changes.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "label": "unchanged code",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  // The editor builds its extensions once, on mount, so it has to be remounted"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // whenever the diff configuration changes. Revisions are listed without their"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // content, so the revision being compared against — and with it the Diff"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // extension — usually only arrives on a later render; without this neither"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // the highlights nor the change count would ever appear."
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    comparisonData ? \"loaded\" : \"pending\",",
+                  "annotation": "The key flips when comparison data arrives → new editor instance.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "        ref={mergeRefs([ref, setEditor])}",
+                  "annotation": "The editor is also published to DocumentContext, but that field is not observable yet.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "problem",
+          "heading": "What breaks",
+          "text": "Two timelines, one per symptom.",
+          "traces": [
+            [
+              {
+                "label": "header renders"
+              },
+              {
+                "label": "editorRef.current"
+              },
+              {
+                "label": "null",
+                "status": "bad"
+              },
+              {
+                "label": "count = 0"
+              },
+              {
+                "label": "counter hidden",
+                "status": "bad"
+              }
+            ],
+            [
+              {
+                "label": "editor remounted"
+              },
+              {
+                "label": "header not re-rendered",
+                "status": "bad"
+              },
+              {
+                "label": "observes old Diff",
+                "status": "bad"
+              },
+              {
+                "label": "stuck on \"N changes\"",
+                "status": "bad"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "notes": [
+        "The mechanism behind \"stuck\" (header still observing the previous Diff instance while buttons drive the new one) is the analyzer's inference from code, not described by the author."
+      ],
+      "sources": [
+        {
+          "type": "code_comment",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx: editorKey comment"
+        },
+        {
+          "type": "inference",
+          "ref": "stuck mechanism"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "kind": "change",
+      "routeLabel": "observable.ref",
+      "title": "Make the editor reactive",
+      "focusNode": "ctx",
+      "tag": "fact",
+      "narration": "The editor was already being stored in a shared place for the document, but nobody could subscribe to it. Now that slot notifies anyone who reads it, so the header redraws the moment the editor appears or is replaced.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "`editor` in `DocumentContext` becomes a MobX observable reference.",
+          "code": [
+            {
+              "file": "app/components/DocumentContext.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  /** The editor instance for this document */"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  editor?: Editor;"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @observable.ref",
+                  "annotation": "`.ref` tracks only replacement of the reference; MobX won't try to make the whole ProseMirror editor deeply observable.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "added",
+                  "text": "  editor: Editor | undefined = undefined;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/components/DocumentContext.tsx#1"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/components/DocumentContext.tsx#1"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "kind": "decision",
+      "routeLabel": "countChanges",
+      "title": "The counter doesn't need the editor at all",
+      "focusNode": "diff",
+      "tag": "fact",
+      "narration": "Making the editor reactive fixes the stuck counter, but the number would still only show up after the editor loads. The key idea of this change: the number of changes depends only on the difference between two versions, not on the editor. So the counting logic is pulled out into a function that works without an editor.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "Counting is an instance method, so it needs a mounted `Diff` extension.",
+          "code": [
+            {
+              "file": "shared/editor/extensions/Diff.ts",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  public getTotalChangesCount(): number {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    const { changes } = this.options;",
+                  "annotation": "Needs an instance: only reachable through a mounted editor.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … reduce over inserted + deleted + modified …"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "The same logic moves to a static method; the instance method now delegates to it. Behaviour of counting is unchanged.",
+          "code": [
+            {
+              "file": "shared/editor/extensions/Diff.ts",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  public static countChanges("
+                },
+                {
+                  "kind": "added",
+                  "text": "    changes: readonly ExtendedChange[] | null"
+                },
+                {
+                  "kind": "added",
+                  "text": "  ): number {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    if (!changes) {"
+                },
+                {
+                  "kind": "added",
+                  "text": "      return 0;"
+                },
+                {
+                  "kind": "added",
+                  "text": "    }"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … same reduce as before …"
+                },
+                {
+                  "kind": "added",
+                  "text": "  }"
+                },
+                {
+                  "kind": "context",
+                  "text": ""
+                },
+                {
+                  "kind": "context",
+                  "text": "  public getTotalChangesCount(): number {"
+                },
+                {
+                  "kind": "removed",
+                  "text": "    const { changes } = this.options;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … old reduce removed …"
+                },
+                {
+                  "kind": "added",
+                  "text": "    return Diff.countChanges(this.options.changes);",
+                  "annotation": "Pure move, no new logic.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "shared/editor/extensions/Diff.ts#1",
+        "shared/editor/extensions/Diff.ts#2"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "shared/editor/extensions/Diff.ts"
+        },
+        {
+          "type": "code_comment",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx: \"so the indicator can render before the editor ... finished mounting\""
+        }
+      ]
+    },
+    {
+      "id": "s7",
+      "kind": "change",
+      "routeLabel": "Count in RevisionViewer",
+      "title": "Count where the changeset already exists",
+      "focusNode": "rv",
+      "tag": "fact",
+      "narration": "The difference between the two versions is already calculated in the component that shows the old version. Now the count is taken from that same calculation and put into the shared document state, so the header gets it immediately instead of waiting for the editor.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "The changeset is computed here and its only consumer is the `Diff` extension passed into the editor.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const extensions = React.useMemo(() => {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    const changeset = ChangesetHelper.getChangeset(",
+                  "annotation": "The difference between the two revisions.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "        ? [new Diff({ changes: changeset?.changes })]",
+                  "annotation": "The only consumer of the changeset.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }, [revision.data, comparisonData, showChanges]);"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "The memo now returns both the extensions and the count, and the count is published to the context.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "  const extensions = React.useMemo(() => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "  const { extensions, totalChanges } = React.useMemo(() => {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    const changeset = ChangesetHelper.getChangeset("
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "      totalChanges: showChanges",
+                  "annotation": "Count and highlights come from the same changeset in the same memo, so they cannot diverge.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "added",
+                  "text": "        ? Diff.countChanges(changeset?.changes ?? null)"
+                },
+                {
+                  "kind": "added",
+                  "text": "        : 0,"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "  React.useEffect(() => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    setTotalChanges(totalChanges);"
+                },
+                {
+                  "kind": "added",
+                  "text": "  }, [totalChanges, setTotalChanges]);"
+                }
+              ]
+            }
+          ],
+          "traces": [
+            [
+              {
+                "label": "changeset"
+              },
+              {
+                "label": "Diff.countChanges"
+              },
+              {
+                "label": "context.totalChanges",
+                "status": "ok"
+              },
+              {
+                "label": "header updates",
+                "status": "ok"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/RevisionViewer.tsx#1",
+        "app/scenes/Document/components/RevisionViewer.tsx#2"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx#2"
+        }
+      ]
+    },
+    {
+      "id": "s8",
+      "kind": "change",
+      "routeLabel": "Field in context",
+      "title": "A channel between the viewer and the header",
+      "focusNode": "ctx",
+      "tag": "fact",
+      "narration": "Back to the shared document state. The component that knows the count and the header that shows it aren't directly connected, so a shared observable value is the shortest path between them. The same place already carries the editor, so an existing channel is extended rather than a new one invented.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "A new observable `totalChanges` with an action setter.",
+          "code": [
+            {
+              "file": "app/components/DocumentContext.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  /** The total number of changes in the currently viewed revision diff */"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @observable"
+                },
+                {
+                  "kind": "added",
+                  "text": "  totalChanges: number = 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @action"
+                },
+                {
+                  "kind": "added",
+                  "text": "  setTotalChanges = (totalChanges: number) => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    this.totalChanges = totalChanges;"
+                },
+                {
+                  "kind": "added",
+                  "text": "  };"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/components/DocumentContext.tsx#1",
+        "app/components/DocumentContext.tsx#2"
+      ],
+      "notes": [
+        "Not chosen (inferred): passing the count down through Document and Header as props — that prop chain was the source of the problem."
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/components/DocumentContext.tsx#2"
+        }
+      ]
+    },
+    {
+      "id": "s9",
+      "kind": "dead_end",
+      "routeLabel": "Flicker",
+      "title": "Reset only on unmount",
+      "focusNode": "rv",
+      "tag": "commit_history",
+      "isDeadEnd": true,
+      "narration": "There was one more iteration. If the count is cleared every time it's recalculated, it drops to zero for a moment whenever you switch versions, and the header blinks. So clearing was moved to a separate step that only runs when you leave the history view.",
+      "beats": [
+        {
+          "kind": "problem",
+          "heading": "What broke in the first version",
+          "text": "Likely intermediate version: reset in the cleanup of the publishing effect.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "reconstructed": true,
+              "label": "reconstructed from commit title, not in the diff",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  React.useEffect(() => {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    setTotalChanges(totalChanges);"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    return () => setTotalChanges(0);",
+                  "annotation": "Runs on every recalculation → count briefly 0 → header flickers.",
+                  "annotationTag": "inferred"
+                },
+                {
+                  "kind": "focus",
+                  "text": "  }, [totalChanges, setTotalChanges]);"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "A separate effect with stable deps runs its cleanup only on unmount.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  // Reset the count on unmount so it does not linger on the live document."
+                },
+                {
+                  "kind": "added",
+                  "text": "  React.useEffect(() => () => setTotalChanges(0), [setTotalChanges]);",
+                  "annotation": "Two effects instead of one: publishing and resetting have different lifetimes.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/RevisionViewer.tsx#2"
+      ],
+      "notes": [
+        "The PR was squash-merged, so the exact intermediate code is not preserved. Its shape is reconstructed from the commit title."
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Reset changes count only on unmount to avoid flicker"
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "kind": "change",
+      "routeLabel": "Header reads context",
+      "title": "The header reads from the context",
+      "focusNode": "cn",
+      "tag": "commit_history",
+      "narration": "Now the number arrives immediately, while the editor may still be loading. That's why the last commit disables the previous and next buttons until the editor is ready; otherwise they would appear together with the number but do nothing.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "No more props: the counter takes `editor` and `totalChanges` from context; navigation buttons are disabled until the Diff extension exists.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  const { editor, totalChanges } = useDocumentContext();"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  const diffExtension = editorRef.current?.extensions.extensions.find("
+                },
+                {
+                  "kind": "added",
+                  "text": "  const diffExtension = editor?.extensions.extensions.find("
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "              onClick={() => editorRef.current?.commands.nextChange()}"
+                },
+                {
+                  "kind": "added",
+                  "text": "              onClick={() => editor?.commands.nextChange()}"
+                },
+                {
+                  "kind": "added",
+                  "text": "              disabled={!diffExtension}",
+                  "annotation": "The count can now render before the editor exists; buttons must wait for it.",
+                  "annotationTag": "commit_history"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/Header.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "                <ChangesNavigation revision={revision} editorRef={editorRef} />"
+                },
+                {
+                  "kind": "added",
+                  "text": "                <ChangesNavigation />"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/ChangesNavigation.tsx#1",
+        "app/scenes/Document/components/ChangesNavigation.tsx#2",
+        "app/scenes/Document/components/Header.tsx#4"
+      ],
+      "skipped": [
+        "Removed the editorRef prop, its type and unused imports from Header.tsx and Document.tsx"
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Disable change nav buttons until Diff extension is available"
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "kind": "verification",
+      "routeLabel": "Proof",
+      "title": "How to check it",
+      "focusNode": "cn",
+      "tag": "unverified",
+      "narration": "This scenario has not been run yet. It's what the tool would execute on the main branch and on the pull request branch. Each line checks one of the decisions above, not just the original symptom.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "Scenario",
+          "text": "Run on base and head; record both.",
+          "traces": [
+            [
+              {
+                "label": "open revision with ?changes"
+              },
+              {
+                "label": "\"N changes\" immediately",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "click next change"
+              },
+              {
+                "label": "\"1 of N changes\"",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "change compareTo"
+              },
+              {
+                "label": "new N, no flash of 0",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "back to live document"
+              },
+              {
+                "label": "counter gone",
+                "status": "ok"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "inference",
+          "ref": "derived from the steps above"
+        }
+      ]
+    }
+  ],
+  "skippedHunks": [
+    {
+      "hunkId": "app/scenes/Document/components/Document.tsx#1",
+      "reason": "removed editorRef prop"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#1",
+      "reason": "removed unused Editor import"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#2",
+      "reason": "removed editorRef from Props"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#3",
+      "reason": "removed editorRef from destructuring"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "q1",
+      "stepId": "s4",
+      "question": "After the editor remounts, does the current-change index reset, so the label shows \"N changes\" until the user clicks next? Is that intended?",
+      "why": "The index lives on the Diff instance, which is recreated on every remount.",
+      "tag": "inferred"
+    },
+    {
+      "id": "q2",
+      "stepId": "s7",
+      "question": "While comparison data is still loading, what count is published — 0, or a count against the wrong base?",
+      "why": "totalChanges is computed from comparisonData, which may be undefined on the first render.",
+      "tag": "inferred"
+    }
+  ],
+  "verification": {
+    "status": "not_run",
+    "scenario": [
+      "Open a revision with ?changes → \"N changes\" appears immediately",
+      "Click next change → \"1 of N changes\"",
+      "Change compareTo → new N without a flash of 0",
+      "Return to the live document → counter disappears"
+    ]
+  },
+  "meta": {
+    "analyzer": "manual",
+    "generatedAt": "2026-09-25T00:00:00Z",
+    "language": "en"
+  },
+  "coverage": {
+    "totalHunks": 13,
+    "explained": 9,
+    "skipped": 4,
+    "uncoveredHunkIds": []
+  }
+}

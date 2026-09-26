@@ -1,0 +1,1550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR walkthrough prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4f5f7;--panel:#ffffff;--ink:#161616;--muted:#525c69;--faint:#8d96a3;--line:#dde1e6;
+  --accent:#0f62fe;--accent-soft:#e5eeff;
+  --fact:#198038;--fact-soft:#defbe6;--commit:#6929c4;--commit-soft:#f0e8ff;
+  --inferred:#8e6a00;--inferred-soft:#fcf4d6;--unverified:#525252;--unverified-soft:#ececec;
+  --danger:#da1e28;--danger-soft:#fff1f1;
+  --add:rgba(25,128,56,.11);--del:rgba(218,30,40,.09);--focus:rgba(241,194,27,.22);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --serif:"IBM Plex Serif",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#121212;--panel:#1c1c1c;--ink:#f4f4f4;--muted:#b0b7c0;--faint:#7d8590;--line:#333a42;
+  --accent:#78a9ff;--accent-soft:#0f2a5c;
+  --fact:#42be65;--fact-soft:#0e2a17;--commit:#be95ff;--commit-soft:#2a1747;
+  --inferred:#f1c21b;--inferred-soft:#3a2f05;--unverified:#c6c6c6;--unverified-soft:#2c2c2c;
+  --danger:#fa4d56;--danger-soft:#3a0c0f;
+  --add:rgba(66,190,101,.14);--del:rgba(250,77,86,.13);--focus:rgba(241,194,27,.16);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans)}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.9em;background:var(--paper);padding:1px 4px;border-radius:3px}
+button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--faint)}
+button:focus-visible,.rt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header.top{padding:20px 28px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.repo{font-size:13px;color:var(--muted)}
+h1{font-size:20px;font-weight:600;margin:4px 0 6px;max-width:80ch}
+.stats{font-size:13px;color:var(--muted)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 28px;margin-top:12px;font-size:14px;max-width:1100px}
+.summary b{font-weight:500;display:block;color:var(--muted);font-size:12px}
+.wrap{display:grid;grid-template-columns:230px minmax(0,1fr);gap:0;min-height:calc(100vh - 150px)}
+aside{border-right:1px solid var(--line);padding:16px 10px;background:var(--panel)}
+aside .cap{font-size:12px;color:var(--muted);padding:0 8px 8px}
+.rt{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;color:var(--muted);position:relative}
+.rt:hover{background:var(--paper)}
+.rt.on{background:var(--accent-soft);color:var(--ink)}
+.rt .n{flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:11px;background:var(--panel)}
+.rt.on .n{border-color:var(--accent);color:var(--accent)}
+.rt.dead .l{text-decoration:line-through}
+.rt .file{display:block;font-family:var(--mono);font-size:11px;color:var(--faint)}
+main{padding:18px 28px 40px;min-width:0}
+.graph{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;overflow-x:auto}
+.graph svg{display:block;margin:0 auto}
+.step{margin-top:18px;max-width:980px}
+.shead{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.shead h2{font-size:19px;font-weight:600;margin:0}
+.kind{font-size:12px;color:var(--muted)}
+.chip{font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.t-fact{background:var(--fact-soft);color:var(--fact)}.t-commit_history{background:var(--commit-soft);color:var(--commit)}
+.t-inferred{background:var(--inferred-soft);color:var(--inferred)}.t-unverified{background:var(--unverified-soft);color:var(--unverified)}
+.voice{display:flex;gap:14px;align-items:flex-start;margin:14px 0 6px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 8px 8px 0}
+.voice p{margin:0;font:16.5px/1.65 var(--serif);max-width:75ch}
+.play{flex:none;width:36px;height:36px;padding:0;border-radius:50%;display:grid;place-items:center}
+.beat{margin-top:18px}
+.beat h3{font-size:14px;font-weight:600;margin:0 0 4px;display:flex;gap:8px;align-items:center}
+.beat h3 .bn{width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:11px}
+.beat p{margin:4px 0 8px;max-width:78ch}
+.code{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:8px 0;overflow:hidden}
+.code.rec{border-style:dashed}
+.code .fh{display:flex;justify-content:space-between;gap:10px;font:12px var(--mono);color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line)}
+.code .body{overflow-x:auto;padding:4px 0}
+.ln{font:12.5px/1.7 var(--mono);white-space:pre;padding:0 12px 0 0;display:flex}
+.ln .g{flex:none;width:22px;text-align:center;color:var(--faint);user-select:none}
+.ln.added{background:var(--add)}.ln.removed{background:var(--del);color:var(--muted)}.ln.removed .tx{text-decoration:line-through}
+.ln.focus{background:var(--focus)}.ln.elided{color:var(--faint);font-style:italic}
+.ann{display:flex;gap:8px;align-items:baseline;font:13px/1.5 var(--sans);color:var(--accent);padding:2px 12px 6px 34px;white-space:normal}
+.ann .chip{font-size:11px}
+.traces{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.trace{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:12.5px var(--mono)}
+.trace span{padding:3px 8px;border-radius:5px;background:var(--panel);border:1px solid var(--line)}
+.trace span.bad{background:var(--danger-soft);color:var(--danger);border-color:transparent}
+.trace span.ok{background:var(--fact-soft);color:var(--fact);border-color:transparent}
+.trace i{color:var(--faint);font-style:normal}
+.notes{font-size:13px;color:var(--muted);margin-top:10px;max-width:78ch}
+.notes div{margin:3px 0}
+.q{margin-top:14px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel);max-width:78ch}
+.q b{font-weight:600;font-size:13px}
+.q p{margin:4px 0 0;font-size:14px}
+.q small{color:var(--muted)}
+.src{font-size:12px;color:var(--faint);margin-top:10px}
+.nav{display:flex;gap:10px;align-items:center;margin-top:22px;flex-wrap:wrap}
+.nav .hint{font-size:12px;color:var(--faint)}
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:30px;max-width:980px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.panel h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.hk{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)}
+.hk:last-child{border-bottom:0}
+.hk .f{font-family:var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hk .s{flex:none}
+.warn{color:var(--danger)}
+@media (max-width:800px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="repo" id="repo"></div>
+  <h1 id="title"></h1>
+  <div class="stats" id="stats"></div>
+  <div class="summary" id="summary"></div>
+</header>
+<div class="wrap">
+  <aside>
+    <div class="cap">Reasoning route</div>
+    <div id="route"></div>
+  </aside>
+  <main>
+    <div class="graph"><svg id="g" role="img" aria-label="Files touched by the pull request and how data flows between them"></svg></div>
+    <section class="step" id="step" aria-live="polite"></section>
+    <div class="nav">
+      <button id="prev">Previous</button>
+      <button id="next">Next</button>
+      <label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" id="auto"> Play all steps aloud</label>
+      <span class="hint">Arrow keys move between steps</span>
+    </div>
+    <div class="lower">
+      <div class="panel"><h4>Questions for the author</h4><div id="questions"></div></div>
+      <div class="panel"><h4 id="covh">Diff coverage</h4><div id="coverage"></div></div>
+    </div>
+  </main>
+</div>
+<script type="application/json" id="data">{
+  "schemaVersion": 1,
+  "pr": {
+    "repo": "outline/outline",
+    "number": 13673,
+    "title": "fix: History changes indicator missing on load and stuck on \"N changes\"",
+    "url": "https://github.com/outline/outline/pull/13673",
+    "author": "Tom Moor",
+    "mergedAt": "2026-09-07",
+    "headSha": "70ef12b",
+    "filesChanged": 6,
+    "additions": 71,
+    "deletions": 44,
+    "commitTitles": [
+      "fix: History changes indicator missing on load and stuck on \"N changes\"",
+      "fix: Match changes param check to RevisionViewer",
+      "fix: Disable change nav buttons until Diff extension is available",
+      "fix: Reset changes count only on unmount to avoid flicker"
+    ]
+  },
+  "summary": {
+    "problem": "In document history, the header's changes counter didn't appear on load and got stuck, because it read the count through a non-reactive editor ref that is set late and replaced on remount.",
+    "solution": "Compute the count from the changeset where it is already built, publish it through the observable DocumentContext, and make the editor reference observable too."
+  },
+  "hunks": [
+    {
+      "id": "app/components/DocumentContext.tsx#1",
+      "file": "app/components/DocumentContext.tsx",
+      "header": "@@ -14,7 +14,12 @@ class DocumentContext {",
+      "added": 6,
+      "removed": 1
+    },
+    {
+      "id": "app/components/DocumentContext.tsx#2",
+      "file": "app/components/DocumentContext.tsx",
+      "header": "@@ -67,6 +72,11 @@ class DocumentContext {",
+      "added": 5,
+      "removed": 0
+    },
+    {
+      "id": "app/scenes/Document/components/ChangesNavigation.tsx#1",
+      "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+      "header": "@@ -6,32 +6,24 @@ import { CaretDownIcon, CaretUpIcon } from \"outline-icons\";",
+      "added": 5,
+      "removed": 13
+    },
+    {
+      "id": "app/scenes/Document/components/ChangesNavigation.tsx#2",
+      "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+      "header": "@@ -50,14 +42,16 @@ export const ChangesNavigation = observer(function ChangesNavigation_({",
+      "added": 4,
+      "removed": 2
+    },
+    {
+      "id": "app/scenes/Document/components/Document.tsx#1",
+      "file": "app/scenes/Document/components/Document.tsx",
+      "header": "@@ -365,7 +365,6 @@ function DocumentScene({",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#1",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -21,7 +21,6 @@ import Flex from \"~/components/Flex\";",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#2",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -44,7 +43,6 @@ import { SearchHighlightChip } from \"./SearchHighlightChip\";",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#3",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -62,7 +60,6 @@ type Props = {",
+      "added": 0,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/Header.tsx#4",
+      "file": "app/scenes/Document/components/Header.tsx",
+      "header": "@@ -263,7 +260,7 @@ function DocumentHeader({",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/RevisionViewer.tsx#1",
+      "file": "app/scenes/Document/components/RevisionViewer.tsx",
+      "header": "@@ -44,7 +44,7 @@ type Props = Omit<EditorProps, \"extensions\"> & {",
+      "added": 1,
+      "removed": 1
+    },
+    {
+      "id": "app/scenes/Document/components/RevisionViewer.tsx#2",
+      "file": "app/scenes/Document/components/RevisionViewer.tsx",
+      "header": "@@ -80,22 +80,38 @@ function RevisionViewer(props: Props, ref: React.Ref<TEditor>) {",
+      "added": 25,
+      "removed": 9
+    },
+    {
+      "id": "shared/editor/extensions/Diff.ts#1",
+      "file": "shared/editor/extensions/Diff.ts",
+      "header": "@@ -36,6 +36,29 @@ type DiffOptions = {",
+      "added": 23,
+      "removed": 0
+    },
+    {
+      "id": "shared/editor/extensions/Diff.ts#2",
+      "file": "shared/editor/extensions/Diff.ts",
+      "header": "@@ -82,19 +105,7 @@ export default class Diff extends Extension<DiffOptions> {",
+      "added": 1,
+      "removed": 13
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "doc",
+        "label": "Document",
+        "sublabel": "page",
+        "file": "app/scenes/Document/components/Document.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "header",
+        "label": "Header",
+        "sublabel": "revision header",
+        "file": "app/scenes/Document/components/Header.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "cn",
+        "label": "ChangesNavigation",
+        "sublabel": "the counter",
+        "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "ctx",
+        "label": "DocumentContext",
+        "sublabel": "shared state",
+        "file": "app/components/DocumentContext.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "rv",
+        "label": "RevisionViewer",
+        "sublabel": "diff editor",
+        "file": "app/scenes/Document/components/RevisionViewer.tsx",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "diff",
+        "label": "Diff",
+        "sublabel": "editor extension",
+        "file": "shared/editor/extensions/Diff.ts",
+        "kind": "file",
+        "layout": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "from": "doc",
+        "to": "header",
+        "label": "editorRef",
+        "kind": "props",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 9
+      },
+      {
+        "id": "e2",
+        "from": "header",
+        "to": "cn",
+        "label": "editorRef",
+        "kind": "props",
+        "state": "before",
+        "problem": true,
+        "visibleUntil": 9
+      },
+      {
+        "id": "e3",
+        "from": "rv",
+        "to": "ctx",
+        "label": "setEditor",
+        "kind": "data",
+        "state": "unchanged",
+        "visibleUntil": 6
+      },
+      {
+        "id": "e4",
+        "from": "rv",
+        "to": "ctx",
+        "label": "setEditor + setTotalChanges",
+        "kind": "data",
+        "state": "after",
+        "visibleFrom": 7
+      },
+      {
+        "id": "e5",
+        "from": "rv",
+        "to": "diff",
+        "label": "new Diff(...)",
+        "kind": "call",
+        "state": "unchanged"
+      },
+      {
+        "id": "e6",
+        "from": "cn",
+        "to": "ctx",
+        "label": "useDocumentContext",
+        "kind": "data",
+        "state": "after",
+        "visibleFrom": 10
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "kind": "symptom",
+      "routeLabel": "Symptom",
+      "title": "The changes counter is missing or stuck",
+      "focusNode": "cn",
+      "tag": "fact",
+      "narration": "When you look at an older version of a document, the header shows how many changes it contains and lets you jump between them. According to the pull request, that counter often doesn't appear at all, and when it does, it gets stuck instead of showing which change you're on. The counter is drawn in the header, so that's where we start.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "`ChangesNavigation` renders the counter in the revision header. It decides whether to render from the URL, then reads the count from the editor's Diff extension.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "base",
+              "label": "before the change",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = query.get(\"changes\");",
+                  "annotation": "Turns the whole counter on or off based on the URL.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "  if (!showChanges) {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    return null;"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                },
+                {
+                  "kind": "context",
+                  "text": ""
+                },
+                {
+                  "kind": "focus",
+                  "text": "  const diffExtension = editorRef.current?.extensions.extensions.find(",
+                  "annotation": "The count lives inside the editor: ref → editor → extensions → Diff.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "    (ext) => ext instanceof Diff"
+                },
+                {
+                  "kind": "context",
+                  "text": "  ) as Diff | undefined;"
+                },
+                {
+                  "kind": "focus",
+                  "text": "  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "      {totalChanges > 0 && (",
+                  "annotation": "With a count of 0 the counter renders nothing.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "pr_title",
+          "ref": "fix: History changes indicator missing on load and stuck on \"N changes\""
+        },
+        {
+          "type": "code",
+          "ref": "app/scenes/Document/components/ChangesNavigation.tsx (base)"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "kind": "cause",
+      "routeLabel": "URL flag mismatch",
+      "title": "Small cause: get() versus has()",
+      "focusNode": "cn",
+      "tag": "commit_history",
+      "narration": "First, a small mismatch. Two parts of the page check the same flag in the address bar, but in different ways. If the flag is present without a value, one part says yes and the other says no, so the changes are highlighted in the text while the counter stays hidden.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "The same `changes` URL parameter is read in two places, with two different methods.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = query.get(\"changes\");",
+                  "annotation": "Asks: does the parameter have a non-empty value?",
+                  "annotationTag": "fact"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "label": "unchanged code",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const showChanges = props.showChanges ?? query.has(\"changes\");",
+                  "annotation": "Asks: is the parameter present at all? Decides whether highlights are built.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "problem",
+          "heading": "What breaks",
+          "text": "With a link like `?changes` (no value) the two checks disagree.",
+          "traces": [
+            [
+              {
+                "label": "URL …?changes"
+              },
+              {
+                "label": "get(\"changes\")"
+              },
+              {
+                "label": "\"\"",
+                "status": "bad"
+              },
+              {
+                "label": "return null",
+                "status": "bad"
+              }
+            ],
+            [
+              {
+                "label": "URL …?changes"
+              },
+              {
+                "label": "has(\"changes\")"
+              },
+              {
+                "label": "true",
+                "status": "ok"
+              },
+              {
+                "label": "highlights built",
+                "status": "ok"
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "Both places now ask the same question, so highlights and counter switch on together.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "  const showChanges = query.get(\"changes\");"
+                },
+                {
+                  "kind": "added",
+                  "text": "  const showChanges = query.has(\"changes\");"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/ChangesNavigation.tsx#1"
+      ],
+      "notes": [
+        "That links of the form ?changes (without a value) exist in the app is inferred from the commit title; the analyzer did not locate where they are generated."
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Match changes param check to RevisionViewer"
+        },
+        {
+          "type": "diff",
+          "ref": "app/scenes/Document/components/ChangesNavigation.tsx#1"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "kind": "cause",
+      "routeLabel": "Ref passed as prop",
+      "title": "How the header gets the editor",
+      "focusNode": "header",
+      "tag": "fact",
+      "narration": "The header reaches the editor through a reference that is handed down from the page, through the header, into the counter. The catch is that updating such a reference never tells anyone to redraw. So the header only notices the editor when it happens to redraw for some unrelated reason.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "`editorRef` is prop-drilled from `Document` through `Header` into `ChangesNavigation`. Setting `ref.current` does not re-render, and MobX `observer` cannot track it.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/Document.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "            <Header"
+                },
+                {
+                  "kind": "focus",
+                  "text": "              editorRef={editorRef}"
+                },
+                {
+                  "kind": "context",
+                  "text": "              document={document}"
+                },
+                {
+                  "kind": "context",
+                  "text": "              revision={revision}"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/Header.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "                <ChangesNavigation revision={revision} editorRef={editorRef} />",
+                  "annotation": "The counter reads the editor from a ref, which is not reactive.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "code",
+          "ref": "app/scenes/Document/components/Document.tsx, app/scenes/Document/components/Header.tsx (base)"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "kind": "constraint",
+      "routeLabel": "Late editor",
+      "title": "The editor appears late, and more than once",
+      "focusNode": "rv",
+      "tag": "inferred",
+      "narration": "The editor that draws the highlighted text is loaded lazily, and it is rebuilt from scratch when the older version it compares against finishes loading. So on the first draw the header sees no editor at all, and after the rebuild it keeps looking at the old one.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "This was already documented in a code comment: the editor is remounted via `key` whenever the diff configuration or the comparison data changes.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "label": "unchanged code",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  // The editor builds its extensions once, on mount, so it has to be remounted"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // whenever the diff configuration changes. Revisions are listed without their"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // content, so the revision being compared against — and with it the Diff"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // extension — usually only arrives on a later render; without this neither"
+                },
+                {
+                  "kind": "context",
+                  "text": "  // the highlights nor the change count would ever appear."
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    comparisonData ? \"loaded\" : \"pending\",",
+                  "annotation": "The key flips when comparison data arrives → new editor instance.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "focus",
+                  "text": "        ref={mergeRefs([ref, setEditor])}",
+                  "annotation": "The editor is also published to DocumentContext, but that field is not observable yet.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "problem",
+          "heading": "What breaks",
+          "text": "Two timelines, one per symptom.",
+          "traces": [
+            [
+              {
+                "label": "header renders"
+              },
+              {
+                "label": "editorRef.current"
+              },
+              {
+                "label": "null",
+                "status": "bad"
+              },
+              {
+                "label": "count = 0"
+              },
+              {
+                "label": "counter hidden",
+                "status": "bad"
+              }
+            ],
+            [
+              {
+                "label": "editor remounted"
+              },
+              {
+                "label": "header not re-rendered",
+                "status": "bad"
+              },
+              {
+                "label": "observes old Diff",
+                "status": "bad"
+              },
+              {
+                "label": "stuck on \"N changes\"",
+                "status": "bad"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "notes": [
+        "The mechanism behind \"stuck\" (header still observing the previous Diff instance while buttons drive the new one) is the analyzer's inference from code, not described by the author."
+      ],
+      "sources": [
+        {
+          "type": "code_comment",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx: editorKey comment"
+        },
+        {
+          "type": "inference",
+          "ref": "stuck mechanism"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "kind": "change",
+      "routeLabel": "observable.ref",
+      "title": "Make the editor reactive",
+      "focusNode": "ctx",
+      "tag": "fact",
+      "narration": "The editor was already being stored in a shared place for the document, but nobody could subscribe to it. Now that slot notifies anyone who reads it, so the header redraws the moment the editor appears or is replaced.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "`editor` in `DocumentContext` becomes a MobX observable reference.",
+          "code": [
+            {
+              "file": "app/components/DocumentContext.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "context",
+                  "text": "  /** The editor instance for this document */"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  editor?: Editor;"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @observable.ref",
+                  "annotation": "`.ref` tracks only replacement of the reference; MobX won't try to make the whole ProseMirror editor deeply observable.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "added",
+                  "text": "  editor: Editor | undefined = undefined;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/components/DocumentContext.tsx#1"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/components/DocumentContext.tsx#1"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "kind": "decision",
+      "routeLabel": "countChanges",
+      "title": "The counter doesn't need the editor at all",
+      "focusNode": "diff",
+      "tag": "fact",
+      "narration": "Making the editor reactive fixes the stuck counter, but the number would still only show up after the editor loads. The key idea of this change: the number of changes depends only on the difference between two versions, not on the editor. So the counting logic is pulled out into a function that works without an editor.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "Counting is an instance method, so it needs a mounted `Diff` extension.",
+          "code": [
+            {
+              "file": "shared/editor/extensions/Diff.ts",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  public getTotalChangesCount(): number {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    const { changes } = this.options;",
+                  "annotation": "Needs an instance: only reachable through a mounted editor.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … reduce over inserted + deleted + modified …"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "The same logic moves to a static method; the instance method now delegates to it. Behaviour of counting is unchanged.",
+          "code": [
+            {
+              "file": "shared/editor/extensions/Diff.ts",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  public static countChanges("
+                },
+                {
+                  "kind": "added",
+                  "text": "    changes: readonly ExtendedChange[] | null"
+                },
+                {
+                  "kind": "added",
+                  "text": "  ): number {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    if (!changes) {"
+                },
+                {
+                  "kind": "added",
+                  "text": "      return 0;"
+                },
+                {
+                  "kind": "added",
+                  "text": "    }"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … same reduce as before …"
+                },
+                {
+                  "kind": "added",
+                  "text": "  }"
+                },
+                {
+                  "kind": "context",
+                  "text": ""
+                },
+                {
+                  "kind": "context",
+                  "text": "  public getTotalChangesCount(): number {"
+                },
+                {
+                  "kind": "removed",
+                  "text": "    const { changes } = this.options;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "    … old reduce removed …"
+                },
+                {
+                  "kind": "added",
+                  "text": "    return Diff.countChanges(this.options.changes);",
+                  "annotation": "Pure move, no new logic.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "shared/editor/extensions/Diff.ts#1",
+        "shared/editor/extensions/Diff.ts#2"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "shared/editor/extensions/Diff.ts"
+        },
+        {
+          "type": "code_comment",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx: \"so the indicator can render before the editor ... finished mounting\""
+        }
+      ]
+    },
+    {
+      "id": "s7",
+      "kind": "change",
+      "routeLabel": "Count in RevisionViewer",
+      "title": "Count where the changeset already exists",
+      "focusNode": "rv",
+      "tag": "fact",
+      "narration": "The difference between the two versions is already calculated in the component that shows the old version. Now the count is taken from that same calculation and put into the shared document state, so the header gets it immediately instead of waiting for the editor.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "How it works now",
+          "text": "The changeset is computed here and its only consumer is the `Diff` extension passed into the editor.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "base",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  const extensions = React.useMemo(() => {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    const changeset = ChangesetHelper.getChangeset(",
+                  "annotation": "The difference between the two revisions.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "        ? [new Diff({ changes: changeset?.changes })]",
+                  "annotation": "The only consumer of the changeset.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "context",
+                  "text": "  }, [revision.data, comparisonData, showChanges]);"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "The memo now returns both the extensions and the count, and the count is published to the context.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "  const extensions = React.useMemo(() => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "  const { extensions, totalChanges } = React.useMemo(() => {"
+                },
+                {
+                  "kind": "context",
+                  "text": "    const changeset = ChangesetHelper.getChangeset("
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "      totalChanges: showChanges",
+                  "annotation": "Count and highlights come from the same changeset in the same memo, so they cannot diverge.",
+                  "annotationTag": "fact"
+                },
+                {
+                  "kind": "added",
+                  "text": "        ? Diff.countChanges(changeset?.changes ?? null)"
+                },
+                {
+                  "kind": "added",
+                  "text": "        : 0,"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "  React.useEffect(() => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    setTotalChanges(totalChanges);"
+                },
+                {
+                  "kind": "added",
+                  "text": "  }, [totalChanges, setTotalChanges]);"
+                }
+              ]
+            }
+          ],
+          "traces": [
+            [
+              {
+                "label": "changeset"
+              },
+              {
+                "label": "Diff.countChanges"
+              },
+              {
+                "label": "context.totalChanges",
+                "status": "ok"
+              },
+              {
+                "label": "header updates",
+                "status": "ok"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/RevisionViewer.tsx#1",
+        "app/scenes/Document/components/RevisionViewer.tsx#2"
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/scenes/Document/components/RevisionViewer.tsx#2"
+        }
+      ]
+    },
+    {
+      "id": "s8",
+      "kind": "change",
+      "routeLabel": "Field in context",
+      "title": "A channel between the viewer and the header",
+      "focusNode": "ctx",
+      "tag": "fact",
+      "narration": "Back to the shared document state. The component that knows the count and the header that shows it aren't directly connected, so a shared observable value is the shortest path between them. The same place already carries the editor, so an existing channel is extended rather than a new one invented.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "A new observable `totalChanges` with an action setter.",
+          "code": [
+            {
+              "file": "app/components/DocumentContext.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  /** The total number of changes in the currently viewed revision diff */"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @observable"
+                },
+                {
+                  "kind": "added",
+                  "text": "  totalChanges: number = 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "added",
+                  "text": "  @action"
+                },
+                {
+                  "kind": "added",
+                  "text": "  setTotalChanges = (totalChanges: number) => {"
+                },
+                {
+                  "kind": "added",
+                  "text": "    this.totalChanges = totalChanges;"
+                },
+                {
+                  "kind": "added",
+                  "text": "  };"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/components/DocumentContext.tsx#1",
+        "app/components/DocumentContext.tsx#2"
+      ],
+      "notes": [
+        "Not chosen (inferred): passing the count down through Document and Header as props — that prop chain was the source of the problem."
+      ],
+      "sources": [
+        {
+          "type": "diff",
+          "ref": "app/components/DocumentContext.tsx#2"
+        }
+      ]
+    },
+    {
+      "id": "s9",
+      "kind": "dead_end",
+      "routeLabel": "Flicker",
+      "title": "Reset only on unmount",
+      "focusNode": "rv",
+      "tag": "commit_history",
+      "isDeadEnd": true,
+      "narration": "There was one more iteration. If the count is cleared every time it's recalculated, it drops to zero for a moment whenever you switch versions, and the header blinks. So clearing was moved to a separate step that only runs when you leave the history view.",
+      "beats": [
+        {
+          "kind": "problem",
+          "heading": "What broke in the first version",
+          "text": "Likely intermediate version: reset in the cleanup of the publishing effect.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "reconstructed": true,
+              "label": "reconstructed from commit title, not in the diff",
+              "lines": [
+                {
+                  "kind": "focus",
+                  "text": "  React.useEffect(() => {"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    setTotalChanges(totalChanges);"
+                },
+                {
+                  "kind": "focus",
+                  "text": "    return () => setTotalChanges(0);",
+                  "annotation": "Runs on every recalculation → count briefly 0 → header flickers.",
+                  "annotationTag": "inferred"
+                },
+                {
+                  "kind": "focus",
+                  "text": "  }, [totalChanges, setTotalChanges]);"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "A separate effect with stable deps runs its cleanup only on unmount.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/RevisionViewer.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  // Reset the count on unmount so it does not linger on the live document."
+                },
+                {
+                  "kind": "added",
+                  "text": "  React.useEffect(() => () => setTotalChanges(0), [setTotalChanges]);",
+                  "annotation": "Two effects instead of one: publishing and resetting have different lifetimes.",
+                  "annotationTag": "fact"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/RevisionViewer.tsx#2"
+      ],
+      "notes": [
+        "The PR was squash-merged, so the exact intermediate code is not preserved. Its shape is reconstructed from the commit title."
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Reset changes count only on unmount to avoid flicker"
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "kind": "change",
+      "routeLabel": "Header reads context",
+      "title": "The header reads from the context",
+      "focusNode": "cn",
+      "tag": "commit_history",
+      "narration": "Now the number arrives immediately, while the editor may still be loading. That's why the last commit disables the previous and next buttons until the editor is ready; otherwise they would appear together with the number but do nothing.",
+      "beats": [
+        {
+          "kind": "change",
+          "heading": "What we change",
+          "text": "No more props: the counter takes `editor` and `totalChanges` from context; navigation buttons are disabled until the Diff extension exists.",
+          "code": [
+            {
+              "file": "app/scenes/Document/components/ChangesNavigation.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "added",
+                  "text": "  const { editor, totalChanges } = useDocumentContext();"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  const diffExtension = editorRef.current?.extensions.extensions.find("
+                },
+                {
+                  "kind": "added",
+                  "text": "  const diffExtension = editor?.extensions.extensions.find("
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "  const totalChanges = diffExtension?.getTotalChangesCount() ?? 0;"
+                },
+                {
+                  "kind": "elided",
+                  "text": "…"
+                },
+                {
+                  "kind": "removed",
+                  "text": "              onClick={() => editorRef.current?.commands.nextChange()}"
+                },
+                {
+                  "kind": "added",
+                  "text": "              onClick={() => editor?.commands.nextChange()}"
+                },
+                {
+                  "kind": "added",
+                  "text": "              disabled={!diffExtension}",
+                  "annotation": "The count can now render before the editor exists; buttons must wait for it.",
+                  "annotationTag": "commit_history"
+                }
+              ]
+            },
+            {
+              "file": "app/scenes/Document/components/Header.tsx",
+              "revision": "diff",
+              "lines": [
+                {
+                  "kind": "removed",
+                  "text": "                <ChangesNavigation revision={revision} editorRef={editorRef} />"
+                },
+                {
+                  "kind": "added",
+                  "text": "                <ChangesNavigation />"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hunkIds": [
+        "app/scenes/Document/components/ChangesNavigation.tsx#1",
+        "app/scenes/Document/components/ChangesNavigation.tsx#2",
+        "app/scenes/Document/components/Header.tsx#4"
+      ],
+      "skipped": [
+        "Removed the editorRef prop, its type and unused imports from Header.tsx and Document.tsx"
+      ],
+      "sources": [
+        {
+          "type": "commit_message",
+          "ref": "Disable change nav buttons until Diff extension is available"
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "kind": "verification",
+      "routeLabel": "Proof",
+      "title": "How to check it",
+      "focusNode": "cn",
+      "tag": "unverified",
+      "narration": "This scenario has not been run yet. It's what the tool would execute on the main branch and on the pull request branch. Each line checks one of the decisions above, not just the original symptom.",
+      "beats": [
+        {
+          "kind": "current",
+          "heading": "Scenario",
+          "text": "Run on base and head; record both.",
+          "traces": [
+            [
+              {
+                "label": "open revision with ?changes"
+              },
+              {
+                "label": "\"N changes\" immediately",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "click next change"
+              },
+              {
+                "label": "\"1 of N changes\"",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "change compareTo"
+              },
+              {
+                "label": "new N, no flash of 0",
+                "status": "ok"
+              }
+            ],
+            [
+              {
+                "label": "back to live document"
+              },
+              {
+                "label": "counter gone",
+                "status": "ok"
+              }
+            ]
+          ]
+        }
+      ],
+      "hunkIds": [],
+      "sources": [
+        {
+          "type": "inference",
+          "ref": "derived from the steps above"
+        }
+      ]
+    }
+  ],
+  "skippedHunks": [
+    {
+      "hunkId": "app/scenes/Document/components/Document.tsx#1",
+      "reason": "removed editorRef prop"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#1",
+      "reason": "removed unused Editor import"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#2",
+      "reason": "removed editorRef from Props"
+    },
+    {
+      "hunkId": "app/scenes/Document/components/Header.tsx#3",
+      "reason": "removed editorRef from destructuring"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "q1",
+      "stepId": "s4",
+      "question": "After the editor remounts, does the current-change index reset, so the label shows \"N changes\" until the user clicks next? Is that intended?",
+      "why": "The index lives on the Diff instance, which is recreated on every remount.",
+      "tag": "inferred"
+    },
+    {
+      "id": "q2",
+      "stepId": "s7",
+      "question": "While comparison data is still loading, what count is published — 0, or a count against the wrong base?",
+      "why": "totalChanges is computed from comparisonData, which may be undefined on the first render.",
+      "tag": "inferred"
+    }
+  ],
+  "verification": {
+    "status": "not_run",
+    "scenario": [
+      "Open a revision with ?changes → \"N changes\" appears immediately",
+      "Click next change → \"1 of N changes\"",
+      "Change compareTo → new N without a flash of 0",
+      "Return to the live document → counter disappears"
+    ]
+  },
+  "meta": {
+    "analyzer": "manual",
+    "generatedAt": "2026-09-25T00:00:00Z",
+    "language": "en"
+  },
+  "coverage": {
+    "totalHunks": 13,
+    "explained": 9,
+    "skipped": 4,
+    "uncoveredHunkIds": []
+  }
+}</script>
+<script>
+const D=JSON.parse(document.getElementById('data').textContent);
+const S=D.steps;let i=0;
+const TAG={fact:'Fact',commit_history:'From commits',inferred:'Inferred',unverified:'Not verified'};
+const KIND={symptom:'Symptom',cause:'Cause',constraint:'Constraint',data_origin:'Where the data lives',decision:'Key decision',change:'Change',alternative_rejected:'Rejected alternative',dead_end:'Dead end',open_question:'Open question',verification:'Verification'};
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const md=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>');
+const chip=t=>'<span class="chip t-'+t+'">'+TAG[t]+'</span>';
+const nodeById=Object.fromEntries(D.graph.nodes.map(n=>[n.id,n]));
+
+document.getElementById('repo').innerHTML='<a href="'+esc(D.pr.url)+'">'+esc(D.pr.repo)+' #'+D.pr.number+'</a> by '+esc(D.pr.author);
+document.getElementById('title').textContent=D.pr.title;
+document.getElementById('stats').textContent=D.pr.filesChanged+' files changed, +'+D.pr.additions+' −'+D.pr.deletions+', '+D.pr.commitTitles.length+' commits';
+document.getElementById('summary').innerHTML='<div><b>What was broken</b>'+md(D.summary.problem)+'</div><div><b>The idea of the fix</b>'+md(D.summary.solution)+'</div>';
+
+const route=document.getElementById('route');
+route.innerHTML=S.map((s,j)=>{const n=nodeById[s.focusNode];return '<div class="rt'+(s.isDeadEnd?' dead':'')+'" tabindex="0" data-j="'+j+'"><span class="n">'+(j+1)+'</span><span><span class="l">'+esc(s.routeLabel)+'</span><span class="file">'+esc(n?n.label:'')+'</span></span></div>'}).join('');
+route.querySelectorAll('.rt').forEach(el=>{el.onclick=()=>go(+el.dataset.j);el.onkeydown=e=>{if(e.key==='Enter')go(+el.dataset.j)}});
+
+const NW=200,NH=54,CG=110,RG=46,P=28,PX=150;
+const cols=Math.max(...D.graph.nodes.map(n=>n.layout.col))+1,rows=Math.max(...D.graph.nodes.map(n=>n.layout.row))+1;
+const W=PX*2+cols*NW+(cols-1)*CG,Hh=P*2+rows*NH+(rows-1)*RG;
+const pos=n=>({x:PX+n.layout.col*(NW+CG),y:P+n.layout.row*(NH+RG)});
+const ctr=n=>{const p=pos(n);return {x:p.x+NW/2,y:p.y+NH/2}};
+function clip(a,b){const dx=b.x-a.x,dy=b.y-a.y;const t=Math.min(dx?(NW/2)/Math.abs(dx):1e9,dy?(NH/2)/Math.abs(dy):1e9);return {x:a.x+dx*t,y:a.y+dy*t}}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function drawGraph(){
+  const step=i+1,svg=document.getElementById('g');
+  svg.setAttribute('viewBox','0 0 '+W+' '+Hh);svg.setAttribute('width',W);
+  const c={ink:css('--ink'),muted:css('--muted'),faint:css('--faint'),line:css('--line'),acc:css('--accent'),accs:css('--accent-soft'),dan:css('--danger'),panel:css('--panel')};
+  let h='<defs>'+['acc','dan','faint'].map(k=>'<marker id="m-'+k+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="'+c[k]+'"/></marker>').join('')+'</defs>';
+  D.graph.edges.forEach(e=>{
+    if((e.visibleFrom&&step<e.visibleFrom)||(e.visibleUntil&&step>e.visibleUntil))return;
+    const A=ctr(nodeById[e.from]),B=ctr(nodeById[e.to]),a=clip(A,B),b=clip(B,A);
+    const col=e.problem?c.dan:e.state==='after'?c.acc:c.faint,mk=e.problem?'dan':e.state==='after'?'acc':'faint';
+    const dash=e.problem||e.state==='before'?' stroke-dasharray="6 4"':'';
+    h+='<path d="M'+a.x+' '+a.y+' L'+b.x+' '+b.y+'" stroke="'+col+'" stroke-width="1.6" fill="none"'+dash+' marker-end="url(#m-'+mk+')"/>';
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,vert=Math.abs(a.x-b.x)<2;
+    if(e.label)h+='<text x="'+(vert?mx+8:mx)+'" y="'+(vert?my+4:my-7)+'" font-size="12" font-family="IBM Plex Mono, monospace" fill="'+col+'" text-anchor="'+(vert?'start':'middle')+'">'+esc(e.label)+'</text>';
+  });
+  const visited=new Set(S.slice(0,i).map(s=>s.focusNode)),cur=S[i].focusNode;
+  D.graph.nodes.forEach(n=>{
+    if(n.visibleFrom&&step<n.visibleFrom)return;
+    const p=pos(n),on=n.id===cur,was=visited.has(n.id);
+    h+='<g><rect x="'+p.x+'" y="'+p.y+'" width="'+NW+'" height="'+NH+'" rx="7" fill="'+(on?c.accs:c.panel)+'" stroke="'+(on?c.acc:was?c.muted:c.line)+'" stroke-width="'+(on?2:1)+'"/>';
+    h+='<text x="'+(p.x+NW/2)+'" y="'+(p.y+23)+'" text-anchor="middle" font-size="14" font-weight="500" font-family="IBM Plex Sans, sans-serif" fill="'+c.ink+'">'+esc(n.label)+'</text>';
+    if(n.sublabel)h+='<text x="'+(p.x+NW/2)+'" y="'+(p.y+41)+'" text-anchor="middle" font-size="12" font-family="IBM Plex Sans, sans-serif" fill="'+c.muted+'">'+esc(n.sublabel)+'</text>';
+    h+='</g>';
+  });
+  if(i>0&&S[i-1].focusNode!==cur){
+    const A=ctr(nodeById[S[i-1].focusNode]),B=ctr(nodeById[cur]),a=clip(A,B),b=clip(B,A);
+    const mx=(a.x+b.x)/2+(b.y-a.y)*0.45,my=(a.y+b.y)/2-(b.x-a.x)*0.45;
+    h+='<path d="M'+a.x+' '+a.y+' Q'+mx+' '+my+' '+b.x+' '+b.y+'" stroke="'+(S[i].isDeadEnd?c.dan:c.acc)+'" stroke-width="2.4" fill="none" stroke-dasharray="2 5" stroke-linecap="round" marker-end="url(#m-'+(S[i].isDeadEnd?'dan':'acc')+')"/>';
+  }
+  svg.innerHTML=h;
+}
+function codeBlock(b){
+  const rev={base:'before',head:'after',diff:'change'}[b.revision]||b.revision;
+  let h='<div class="code'+(b.reconstructed?' rec':'')+'"><div class="fh"><span>'+esc(b.file)+'</span><span>'+esc(b.label||rev)+'</span></div><div class="body">';
+  b.lines.forEach(l=>{
+    const g={added:'+',removed:'−',focus:'›',elided:'',context:''}[l.kind];
+    h+='<div class="ln '+l.kind+'"><span class="g">'+g+'</span><span class="tx">'+esc(l.text||' ')+'</span></div>';
+    if(l.annotation)h+='<div class="ann"><span>↳ '+md(l.annotation)+'</span>'+(l.annotationTag&&l.annotationTag!=='fact'?chip(l.annotationTag):'')+'</div>';
+  });
+  return h+'</div></div>';
+}
+function traces(ts){return '<div class="traces">'+ts.map(t=>'<div class="trace">'+t.map((x,j)=>(j?'<i>→</i>':'')+'<span class="'+(x.status||'')+'">'+esc(x.label)+'</span>').join('')+'</div>').join('')+'</div>'}
+function render(){
+  const s=S[i];
+  let h='<div class="shead"><h2>'+(i+1)+'. '+esc(s.title)+'</h2>'+chip(s.tag)+'<span class="kind">'+KIND[s.kind]+'</span></div>';
+  h+='<div class="voice"><button class="play" id="play" aria-label="Read this step aloud">▶</button><p>'+esc(s.narration)+'</p></div>';
+  s.beats.forEach((b,k)=>{h+='<div class="beat"><h3><span class="bn">'+(k+1)+'</span>'+esc(b.heading)+'</h3><p>'+md(b.text)+'</p>';(b.code||[]).forEach(c=>h+=codeBlock(c));if(b.traces)h+=traces(b.traces);h+='</div>'});
+  const notes=(s.notes||[]).map(n=>'<div>'+md(n)+'</div>').concat((s.skipped||[]).map(n=>'<div>Skipped: '+md(n)+'</div>'));
+  if(notes.length)h+='<div class="notes">'+notes.join('')+'</div>';
+  D.openQuestions.filter(q=>q.stepId===s.id).forEach(q=>h+='<div class="q"><b>Ask the author</b> '+chip(q.tag)+'<p>'+md(q.question)+'</p><small>'+md(q.why)+'</small></div>');
+  h+='<div class="src">Sources: '+s.sources.map(x=>esc(x.type.replace('_',' '))+' — '+esc(x.ref)).join('; ')+'</div>';
+  document.getElementById('step').innerHTML=h;
+  document.getElementById('play').onclick=()=>speak(false);
+  route.querySelectorAll('.rt').forEach((el,j)=>el.classList.toggle('on',j===i));
+  drawGraph();
+}
+function go(j){if(j<0||j>=S.length)return;speechSynthesis.cancel();i=j;render();if(document.getElementById('auto').checked)speak(true)}
+function speak(chain){
+  if(!('speechSynthesis' in window))return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(S[i].narration);
+  const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith(D.meta.language||'en'));if(v)u.voice=v;
+  u.rate=1.02;
+  u.onend=()=>{if((chain||document.getElementById('auto').checked)&&i<S.length-1)setTimeout(()=>go(i+1),700)};
+  speechSynthesis.speak(u);
+}
+document.getElementById('prev').onclick=()=>go(i-1);
+document.getElementById('next').onclick=()=>go(i+1);
+document.getElementById('auto').onchange=e=>{if(e.target.checked)speak(true);else speechSynthesis.cancel()};
+document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1)});
+document.getElementById('questions').innerHTML=D.openQuestions.length?D.openQuestions.map(q=>'<div class="q" style="margin-top:0;margin-bottom:8px"><p>'+md(q.question)+'</p><small>Step '+(S.findIndex(s=>s.id===q.stepId)+1)+' · '+md(q.why)+'</small></div>').join(''):'<p style="color:var(--muted);font-size:14px">No open questions.</p>';
+const ref={};S.forEach((s,j)=>s.hunkIds.forEach(h=>(ref[h]=ref[h]||[]).push(j+1)));
+const sk=Object.fromEntries(D.skippedHunks.map(x=>[x.hunkId,x.reason]));
+let unc=0;
+document.getElementById('coverage').innerHTML=D.hunks.map(h=>{const st=ref[h.id]?'steps '+ref[h.id].join(', '):sk[h.id]?'skipped: '+esc(sk[h.id]):(unc++,'<span class="warn">not explained</span>');return '<div class="hk"><span class="f" title="'+esc(h.id)+'">'+esc(h.id.split('/').pop())+'</span><span class="s">'+st+'</span></div>'}).join('');
+document.getElementById('covh').textContent='Diff coverage: '+(D.hunks.length-unc)+' of '+D.hunks.length+' hunks accounted for';
+if('speechSynthesis' in window)speechSynthesis.onvoiceschanged=()=>{};
+render();
+</script>
+</body>
+</html>
