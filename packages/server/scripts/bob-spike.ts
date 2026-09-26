@@ -163,6 +163,8 @@ interface BobRun {
   sessionCost: number;
   toolCalls: number;
   subagents: number;
+  /** From a `{"type":"error",...}` event, if any — e.g. "The task reached the cost limit". */
+  errorMessage?: string;
 }
 
 /** Best-effort summary over an unverified event stream — see bob-shell.ts's twin. */
@@ -173,11 +175,12 @@ interface BobRun {
  * no persistent per-subagent id in the stream, so this counts spawns, not
  * distinct agents (fine: each `spawn_subagent` call is one sub-agent run).
  */
-function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents"> {
+function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents" | "errorMessage"> {
   let taskId: string | undefined;
   let sessionCost = 0;
   let toolCalls = 0;
   let subagents = 0;
+  let errorMessage: string | undefined;
   const visit = (v: unknown): void => {
     if (Array.isArray(v)) { v.forEach(visit); return; }
     if (!v || typeof v !== "object") return;
@@ -186,10 +189,15 @@ function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCos
     if (typeof o["session_costs"] === "number") sessionCost = Math.max(sessionCost, o["session_costs"] as number);
     if (typeof o["tool_calls"] === "number") toolCalls = Math.max(toolCalls, o["tool_calls"] as number);
     if (o["tool_name"] === "spawn_subagent") subagents++;
+    // Confirmed by a real --resume run: `--max-cost` is the TASK'S CUMULATIVE
+    // spend, not a per-invocation budget — resuming with a cap already below
+    // what the original run spent fails immediately with an event shaped
+    // like {"type":"error","message":"The task reached the cost limit..."}.
+    if (o["type"] === "error" && typeof o["message"] === "string") errorMessage = o["message"] as string;
     Object.values(o).forEach(visit);
   };
   events.forEach(visit);
-  return { taskId, sessionCost, toolCalls, subagents };
+  return { taskId, sessionCost, toolCalls, subagents, errorMessage };
 }
 
 /**
@@ -473,15 +481,26 @@ async function main(): Promise<void> {
       ...issues.map((e) => `- ${e}`),
     ].join("\n");
     await writeFile(path.join(runDir, "prompt.md"), prompt);
-    console.log(`• resuming task ${taskId} to fix ${issues.length} issue(s)`);
-    const maxCost = process.env.MAX_COST ?? "1";
-    await assertBudget(Number(maxCost));
+    // `--max-cost` on a `--resume` call is the TASK'S CUMULATIVE spend, not a
+    // fresh per-invocation budget — confirmed by a real repair attempt that
+    // failed instantly with "The task reached the cost limit" because the cap
+    // was below what the original run had already spent. Must be the
+    // original spend plus the actual repair allowance.
+    const originalCost: number = prevSummary.sessionCost ?? 0;
+    const repairAllowance = Number(process.env.MAX_COST ?? "1");
+    const maxCost = (originalCost + repairAllowance).toFixed(2);
+    console.log(`• resuming task ${taskId} to fix ${issues.length} issue(s) (original spend $${originalCost.toFixed(3)}, cumulative cap $${maxCost})`);
+    await assertBudget(repairAllowance);
     const run = await runBob(prompt, repoPath, maxCost, runDir, { resumeTaskId: taskId });
+    if (run.errorMessage) console.log(`• bob reported an error: ${run.errorMessage}`);
     const draft = findWalkthroughInEvents(run.events);
+    // run.sessionCost is the TASK'S NEW cumulative total; only the increment
+    // over the original run is genuinely new spend for our own ledger.
+    const repairIncrement = Math.max(0, run.sessionCost - originalCost);
     const summary: Record<string, unknown> = {
       mode, resumedFrom: src, exitCode: run.code, durationSec: Math.round(run.ms / 1000),
-      taskId: run.taskId, sessionCost: run.sessionCost, toolCalls: run.toolCalls, subagents: run.subagents,
-      walkthroughFound: !!draft,
+      taskId: run.taskId, sessionCost: run.sessionCost, repairIncrement, toolCalls: run.toolCalls, subagents: run.subagents,
+      errorMessage: run.errorMessage, walkthroughFound: !!draft,
     };
     if (draft) {
       await writeFile(path.join(runDir, "walkthrough.draft.json"), JSON.stringify(draft, null, 2));
@@ -491,9 +510,9 @@ async function main(): Promise<void> {
       }, autoSkipped);
     }
     await recordSpend({
-      pr: `${PR.repo}#${PR.number}`, mode: "repair", maxCost: Number(maxCost), actualCost: run.sessionCost,
+      pr: `${PR.repo}#${PR.number}`, mode: "repair", maxCost: repairAllowance, actualCost: repairIncrement,
       durationSec: Math.round(run.ms / 1000), toolCalls: run.toolCalls, subagents: run.subagents, repairs: 1,
-      valid: summary.valid as boolean | undefined,
+      valid: summary.valid as boolean | undefined, notes: run.errorMessage,
     });
     await writeFile(path.join(runDir, "summary.json"), JSON.stringify(summary, null, 2));
     console.log("\n" + JSON.stringify(summary, null, 2));

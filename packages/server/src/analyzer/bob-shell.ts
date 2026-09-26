@@ -165,6 +165,8 @@ export interface BobRun {
   sessionCost: number;
   toolCalls: number;
   subagents: number;
+  /** From a `{"type":"error",...}` event, if any — e.g. "The task reached the cost limit". */
+  errorMessage?: string;
 }
 
 /**
@@ -180,11 +182,12 @@ export interface BobRun {
  * no persistent per-subagent id in the stream, so this counts spawns, not
  * distinct agents (fine: each `spawn_subagent` call is one sub-agent run).
  */
-function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents"> {
+function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCost" | "toolCalls" | "subagents" | "errorMessage"> {
   let taskId: string | undefined;
   let sessionCost = 0;
   let toolCalls = 0;
   let subagents = 0;
+  let errorMessage: string | undefined;
   const visit = (v: unknown): void => {
     if (Array.isArray(v)) { v.forEach(visit); return; }
     if (!v || typeof v !== "object") return;
@@ -193,10 +196,16 @@ function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCos
     if (typeof o["session_costs"] === "number") sessionCost = Math.max(sessionCost, o["session_costs"] as number);
     if (typeof o["tool_calls"] === "number") toolCalls = Math.max(toolCalls, o["tool_calls"] as number);
     if (o["tool_name"] === "spawn_subagent") subagents++;
+    // Confirmed by a real --resume run: `--max-cost` is the TASK'S CUMULATIVE
+    // spend, not a per-invocation budget — resuming with a cap already below
+    // what the original run spent fails immediately with an event shaped
+    // like {"type":"error","message":"The task reached the cost limit..."}.
+    // Surface it, since it otherwise looks identical to a normal empty reply.
+    if (o["type"] === "error" && typeof o["message"] === "string") errorMessage = o["message"] as string;
     Object.values(o).forEach(visit);
   };
   events.forEach(visit);
-  return { taskId, sessionCost, toolCalls, subagents };
+  return { taskId, sessionCost, toolCalls, subagents, errorMessage };
 }
 
 /**
@@ -485,11 +494,18 @@ export class BobShellAnalyzer implements Analyzer {
     // gave us a task id to resume. This continues the SAME session (cheaper
     // and more accurate than a fresh analysis) rather than starting over.
     if (!check.valid && run.taskId) {
-      console.log(`[bob-shell] validation failed (${check.errors.length} issue(s)) — one repair attempt via --resume ${run.taskId}`);
+      // `--max-cost` on a `--resume` call is the TASK'S CUMULATIVE spend, not
+      // a fresh per-invocation budget — confirmed by a real repair attempt
+      // that failed instantly with "The task reached the cost limit" because
+      // the cap was below what the original run had already spent. Must be
+      // the original spend plus the actual repair allowance.
+      const repairCap = (run.sessionCost + Number(this.repairMaxCost)).toFixed(2);
+      console.log(`[bob-shell] validation failed (${check.errors.length} issue(s)) — one repair attempt via --resume ${run.taskId} (cumulative cap $${repairCap})`);
       await assertBudget(Number(this.repairMaxCost));
-      const repairRun = await repairBob(run.taskId, check.errors.slice(0, 20), repoPath, this.repairMaxCost);
+      const repairRun = await repairBob(run.taskId, check.errors.slice(0, 20), repoPath, repairCap);
       console.log(
-        `[bob-shell] repair finished in ${Math.round(repairRun.ms / 1000)}s, exit=${repairRun.code}, cost=$${repairRun.sessionCost.toFixed(3)}`
+        `[bob-shell] repair finished in ${Math.round(repairRun.ms / 1000)}s, exit=${repairRun.code}, cost=$${repairRun.sessionCost.toFixed(3)}` +
+          (repairRun.errorMessage ? `, error: ${repairRun.errorMessage}` : "")
       );
       const repaired = findWalkthroughInEvents(repairRun.events);
       if (repaired) {
@@ -500,14 +516,22 @@ export class BobShellAnalyzer implements Analyzer {
       } else {
         console.warn("[bob-shell] repair run did not return a walkthrough — keeping the original (invalid) draft");
       }
+      // repairRun.sessionCost is the TASK'S NEW cumulative total (it includes the
+      // original run's spend, since --resume continues the same task) — only the
+      // increment over the original run is genuinely new spend for our own ledger.
+      const repairIncrement = Math.max(0, repairRun.sessionCost - run.sessionCost);
       await recordSpend({
         pr: pr.repo + "#" + pr.number, mode: "repair", maxCost: Number(this.repairMaxCost),
-        actualCost: repairRun.sessionCost, durationSec: Math.round(repairRun.ms / 1000),
+        actualCost: repairIncrement, durationSec: Math.round(repairRun.ms / 1000),
         toolCalls: repairRun.toolCalls, subagents: repairRun.subagents, repairs: 1, valid: check.valid,
-        notes: repaired ? undefined : "no walkthrough in repair output",
+        notes: repairRun.errorMessage ?? (repaired ? undefined : "no walkthrough in repair output"),
       });
-      totalCost += repairRun.sessionCost;
-      toolCalls += repairRun.toolCalls;
+      // Bob's own stats are cumulative per TASK (confirmed: a failed resume
+      // attempt still reported the original run's exact tool_calls count) —
+      // so repairRun.sessionCost/toolCalls already are the new grand totals,
+      // not increments to add on top of run.sessionCost/toolCalls.
+      totalCost = repairRun.sessionCost;
+      toolCalls = repairRun.toolCalls;
       subagents = Math.max(subagents, repairRun.subagents);
     }
 

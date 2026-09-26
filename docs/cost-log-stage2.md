@@ -14,3 +14,5 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-26 15:40 | excalidraw/excalidraw#8340 | full | 8 | 1.113 | 245s | 20 | 4 | 0 | no |  |
 | 2026-09-26 15:43 | excalidraw/excalidraw#9403 | full | 6 | 0.791 | 393s | 13 | 5 | 0 | no |  |
 | 2026-09-26 15:47 | excalidraw/excalidraw#8340 | repair | 1 | 0.000 | 2s | 20 | 4 | 1 | — |  |
+| 2026-09-26 15:50 | excalidraw/excalidraw#8340 | repair | 1 | 0.000 | 2s | 20 | 4 | 1 | — |  |
+| 2026-09-26 15:58 | excalidraw/excalidraw#8340 | repair | 1 | 0.336 | 137s | 21 | 4 | 1 | yes |  |
