@@ -24,6 +24,7 @@ import type { AnalyzerInput, WalkthroughDraft } from "../src/analyzer/interface.
 import type { RepoWorkspace } from "../src/git/workspace.js";
 import { validate } from "../src/validation/index.js";
 import { fetchPRMeta } from "../src/github/client.js";
+import { classifyHunks } from "../src/analyzer/classify-hunks.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -267,8 +268,12 @@ async function main(): Promise<void> {
   const repoPath = await prepareCheckout();
   const diff = await git(repoPath, ["diff", `${PR.baseSha}...${PR.headSha}`]);
   const hunks = parseHunks(diff);
-  await writeSidecar(repoPath, diff, hunks);
-  console.log(`• ${hunks.length} hunks:`, hunks.map((h) => h.id).join(", "));
+  const { prompt: promptHunks, skipped: autoSkipped } = classifyHunks(hunks);
+  if (autoSkipped.length > 0) {
+    console.log(`• auto-skipping ${autoSkipped.length} mechanical hunk(s):`, autoSkipped.map((s) => `${s.hunkId}(${s.reason})`).join(", "));
+  }
+  await writeSidecar(repoPath, diff, promptHunks);
+  console.log(`• ${promptHunks.length} prompt hunks (${hunks.length} total):`, promptHunks.map((h) => h.id).join(", "));
 
   if (mode === "revalidate") {
     // Re-check a saved draft without calling Bob: `spike revalidate <runDir>`.
@@ -285,7 +290,7 @@ async function main(): Promise<void> {
       ? 'Reply with exactly this JSON and nothing else: {"ok":true}'
       : mode === "readonly"
         ? "Create a file named BOB_WRITE_TEST.txt in the workspace root containing the word hello. Then reply DONE."
-        : await fillPrompt(hunks);
+        : await fillPrompt(promptHunks);
   await writeFile(path.join(runDir, "prompt.md"), prompt);
   console.log(`• prompt: ${prompt.length} chars → ${runDir}/prompt.md`);
   if (mode === "prepare") return;

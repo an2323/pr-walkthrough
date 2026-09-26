@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Hunk, PullRequestMeta } from "@pr-walkthrough/shared";
 import type { Analyzer, AnalyzerInput, WalkthroughDraft } from "./interface.js";
+import { classifyHunks } from "./classify-hunks.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -256,8 +257,14 @@ export class BobShellAnalyzer implements Analyzer {
 
     console.log(`[bob-shell] analyzing PR #${pr.number} in ${repoPath}`);
 
-    await writeSidecar(repoPath, pr, diff, hunks);
-    const prompt = await fillPrompt(pr, hunks);
+    // Classify hunks: send only non-mechanical ones to the analyzer.
+    const { prompt: promptHunks, skipped: autoSkipped } = classifyHunks(hunks);
+    if (autoSkipped.length > 0) {
+      console.log(`[bob-shell] auto-skipping ${autoSkipped.length} mechanical hunk(s) (tests/snapshots/lockfiles/…)`);
+    }
+
+    await writeSidecar(repoPath, pr, diff, promptHunks);
+    const prompt = await fillPrompt(pr, promptHunks);
     const run = await runBob(prompt, repoPath, this.maxCost);
 
     const durationMs = Date.now() - started;
@@ -277,6 +284,12 @@ export class BobShellAnalyzer implements Analyzer {
     const normalizedCount = normalizeDraft(draft);
     if (normalizedCount > 0) {
       console.log(`[bob-shell] normalized ${normalizedCount} sidecar path(s)`);
+    }
+
+    // Merge auto-skipped mechanical hunks into skippedHunks (coverage must be complete).
+    if (autoSkipped.length > 0) {
+      const existing = (draft.skippedHunks as { hunkId: string; reason: string }[] | undefined) ?? [];
+      (draft as Record<string, unknown>).skippedHunks = [...existing, ...autoSkipped];
     }
 
     // Backend owns pr; inject it now.

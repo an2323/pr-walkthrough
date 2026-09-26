@@ -125,15 +125,40 @@ export function SummaryScreen({
                 </span>
               </div>
             ))}
-            {walkthrough.skippedHunks?.length > 0 && (
-              <div className="sum-item">
-                <span className="m no">·</span>
-                <span>
-                  {walkthrough.skippedHunks.length} small cleanups:{' '}
-                  {[...new Set(walkthrough.skippedHunks.map((h) => h.reason))].join('; ')}
-                </span>
-              </div>
-            )}
+            {walkthrough.skippedHunks?.length > 0 && (() => {
+              const mechanical: Record<string, number> = {};
+              const analyzerSkipped: { hunkId: string; reason: string }[] = [];
+              const MECH = new Set(['tests', 'snapshots', 'lockfile', 'translations', 'generated']);
+              for (const s of walkthrough.skippedHunks) {
+                if (MECH.has(s.reason)) mechanical[s.reason] = (mechanical[s.reason] ?? 0) + 1;
+                else analyzerSkipped.push(s);
+              }
+              const mechLines: string[] = [];
+              const tsCount = (mechanical['tests'] ?? 0) + (mechanical['snapshots'] ?? 0);
+              if (tsCount > 0) mechLines.push(`${tsCount} test and snapshot hunk${tsCount !== 1 ? 's' : ''}`);
+              for (const [r, label] of [['lockfile','lockfile'],['translations','translation'],['generated','generated']] as const) {
+                if (mechanical[r]) mechLines.push(`${mechanical[r]} ${label} hunk${mechanical[r] !== 1 ? 's' : ''}`);
+              }
+              return (
+                <>
+                  {mechLines.map((line) => (
+                    <div className="sum-item" key={line}>
+                      <span className="m no">·</span>
+                      <span>{line}</span>
+                    </div>
+                  ))}
+                  {analyzerSkipped.length > 0 && (
+                    <div className="sum-item">
+                      <span className="m no">·</span>
+                      <span>
+                        {analyzerSkipped.length} small cleanup{analyzerSkipped.length !== 1 ? 's' : ''}:{' '}
+                        {[...new Set(analyzerSkipped.map((h) => h.reason))].join('; ')}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </>
       )}
