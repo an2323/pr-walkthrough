@@ -3,7 +3,10 @@
  *
  * Routes:
  *   GET  /api/walkthroughs/:owner/:repo/:number               — serve stored walkthrough JSON
- *   POST /api/analyze  { prUrl }                              — trigger analysis pipeline
+ *   POST /api/analyze  { prUrl, force? }                      — queue an analysis job, returns { jobId }
+ *   GET  /api/jobs/:jobId                                     — current job status/result
+ *   GET  /api/jobs/:jobId/events                              — SSE stream of ProgressEvents (live)
+ *   GET  /api/runs/:owner/:repo/:number/events?speed=N         — SSE replay of a recorded run ($0 demo)
  *   GET  /api/context/:owner/:repo/:number                    — read file lines from checkout
  *   GET  /api/audio/:owner/:repo/:number/:stepId/:n.mp3       — serve/generate TTS sentence
  */
@@ -14,18 +17,22 @@ import { existsSync, createReadStream } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseHunks } from "@pr-walkthrough/shared";
+import type { ProgressEvent } from "@pr-walkthrough/shared";
 import { splitSentences, sentenceHash, generateSentenceAudio } from "../tts/elevenlabs.js";
-import { loadWalkthrough, saveWalkthrough } from "../storage.js";
-import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
-import { fetchPRMeta, parsePRUrl } from "../github/client.js";
-import { prepareWorkspace } from "../git/workspace.js";
-import { validate, checkQuality } from "../validation/index.js";
+import { loadWalkthrough } from "../storage.js";
+import { parsePRUrl } from "../github/client.js";
+import { createJob, getJob, subscribeJob, findActiveJob } from "./jobs.js";
+import { runAnalyzeJob } from "./analyze-pipeline.js";
 
-const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
+const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos"; // used by /api/context to locate a PR's worktree
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."); // repo root (src/api → 4 up)
 
 const router = Router();
+
+/** Route-param safety shared by /runs and (in spirit) /context: no path traversal via owner/repo/number. */
+function isSafePathSegment(s: string): boolean {
+  return /^[\w.-]+$/.test(s) && s !== "." && s !== "..";
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/walkthroughs/:owner/:repo/:number
@@ -54,9 +61,14 @@ router.get(
 
 // ---------------------------------------------------------------------------
 // POST /api/analyze  { prUrl: string }
+//
+// Returns { jobId } immediately (202) instead of blocking for the 3+ minutes
+// a real Bob Shell run takes (ST6c) — the pipeline itself runs detached, in
+// `runAnalyzeJob`, reporting progress through the job store. Poll
+// GET /api/jobs/:jobId or stream GET /api/jobs/:jobId/events for the result.
 // ---------------------------------------------------------------------------
 
-router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
+router.post("/analyze", (req: Request, res: Response): void => {
   const { prUrl } = req.body as { prUrl?: string };
   if (!prUrl || typeof prUrl !== "string") {
     res.status(400).json({ error: "body.prUrl is required" });
@@ -71,83 +83,194 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const analyzerType = process.env.ANALYZER ?? "cached";
-
-  // ------------------------------------------------------------------
-  // cached mode — skip GitHub fetch and workspace prep entirely
-  // ------------------------------------------------------------------
-  if (analyzerType === "cached") {
-    const cached = new CachedAnalyzer();
-    // Build a minimal AnalyzerInput so CachedAnalyzer can locate the file.
-    const minimalInput = {
-      repoPath: "",
-      baseSha: "",
-      headSha: "",
-      pr: {
-        repo: `${owner}/${repo}`,
-        number,
-        title: "",
-        url: prUrl,
-        author: "",
-        filesChanged: 0,
-        additions: 0,
-        deletions: 0,
-        commitTitles: [],
-      },
-      hunks: [],
-      diff: "",
-    };
-    try {
-      await cached.analyze(minimalInput);
-    } catch (err) {
-      res.status(404).json({ error: String(err) });
-      return;
-    }
-    const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${number}`;
-    res.json({ walkthroughUrl });
+  // Cost guard: re-attach to a running job for the same PR; in bob mode allow
+  // only one paid run at a time.
+  const samePr = findActiveJob({ owner, repo, number });
+  if (samePr) {
+    res.status(202).json({ jobId: samePr.id });
+    return;
+  }
+  const busy = (process.env.ANALYZER ?? "cached") === "bob" ? findActiveJob() : undefined;
+  if (busy) {
+    res.status(409).json({ error: `Another analysis is running (${busy.owner}/${busy.repo}#${busy.number}) — try again when it finishes`, jobId: busy.id });
     return;
   }
 
-  // ------------------------------------------------------------------
-  // bob mode — full pipeline
-  // ------------------------------------------------------------------
-  try {
-    const pr = await fetchPRMeta(owner, repo, number);
-    const repoUrl = `https://github.com/${owner}/${repo}`;
-    const workspace = await prepareWorkspace(repoUrl, pr.headSha!, pr.baseSha!, number, GIT_CACHE_DIR);
-    const diff = await workspace.diff();
-    const hunks = parseHunks(diff);
+  const force = (req.body as { force?: unknown }).force === true;
+  const job = createJob(owner, repo, number);
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  // Fire-and-forget: runAnalyzeJob catches all of its own errors and reports
+  // them through the job store, so there is nothing left to await here.
+  void runAnalyzeJob(job.id, owner, repo, number, baseUrl, { force });
 
-    const analyzer = createAnalyzer();
-    const input = {
-      repoPath: workspace.repoPath,
-      baseSha: pr.baseSha!,
-      headSha: pr.headSha!,
-      pr,
-      hunks,
-      diff,
-    };
-    const draft = await analyzer.analyze(input);
+  res.status(202).json({ jobId: job.id });
+});
 
-    const result = await validate(draft, input, workspace);
-    if (!result.valid || !result.walkthrough) {
-      console.warn(`[analyze] validation failed for ${owner}/${repo}#${number}:`, result.errors);
-      res.status(422).json({ errors: result.errors });
+// ---------------------------------------------------------------------------
+// GET /api/jobs/:jobId — current status/result snapshot (polling fallback).
+// ---------------------------------------------------------------------------
+
+router.get("/jobs/:jobId", (req: Request, res: Response): void => {
+  const job = getJob(req.params["jobId"] as string);
+  if (!job) {
+    res.status(404).json({ error: "Unknown job id" });
+    return;
+  }
+  res.json({
+    id: job.id,
+    owner: job.owner,
+    repo: job.repo,
+    number: job.number,
+    status: job.status,
+    result: job.result,
+    error: job.error,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/jobs/:jobId/events — SSE stream of ProgressEvents.
+//
+// Sends the full backlog first (so a page reload/reconnect always sees
+// everything that happened before it connected), then live events as they
+// arrive. Closes the stream once a "done"/"error" event has been sent.
+// ---------------------------------------------------------------------------
+
+router.get("/jobs/:jobId/events", (req: Request, res: Response): void => {
+  const job = getJob(req.params["jobId"] as string);
+  if (!job) {
+    res.status(404).json({ error: "Unknown job id" });
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no", // disable proxy buffering so SSE flushes immediately
+  });
+
+  let ended = false;
+  const send = (e: ProgressEvent): void => {
+    if (!ended) res.write(`data: ${JSON.stringify(e)}\n\n`);
+  };
+
+  for (const e of job.events) send(e);
+
+  if (job.status === "done" || job.status === "failed") {
+    res.end();
+    return;
+  }
+
+  const unsubscribe = subscribeJob(job.id, (e) => {
+    send(e);
+    if (e.kind === "done" || e.kind === "error") close();
+  });
+  const heartbeat = setInterval(() => {
+    if (!ended) res.write(": heartbeat\n\n");
+  }, 15_000);
+
+  // Hoisted function declaration: safe to reference above before `unsubscribe`/
+  // `heartbeat` are assigned, since `close` itself only ever runs later.
+  function close(): void {
+    if (ended) return;
+    ended = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+    res.end();
+  }
+  // `res` "close" = client went away (req "close" can fire as soon as the request body is read).
+  res.on("close", close);
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/runs/:owner/:repo/:number/events?speed=N
+//
+// SSE replay of a committed recording (data/events/{owner}/{repo}/{number}.ndjson,
+// produced offline by scripts/make-replay.ts) — demoable at $0, no Bob Shell
+// process involved. `speed` multiplies playback rate; the default spreads
+// the whole recording over ~20s regardless of how long the real run took.
+// ---------------------------------------------------------------------------
+
+const REPLAY_TARGET_MS = 20_000;
+
+router.get(
+  "/runs/:owner/:repo/:number/events",
+  async (req: Request, res: Response): Promise<void> => {
+    const owner = req.params["owner"] as string;
+    const repo = req.params["repo"] as string;
+    const number = req.params["number"] as string;
+    if (!isSafePathSegment(owner) || !isSafePathSegment(repo) || !/^\d+$/.test(number)) {
+      res.status(400).json({ error: "Invalid owner/repo/number" });
+      return;
+    }
+    const num = parseInt(number, 10);
+
+    const filePath = path.join(ROOT, "data/events", owner, repo, `${num}.ndjson`);
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: `No recorded run for ${owner}/${repo}#${num}` });
       return;
     }
 
-    await saveWalkthrough(result.walkthrough);
-    const qualityWarnings = checkQuality(result.walkthrough);
-    if (qualityWarnings.length > 0) {
-      console.log(`[analyze] ${qualityWarnings.length} quality warning(s) for ${owner}/${repo}#${number}:`, qualityWarnings.map((w) => w.code).join(", "));
+    let events: ProgressEvent[];
+    try {
+      const raw = await readFile(filePath, "utf-8");
+      events = raw
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as ProgressEvent);
+    } catch (err) {
+      res.status(500).json({ error: `Could not read recording: ${String(err)}` });
+      return;
     }
-    const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${number}`;
-    res.json({ walkthroughUrl, qualityWarnings });
-  } catch (err) {
-    console.error("[analyze] error:", err);
-    res.status(500).json({ error: String(err) });
+
+    const requestedSpeed = Number(req.query["speed"]);
+    const totalMs = events.length > 0 ? events[events.length - 1].t : 0;
+    const speed = requestedSpeed > 0 ? requestedSpeed : Math.max(1, totalMs / REPLAY_TARGET_MS);
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    // Rewrite the recorded "done" event's URL to THIS server's own walkthrough
+    // endpoint — the recording may have been made against a different host.
+    const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${num}`;
+
+    let ended = false;
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    function finish(): void {
+      if (ended) return;
+      ended = true;
+      if (timer) clearTimeout(timer);
+      res.end();
+    }
+
+    function sendNext(): void {
+      if (ended || i >= events.length) {
+        finish();
+        return;
+      }
+      const e = events[i];
+      const toSend = e.kind === "done" ? { ...e, walkthroughUrl } : e;
+      res.write(`data: ${JSON.stringify(toSend)}\n\n`);
+      const next = events[i + 1];
+      i++;
+      if (next) {
+        timer = setTimeout(sendNext, Math.max(0, (next.t - e.t) / speed));
+      } else {
+        finish();
+      }
+    }
+
+    res.on("close", finish);
+    sendNext();
   }
-});
+);
 
 // ---------------------------------------------------------------------------
 // GET /api/context/:owner/:repo/:number

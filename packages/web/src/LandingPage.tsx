@@ -15,6 +15,8 @@ interface ExampleCard {
   number: number;
   title: string;
   description: string;
+  /** Whether a recorded analysis run exists at data/events/{owner}/{repo}/{number}.ndjson (ST6c). */
+  hasReplay?: boolean;
 }
 
 const EXAMPLES: ExampleCard[] = [
@@ -24,6 +26,7 @@ const EXAMPLES: ExampleCard[] = [
     number: 10295,
     title: 'excalidraw / excalidraw #10295',
     description: 'Small fix: floating sidebar closes when the main menu opens (+19 −7)',
+    hasReplay: true,
   },
   {
     owner: 'excalidraw',
@@ -38,6 +41,7 @@ const EXAMPLES: ExampleCard[] = [
     number: 8340,
     title: 'excalidraw / excalidraw #8340',
     description: 'Large refactor: new-element drawing performance (339 hunks, mostly tests)',
+    hasReplay: true,
   },
 ];
 
@@ -62,6 +66,10 @@ function apiHref(c: ExampleCard): string {
   return `/api/walkthroughs/${c.owner}/${c.repo}/${c.number}`;
 }
 
+function replayHref(c: ExampleCard): string {
+  return `/${c.owner}/${c.repo}/${c.number}/progress?replay=1`;
+}
+
 export function LandingPage() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
@@ -77,18 +85,53 @@ export function LandingPage() {
     }
   }, []);
 
-  function handleGo() {
+  const [starting, setStarting] = useState(false);
+
+  // If the PR is already cached, jump straight to the viewer (today's
+  // behaviour). Otherwise kick off a job via POST /api/analyze and go to the
+  // live progress screen (ST6c) instead of blocking on a 3+ minute request.
+  async function handleGo() {
     const parsed = parsePRUrl(input);
     if (!parsed) {
       setError('Enter a GitHub PR URL like https://github.com/owner/repo/pull/123');
       return;
     }
     setError('');
-    window.location.href = `/${parsed.owner}/${parsed.repo}/${parsed.number}`;
+    const viewerPath = `/${parsed.owner}/${parsed.repo}/${parsed.number}`;
+
+    setStarting(true);
+    try {
+      const probe = await fetch(`/api/walkthroughs/${parsed.owner}/${parsed.repo}/${parsed.number}`, { method: 'HEAD' });
+      if (probe.ok) {
+        window.location.href = viewerPath;
+        return;
+      }
+    } catch {
+      // couldn't reach the API to check — fall through and try to start an analysis anyway
+    }
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl: input.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}) as { error?: string });
+        setError(body.error ?? `Could not start analysis (HTTP ${res.status})`);
+        setStarting(false);
+        return;
+      }
+      const { jobId } = (await res.json()) as { jobId: string };
+      window.location.href = `${viewerPath}/progress?job=${jobId}`;
+    } catch {
+      setError('Could not reach the server to start analysis.');
+      setStarting(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') handleGo();
+    if (e.key === 'Enter') void handleGo();
   }
 
   return (
@@ -110,8 +153,8 @@ export function LandingPage() {
             onKeyDown={handleKeyDown}
             aria-label="GitHub PR URL"
           />
-          <button className="v2btn primary" onClick={handleGo}>
-            Analyse →
+          <button className="v2btn primary" onClick={() => void handleGo()} disabled={starting}>
+            {starting ? 'Starting…' : 'Analyse →'}
           </button>
         </div>
         {error && <p className="landing-error">{error}</p>}
@@ -136,6 +179,11 @@ export function LandingPage() {
                     </a>
                   ) : (
                     <span className="landing-status unavailable">Not analysed yet</span>
+                  )}
+                  {card.hasReplay && (
+                    <a className="landing-card-link landing-card-link-secondary" href={replayHref(card)}>
+                      Watch the analysis →
+                    </a>
                   )}
                 </div>
               </div>

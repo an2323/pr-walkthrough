@@ -483,7 +483,9 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ### Sub-Task 6c — Live analysis: job queue + progress screen
 
-**Status:** [ ] pending · **Must** · ~2 h · 0 Bobcoins to build (replay of recorded events), one real run to demo it, if approved
+**Status:** [x] done (Sep 26) — built and verified with `ANALYZER=cached` and replays of the recorded #10295 / #8340 runs, $0. The live `ANALYZER=bob` path is wired but not yet exercised on a real run (needs the user's go-ahead to spend).
+
+**As built:** `POST /api/analyze {prUrl, force?}` → 202 `{jobId}` (re-attaches to a running job for the same PR; in bob mode only one paid run at a time → 409; an already-cached PR is served without a new run unless `force: true`). `GET /api/jobs/:id` and `GET /api/jobs/:id/events` (SSE, backlog first). `GET /api/runs/:owner/:repo/:number/events?speed=N` replays `data/events/{owner}/{repo}/{number}.ndjson`, produced by `pnpm --filter @pr-walkthrough/server make-replay <owner> <repo> <number> <runDir...>` from `data/runs/*`. Raw Bob events → `ProgressEvent` (`packages/shared/src/progress.ts`) in `analyzer/progress-normalizer.ts`, the same code for live and replay. Viewer: `ProgressScreen.tsx` at `/:owner/:repo/:number/progress?job=…|replay=1`; landing cards have "Watch the analysis →".
 
 **Intent:** Paste a PR link and watch what Bob is doing right now; at the end get the walkthrough plus its price and duration.
 
@@ -549,49 +551,20 @@ The idea: a second Bob Shell mode `pr-verifier` (read + execute; `background: tr
 
 ### Sub-Task 7 — Demo data generation and caching
 
-**Status:** [ ] pending
+**Status:** [-] mostly done — demo PRs changed from the original draft (#10013 is dropped).
 
-**Intent:** Pre-generate walkthrough JSON for the three demo PRs using Bob Shell (or manually), store them in `data/walkthroughs/`, and configure the server's `CachedAnalyzer` to serve them. This decouples the demo from live API calls and Bobcoin budget.
-
-**Expected Outcomes:**
-- `data/walkthroughs/outline/outline/13673.json` present and valid (the golden example, cleaned up to match final schema).
-- At least one Excalidraw PR walkthrough generated and stored.
-- `ANALYZER=cached` mode serves these files end-to-end through the viewer with no errors.
-- Bobcoin usage logged per generation run.
-
-**⚠️ Budget gate — do this before spending any Bobcoins on ST7:**
-```bash
-# 1. Validate the adapted golden JSON with zero cost first:
-node -e "
-  const { WalkthroughSchema } = require('./packages/shared/dist/index.js');
-  const json = require('./data/walkthroughs/outline/outline/13673.json');
-  const result = WalkthroughSchema.safeParse(json);
-  console.log(result.success ? 'VALID' : result.error.format());
-"
-# Must print: VALID before proceeding to Bob Shell generation.
-
-# 2. #10295 is ALREADY generated and valid (ST5a) — data/walkthroughs/excalidraw/excalidraw/10295.json. Do not regenerate.
-# 3. #10013 is generated only after ST10 (prompt iteration). Budget is in USD (`session_costs`); ~$46.9 left on Sep 26.
-```
-
-**✓ Verify end-to-end (after caching, zero additional cost):**
-```bash
-ANALYZER=cached pnpm dev   # starts both server and web
-# open http://localhost:5173/excalidraw/excalidraw/10295
-# check: walkthrough loads, all steps render, narration plays
-```
+**State (Sep 26):**
+- `data/walkthroughs/excalidraw/excalidraw/10295.json` — valid, ST10 iteration-2 result.
+- `data/walkthroughs/excalidraw/excalidraw/8340.json` — valid after one `--resume` repair.
+- `data/walkthroughs/outline/outline/13673.json` — golden example, local only (not in the public demo, ST6f).
+- #9403 — deferred: our stream-json reconstruction fails on its repaired answer (see `docs/cost-log-stage2.md`).
+- Replay recordings for the progress screen: `data/events/excalidraw/excalidraw/{10295,8340}.ndjson` (ST6c).
+- Every paid run is logged in `docs/cost-log-stage2.md`; stage cap $20, $10.20 spent.
 
 **Todo List:**
-1. Adapt the golden JSON (`docs/bob-brief/examples/outline-13673.walkthrough.json`) to the final schema (fill any gaps, run validation).
-2. `excalidraw/excalidraw#10295`: done in ST5a — just make sure the viewer and `CachedAnalyzer` serve it.
-3. `excalidraw/excalidraw#10013`: generate after ST10, always with `--max-cost`.
-4. Document Bobcoin cost per run in `docs/cost-log.md`.
-5. Verify `ANALYZER=cached` serves all stored walkthroughs correctly through the full stack.
-
-**Relevant Context:**
-- Brief §11: develop the analyzer prompt on `#10295` first (5 files, +19 −7).
-- Excalidraw is MIT licensed — safe to use. Verify Outline licence before including in the demo.
-- Start Bob Shell with `ANALYZER=bob` for live generation; use `ANALYZER=cached` for all demo runs.
+1. `ANALYZER=cached pnpm dev` → open #10295, #8340 and Outline; all steps render, no console errors.
+2. With the user's go-ahead only: #8340 ST10 confirmation run (~$1–2); #9403 retry once the extractor bug is root-caused.
+3. With the user's go-ahead only: regenerate ElevenLabs narration for #10295 (text changed in ST10) and generate it for #8340 (`tts:pregen`).
 
 ---
 

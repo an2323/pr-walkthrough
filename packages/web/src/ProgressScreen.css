@@ -1,0 +1,164 @@
+/* ProgressScreen.css — live/replay analysis progress (ST6c). Uses only the
+   existing color tokens from styles.css/v2.css, so light/dark just work. */
+
+.progress-screen {
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px;
+  min-height: 100%;
+  background: var(--paper);
+}
+
+.progress-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.progress-pr {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-pr-number {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.progress-elapsed {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.progress-connection-error {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--warn);
+}
+
+.progress-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.progress-stage {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+  background: var(--raised);
+}
+
+.progress-stage--done {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.progress-stage--current {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.progress-current-action {
+  font-size: 0.9rem;
+  color: var(--ink);
+  margin: 0 0 10px;
+  min-height: 1.3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-log {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--raised);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.progress-log-line {
+  font-family: var(--mono, monospace);
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.progress-done {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progress-done-summary {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--good);
+  font-weight: 600;
+}
+
+.progress-error {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.progress-error-message {
+  margin: 0;
+  color: var(--bad);
+  font-size: 0.9rem;
+}
+
+/* Stay usable at 400px width: no fixed widths above 100%, buttons stay full-width. */
+@media (max-width: 420px) {
+  .progress-card {
+    padding: 16px;
+  }
+  .progress-done .v2btn,
+  .progress-error .v2btn {
+    text-align: center;
+  }
+}

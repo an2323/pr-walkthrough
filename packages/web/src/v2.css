@@ -301,6 +301,12 @@ html, body { height: 100%; }
 .landing-card-link:hover {
   text-decoration: underline;
 }
+.landing-card-link-secondary {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-weight: 400;
+}
 .landing-status {
   font-size: 0.82rem;
 }

@@ -9,6 +9,7 @@ import { StepScreen } from './StepScreen';
 import { SummaryScreen } from './SummaryScreen';
 import { Drawer } from './Drawer';
 import { LandingPage } from './LandingPage';
+import { ProgressScreen } from './ProgressScreen';
 import { SHOW_TRY_IT } from './features';
 import './styles.css';
 import './v2.css';
@@ -51,6 +52,16 @@ export default function App() {
   const tokenRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // ---- Route: /:owner/:repo/:number/progress — live or replayed analysis (ST6c) ----
+  // Checked ahead of the walkthrough-viewer states below; useWalkthrough()'s own
+  // pathname match requires exactly 3 segments, so it never fires for this 4-segment
+  // route and stays 'idle' — no unwanted /api/walkthroughs fetch happens here.
+  const progressMatch = window.location.pathname.match(/^\/([^/]+)\/([^/]+)\/(\d+)\/progress\/?$/);
+  if (progressMatch) {
+    const [, owner, repo, numberStr] = progressMatch;
+    return <ProgressScreen owner={owner} repo={repo} number={parseInt(numberStr, 10)} />;
+  }
 
   // ---- Derived data ----
   if (walkthroughState.status === 'idle') {

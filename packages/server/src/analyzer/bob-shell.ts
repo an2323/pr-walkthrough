@@ -18,6 +18,7 @@ import { classifyHunks } from "./classify-hunks.js";
 import { gitCommonDir, type RepoWorkspace } from "../git/workspace.js";
 import { validate } from "../validation/index.js";
 import { assertBudget, recordSpend } from "./budget.js";
+import { NdjsonBuffer } from "./ndjson-buffer.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -214,12 +215,17 @@ function summarizeEvents(events: unknown[]): Pick<BobRun, "taskId" | "sessionCos
  * Pass `resumeTaskId` to continue a previous session (repair pass) instead
  * of starting a fresh one — `--mode` is omitted then, since a resumed
  * session already has one.
+ * Pass `onEvent` (ST6c) to receive each NDJSON line as it's parsed off
+ * stdout, in real time — used to drive the live progress screen. This is
+ * purely an additional tap: the buffered `stdout`/`events` on the resolved
+ * `BobRun` are still built from the complete output exactly as before, so
+ * passing `onEvent` never changes what the caller gets back.
  */
 export function runBob(
   prompt: string,
   repoPath: string,
   maxCost: string,
-  opts: { resumeTaskId?: string } = {}
+  opts: { resumeTaskId?: string; onEvent?: (e: unknown) => void } = {}
 ): Promise<BobRun> {
   const subagentsEnabled = process.env.BOB_SUBAGENTS !== "0";
   // Confirmed empirically (a $0.02 direct CLI test): `--resume` does NOT read
@@ -244,13 +250,24 @@ export function runBob(
     const child = spawn("bob", args, { cwd: repoPath, env: process.env, timeout: 600_000 });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d: Buffer) => (stdout += d));
+    // Only used to drive `opts.onEvent` live — the final `events` array below
+    // is still (re)computed from the complete `stdout`, unchanged from before.
+    const liveBuffer = opts.onEvent ? new NdjsonBuffer() : null;
+    child.stdout.on("data", (d: Buffer) => {
+      stdout += d;
+      if (liveBuffer) {
+        for (const e of liveBuffer.push(d.toString())) opts.onEvent!(e);
+      }
+    });
     child.stderr.on("data", (d: Buffer) => {
       stderr += d;
       process.stderr.write(d);
     });
     child.on("error", reject);
     child.on("close", (code) => {
+      if (liveBuffer) {
+        for (const e of liveBuffer.flush()) opts.onEvent!(e);
+      }
       const events = stdout
         .split("\n")
         .map((l) => l.trim())
@@ -265,7 +282,13 @@ export function runBob(
 }
 
 /** Resume a previous Bob Shell session to fix specific validation issues. */
-export function repairBob(taskId: string, issues: string[], repoPath: string, maxCost: string): Promise<BobRun> {
+export function repairBob(
+  taskId: string,
+  issues: string[],
+  repoPath: string,
+  maxCost: string,
+  onEvent?: (e: unknown) => void
+): Promise<BobRun> {
   const prompt = [
     "The walkthrough JSON you returned failed validation. Fix ONLY the issues below and",
     "return the complete corrected JSON object again — same rules as before: no prose,",
@@ -274,7 +297,7 @@ export function repairBob(taskId: string, issues: string[], repoPath: string, ma
     "Validation errors:",
     ...issues.map((e) => `- ${e}`),
   ].join("\n");
-  return runBob(prompt, repoPath, maxCost, { resumeTaskId: taskId });
+  return runBob(prompt, repoPath, maxCost, { resumeTaskId: taskId, onEvent });
 }
 
 // ---------------------------------------------------------------------------
@@ -421,7 +444,7 @@ export class BobShellAnalyzer implements Analyzer {
   ) {}
 
   async analyze(input: AnalyzerInput): Promise<WalkthroughDraft> {
-    const { repoPath, pr, hunks, diff } = input;
+    const { repoPath, pr, hunks, diff, onEvent } = input;
     const started = Date.now();
 
     console.log(`[bob-shell] analyzing PR #${pr.number} in ${repoPath}`);
@@ -435,7 +458,7 @@ export class BobShellAnalyzer implements Analyzer {
     await writeSidecar(repoPath, pr, diff, promptHunks);
     const prompt = await fillPrompt(pr, promptHunks);
     await assertBudget(Number(this.maxCost));
-    const run = await runBob(prompt, repoPath, this.maxCost);
+    const run = await runBob(prompt, repoPath, this.maxCost, { onEvent });
     console.log(
       `[bob-shell] run finished in ${Math.round(run.ms / 1000)}s, exit=${run.code}, ` +
         `cost=$${run.sessionCost.toFixed(3)}, tools=${run.toolCalls}, subagents=${run.subagents}`
@@ -502,7 +525,7 @@ export class BobShellAnalyzer implements Analyzer {
       const repairCap = (run.sessionCost + Number(this.repairMaxCost)).toFixed(2);
       console.log(`[bob-shell] validation failed (${check.errors.length} issue(s)) — one repair attempt via --resume ${run.taskId} (cumulative cap $${repairCap})`);
       await assertBudget(Number(this.repairMaxCost));
-      const repairRun = await repairBob(run.taskId, check.errors.slice(0, 20), repoPath, repairCap);
+      const repairRun = await repairBob(run.taskId, check.errors.slice(0, 20), repoPath, repairCap, onEvent);
       console.log(
         `[bob-shell] repair finished in ${Math.round(repairRun.ms / 1000)}s, exit=${repairRun.code}, cost=$${repairRun.sessionCost.toFixed(3)}` +
           (repairRun.errorMessage ? `, error: ${repairRun.errorMessage}` : "")

@@ -9,7 +9,8 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "spike": "tsx scripts/bob-spike.ts",
-    "tts:pregen": "tsx scripts/tts-pregen.ts"
+    "tts:pregen": "tsx scripts/tts-pregen.ts",
+    "make-replay": "tsx scripts/make-replay.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",

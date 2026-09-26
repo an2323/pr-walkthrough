@@ -49,3 +49,6 @@ export {
 
 // Hunk parsing utilities
 export { parseHunks, hunkId } from "./hunk-ids.js";
+
+// Live-analysis progress events (ST6c)
+export type { ProgressStage, ProgressEvent, ProgressEventOf } from "./progress.js";
