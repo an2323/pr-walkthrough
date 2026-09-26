@@ -548,7 +548,12 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 **Until this is done:** #10295's screenshots are the manual ones from ST6g. The "Try it in the app" chapter and the "Tried N of M scenarios" line stay **hidden** via `SHOW_TRY_IT = false` in `packages/web/src/features.ts`.
 
-**✓ Verify:** with the user's go-ahead, one verifier run on #10295 produces BASE/HEAD screenshots showing the toolbar-over-sidebar bug and its fix, with highlight boxes over the right spot; they appear in step 1 of the viewer; no dev-server process or port is left running afterwards; a second PR from Excalidraw (#8340) works without code changes, or the reason it can't is written down.
+**Testing without spending on a full analysis (Sep 26, user decision):** no full analysis runs to test this ST. The verifier is a separate step that reads an already-cached walkthrough (`data/walkthroughs/...`), so it can be run on its own: `pnpm --filter @pr-walkthrough/server verify-shots excalidraw/excalidraw#10295` — prepares the BASE/HEAD worktrees, runs only the verifier, writes `data/shots/...` and the `shots` visual. Test in this order:
+1. **$0 first:** the backend part with the Playwright fallback (worktrees, starting Excalidraw at BASE and HEAD, the #10295 scenario, screenshots, highlights, cleanup of processes/ports) — no Bob.
+2. **Then, only with the user's go-ahead for that specific run:** the same command with Bob as the verifier (`--max-cost` set low), logged in `docs/cost-log-stage2.md`.
+Wiring the verifier into the live analysis pipeline (`POST /api/analyze`) is checked with `ANALYZER=cached` + the fallback, never with a paid full run.
+
+**✓ Verify:** the $0 fallback run produces #10295's BASE/HEAD screenshots and leaves no process/port behind; then, with the user's go-ahead, one standalone verifier run on #10295 produces BASE/HEAD screenshots showing the toolbar-over-sidebar bug and its fix, with highlight boxes over the right spot; they appear in step 1 of the viewer; no dev-server process or port is left running afterwards; a second PR from Excalidraw (#8340) works without code changes, or the reason it can't is written down.
 
 ---
 
@@ -950,5 +955,5 @@ Paid runs (each needs the user's go-ahead): #8340 ST10 confirmation ~$1–2, #94
 | M7.9 | ST6g: #10295 step 1 shows before/after screenshots; map opens on demand, no label overlap | 0 |
 | M8 | All demo PRs cached; full stack demo working | #8340 confirmation ~$1–2; #9403 retry if budget allows |
 | M9 | Submission: bob_sessions, README, demo video, smoke test | 0 |
-| M9.5 | ST6e: Bob-produced before/after screenshots with highlights in step 1 (Excalidraw) | ~$3–8 per run (estimate), with the user's go-ahead |
+| M9.5 | ST6e: Bob-produced before/after screenshots with highlights in step 1 (Excalidraw) | $0 for the fallback; a standalone verifier run (no full analysis) ~$3–8 estimate, with the user's go-ahead |
 | M10 | ST11: public live analysis on Railway | per run, with the user's go-ahead |
