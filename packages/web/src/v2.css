@@ -95,6 +95,21 @@ html, body { height: 100%; }
 .ln.context .t { color: var(--faint); }
 .ln.focus { background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .ln.elided .t { color: var(--faint); font-style: italic; }
+.ln .g.cm { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; border-radius: 4px; }
+.ln .g.cm .plus { display: none; }
+.ln:hover .g.cm .gl, .ln.on .g.cm .gl, .ln .g.cm:focus-visible .gl { display: none; }
+.ln:hover .g.cm .plus, .ln.on .g.cm .plus, .ln .g.cm:focus-visible .plus { display: inline; color: #fff; }
+.ln:hover .g.cm, .ln.on .g.cm, .ln .g.cm:focus-visible { background: var(--accent); }
+@media (hover: none) { .ln .g.cm .gl:empty + .plus { display: inline; opacity: .45; } }
+.composer, .posted { position: sticky; left: 0; margin: 4px 0 8px 22px; font-family: var(--sans); white-space: normal; max-width: calc(100% - 26px); }
+.composer { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.composer textarea { font: 14px/1.5 var(--sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); color: inherit; resize: vertical; width: 100%; box-sizing: border-box; }
+.composer textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.composer-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.composer-err { font-size: 13px; color: var(--bad); }
+.posted { font-size: 13px; color: var(--good); }
+.posted a { color: var(--accent); }
+.v2btn.sm { padding: 6px 12px; font-size: 13.5px; border-radius: 8px; }
 .fold { display: block; width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer; color: var(--faint); font: italic 12px/1.9 var(--mono); padding-left: 22px; }
 .fold:hover { color: var(--accent); background: var(--accent-soft); }
 

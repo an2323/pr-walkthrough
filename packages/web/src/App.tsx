@@ -11,6 +11,7 @@ import { Drawer } from './Drawer';
 import { LandingPage } from './LandingPage';
 import { ProgressScreen } from './ProgressScreen';
 import { SHOW_TRY_IT } from './features';
+import { ReviewProvider } from './review';
 import './styles.css';
 import './v2.css';
 
@@ -313,6 +314,7 @@ function AppInner({
   const currentStep = screenIndex >= 0 && screenIndex < END ? flow[screenIndex] : null;
 
   return (
+    <ReviewProvider repo={walkthrough.pr.repo} number={walkthrough.pr.number}>
     <div className="v2app">
       <TopBarV2
         walkthrough={walkthrough}
@@ -393,5 +395,6 @@ function AppInner({
         </div>
       )}
     </div>
+    </ReviewProvider>
   );
 }

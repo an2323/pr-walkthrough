@@ -4,7 +4,9 @@
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
+import { useState } from 'react';
 import { SHOW_TRY_IT } from './features';
+import { useReview, targetLabel } from './review';
 
 interface Props {
   walkthrough: Walkthrough;
@@ -42,10 +44,29 @@ export function SummaryScreen({
   const scenarios = walkthrough.verification?.scenario ?? [];
   const tried = Object.values(verifiedItems).filter(Boolean).length;
 
+  const { status, post } = useReview();
+  const [posting, setPosting] = useState(false);
+  const [postedUrl, setPostedUrl] = useState<{ url: string; text: string } | null>(null);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  async function postQuestions() {
+    if (!comment) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      const c = await post(`Questions from the walkthrough:\n\n${comment}`);
+      setPostedUrl({ url: c.url, text: comment });
+    } catch (e) {
+      setPostError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setPosting(false);
+    }
+  }
+
   function copyComment() {
     if (!comment) return;
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(comment);
+      void navigator.clipboard.writeText(comment);
     } else {
       const pre = document.getElementById('v2-comment');
       if (pre) {
@@ -98,10 +119,26 @@ export function SummaryScreen({
         <>
           <pre className="comment" id="v2-comment">{comment}</pre>
           <div className="cta">
-            <button className="v2btn primary" onClick={copyComment}>
+            {status.enabled && (
+              <button
+                className="v2btn primary"
+                disabled={posting || postedUrl?.text === comment}
+                onClick={() => void postQuestions()}
+              >
+                {posting ? 'Posting…' : postedUrl?.text === comment ? 'Posted' : `Post to ${targetLabel(status)}`}
+              </button>
+            )}
+            <button className={`v2btn${status.enabled ? '' : ' primary'}`} onClick={copyComment}>
               Copy as review comment
             </button>
           </div>
+          {postedUrl && (
+            <p className="note">
+              Posted on GitHub —{' '}
+              <a href={postedUrl.url} target="_blank" rel="noopener noreferrer">view the comment ↗</a>
+            </p>
+          )}
+          {postError && <p className="note" style={{ color: 'var(--bad)' }}>{postError}</p>}
         </>
       ) : (
         <p className="note">

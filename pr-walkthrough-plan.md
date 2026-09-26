@@ -502,7 +502,11 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 
 ### Sub-Task 6d — GitHub round-trip: "Your review" screen
 
-**Status:** [ ] pending · **Must** · ~2–3 h · 0 Bobcoins
+**Status:** [x] done (Sep 26) — Must part built; line comment verified end-to-end on an2323/excalidraw#1. Should-haves (draft review with Submit, bot comment) not built.
+
+**As built:** `GET /api/review/:owner/:repo/:number` → `{enabled, target | reason}`; `POST /api/review/:owner/:repo/:number/comments {body, anchor?}` (`packages/server/src/github/review.ts`). A walkthrough maps to the demo PR only if it equals `GITHUB_DEMO_SOURCE` (default `excalidraw/excalidraw#10295`) **and** the demo PR's head SHA equals the walkthrough's `headSha`. CodeLines have no line numbers, so the backend finds the line in the file at base/head SHA (GitHub contents API) by text + up to 5 same-side neighbours, then checks it against the PR's `/files` patches: inside a hunk → review comment (`line`, `side` LEFT/RIGHT, `commit_id` = head); outside, not found, or a 422 → general comment via the Issues API with a quoted line and a permalink. The anchor's file must be one of the PR's hunks' files. `pnpm --filter @pr-walkthrough/server review:dryrun excalidraw excalidraw 10295` prints where every quoted line would land without posting — all #10295 lines resolve; s3's `useOutsideClick.ts` base block is outside the diff (general-comment path). Viewer: `packages/web/src/review.tsx` (`ReviewProvider`, `LineComposer`); in `CodeFold` hovering a line's gutter shows `+` → inline composer → "Post to an2323/excalidraw#1" (or "Copy comment" when posting is off); the summary screen gets "Post to …" next to "Copy as review comment". `vite.config.ts` proxy target is overridable with `API_TARGET` (used to run a second, token-less stack for the fallback check).
+
+**Verified:** line comment posted from the viewer landed at `styles.scss` line 19 RIGHT ([discussion_r4112143081](https://github.com/an2323/excalidraw/pull/1#discussion_r4112143081)); with `GITHUB_TOKEN_WRITE=` the API says `enabled: false`, POST → 503, the UI shows only copy buttons, no errors, no horizontal scroll at 375 px. Not yet exercised live: the summary "Post" (general comment) and an out-of-diff line — both go through the same Issues-API call.
 
 **Intent:** From inside the walkthrough, write a comment on a line or a question to the author, and it appears in the PR on GitHub.
 
@@ -516,8 +520,6 @@ The analyzer starts filling these in ST10; until then the viewer uses the fallba
 - Backend-only token: fine-grained PAT, "Only select repositories" → `an2323/excalidraw`, **Pull requests: Read and write** + **Issues: Read and write** (the general-comment fallback needs Issues, not just Pull requests). `.env`'s `GITHUB_TOKEN_WRITE`, never sent to the browser. Without it the button falls back to today's copy-to-clipboard. Short expiration (7–14 days) is enough for the hackathon.
 - Should: a draft review with Submit (Comment / Approve / Request changes) via `POST /pulls/{n}/reviews`.
 - Should: a bot comment on the PR linking to the walkthrough.
-
-**Waiting on:** the user is creating `GITHUB_TOKEN_WRITE` now (permissions above) and will drop it into `.env`.
 
 **✓ Verify:** a line comment and a question posted from the viewer show up on an2323/excalidraw#1 at the right line; with the token unset the UI shows the copy button and nothing errors.
 
