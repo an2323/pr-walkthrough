@@ -69,6 +69,18 @@ html, body { height: 100%; }
 .v2step-story { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .v2step-code { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .code-legend { display: flex; gap: 16px; font-size: 12px; color: var(--faint); }
+/* The story column is narrow (460px) even on a wide screen, so a flow diagram inside
+   it goes vertical unconditionally — not just under the ≤720px media query below,
+   which only fires for the whole viewport and never helped a flow that's cramped
+   only because of THIS column, not the window (the original complaint: flows got
+   clipped on a laptop-width screen with plenty of room elsewhere on the page). */
+.v2step-story .flow {
+  flex-direction: column; align-items: stretch; overflow: visible; gap: 6px;
+}
+.v2step-story .flow .node { max-width: none; }
+.v2step-story .flow .arr-h { display: none; }
+.v2step-story .flow .arr-v { display: inline; }
+.v2step-story .flow .arrow { align-self: center; line-height: 1; }
 .lg-item { display: inline-flex; align-items: center; gap: 5px; }
 .lg-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .lg-dot.lg-add { background: var(--good); }
