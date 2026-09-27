@@ -67,9 +67,10 @@ export function StepScreen({
 
   // Symptom steps describe what the user sees; their "code" is background context, not a change.
   const codeBlocks = step.kind === 'symptom' ? [] : step.beats.flatMap((b) => b.code ?? []);
+  const hasCode = codeBlocks.length > 0;
 
-  return (
-    <div className="v2card">
+  const story = (
+    <div className="v2step-story">
       <div className="v2eyebrow">
         <b>{ch}</b>
         {' · '}{stepInChapter} of {chapterTotal}
@@ -99,21 +100,6 @@ export function StepScreen({
           verifiedItems={verifiedItems}
           onVerify={onVerify}
         />
-      )}
-
-      {codeBlocks.length > 0 && (
-        <div className="visual code-stack">
-          {codeBlocks.map((block, i) => (
-            <CodeFold
-              key={i}
-              block={block}
-              prRepo={pr.repo}
-              baseSha={pr.baseSha}
-              headSha={pr.headSha}
-              prUrl={pr.url}
-            />
-          ))}
-        </div>
       )}
 
       {SHOW_CHECKS && p.check && (
@@ -150,6 +136,35 @@ export function StepScreen({
         <button className="link-btn" onClick={onOpenDrawer}>
           How the analysis got here
         </button>
+      </div>
+    </div>
+  );
+
+  if (!hasCode) {
+    return <div className="v2step">{story}</div>;
+  }
+
+  return (
+    <div className="v2step has-code">
+      {story}
+      <div className="v2step-code">
+        <div className="visual code-stack">
+          {codeBlocks.map((block, i) => (
+            <CodeFold
+              key={i}
+              block={block}
+              prRepo={pr.repo}
+              baseSha={pr.baseSha}
+              headSha={pr.headSha}
+              prUrl={pr.url}
+            />
+          ))}
+        </div>
+        <div className="code-legend">
+          <span className="lg-item"><span className="lg-dot lg-add" />added</span>
+          <span className="lg-item"><span className="lg-dot lg-del" />removed</span>
+          <span className="lg-item"><span className="lg-dot lg-focus" />look here</span>
+        </div>
       </div>
     </div>
   );

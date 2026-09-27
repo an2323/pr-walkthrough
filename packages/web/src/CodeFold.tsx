@@ -41,8 +41,18 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
 
   const lineRow = (l: CodeLine, k: number) => {
     const canComment = commentable && l.kind !== 'elided';
+    // Row tint follows `change` (a diff fact) — `focus` (the analyzer's own "look
+    // here" judgement) is layered on as a left accent bar instead of overriding
+    // that colour, so a genuinely-changed line the analyzer only marked `focus`
+    // still reads as changed (see CodeFold.tsx's glyphFor/glyphClassFor above).
+    const rowClass = [
+      isAdded(l) ? 'ln-added' : isRemoved(l) ? 'ln-removed' : l.kind === 'context' ? 'ln-context' : '',
+      l.kind === 'focus' ? 'ln-focus' : '',
+      l.kind === 'elided' ? 'ln-elided' : '',
+    ].filter(Boolean).join(' ');
     return (
-      <div className={`ln ${l.kind}${composing === k ? ' on' : ''}`} key={`ln-${k}`}>
+      <div className={`ln ${rowClass}${composing === k ? ' on' : ''}`} key={`ln-${k}`}>
+        <span className="lno">{l.n ?? ''}</span>
         {canComment ? (
           <button
             className="g cm"
@@ -50,11 +60,11 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
             aria-label="Comment on this line"
             onClick={() => setComposing(composing === k ? null : k)}
           >
-            <span className="gl">{glyph[l.kind] ?? ''}</span>
+            <span className={`gl ${glyphClassFor(l)}`}>{glyphFor(l)}</span>
             <span className="plus">+</span>
           </button>
         ) : (
-          <span className="g">{glyph[l.kind] ?? ''}</span>
+          <span className={`g ${glyphClassFor(l)}`}>{glyphFor(l)}</span>
         )}
         <span className="t" dangerouslySetInnerHTML={{ __html: esc(l.text) }} />
       </div>
@@ -94,14 +104,24 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
     return false;
   });
 
+  // Backend-computed from the diff (validation/line-numbers.ts) — independent of
+  // the analyzer's own `kind`, which is a "look here" judgement, not a reliable
+  // record of what the PR changed (a real run marked genuinely-changed lines
+  // `focus` and never marked one true `removed`). Falls back to `kind` for
+  // blocks generated before that backfill (reconstructed, or older cached data).
+  const hasChangeData = L.some((l) => l.change !== undefined);
+  const isAdded = (l: CodeLine) => (hasChangeData ? l.change === 'added' : l.kind === 'added');
+  const isRemoved = (l: CodeLine) => (hasChangeData ? l.change === 'removed' : l.kind === 'removed');
+
+  const firstLineNumber = L.find((l) => l.kind === 'focus' && l.n !== undefined)?.n ?? L.find((l) => l.n !== undefined)?.n;
   const sha = block.revision === 'base' ? baseSha : headSha;
   const ghUrl = sha
-    ? `https://github.com/${prRepo}/blob/${sha}/${block.file}`
+    ? `https://github.com/${prRepo}/blob/${sha}/${block.file}${firstLineNumber ? `#L${firstLineNumber}` : ''}`
     : `${prUrl}/files`;
 
   const filename = block.file.split('/').pop() ?? block.file;
-  const nAdded = L.filter((l) => l.kind === 'added').length;
-  const nRemoved = L.filter((l) => l.kind === 'removed').length;
+  const nAdded = L.filter(isAdded).length;
+  const nRemoved = L.filter(isRemoved).length;
   let diffLabel = '';
   if (nAdded || nRemoved) {
     diffLabel = `+${nAdded} −${nRemoved}`;
@@ -109,7 +129,18 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
     diffLabel = block.revision === 'base' ? 'before the change' : block.revision === 'head' ? 'after the change' : '';
   }
 
-  const glyph: Record<string, string> = { added: '+', removed: '−', focus: '›' };
+  const glyphFor = (l: CodeLine): string => {
+    if (isAdded(l)) return '+';
+    if (isRemoved(l)) return '−';
+    if (l.kind === 'focus') return '›';
+    return '';
+  };
+  const glyphClassFor = (l: CodeLine): string => {
+    if (isAdded(l)) return 'g-add';
+    if (isRemoved(l)) return 'g-del';
+    if (l.kind === 'focus') return 'g-focus';
+    return '';
+  };
 
   // Build the rows: either lines or fold buttons
   const rows: ReactElement[] = [];
