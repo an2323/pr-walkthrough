@@ -288,7 +288,7 @@
       "check": "`informMutation=true` is the default, so any call site that omits the flag still bumps the version. All the new call sites explicitly pass `false`.",
       "focusNode": "dragEl",
       "tag": "fact",
-      "narration": "The connection between drawing and repainting runs through a single parameter in `mutateElement`. When that parameter is true — which it was by default — the scene increments its nonce, and anything that watches the nonce (including the static canvas) re-renders. Suppressing that flag for in-progress mutations is the core fix.",
+      "narration": "The connection between drawing and repainting runs through a single flag passed whenever an element changes. When that flag says the change should be announced — which it did by default — the scene bumps its version number, and anything watching that number, including the static canvas, re-renders. Suppressing that flag for in-progress changes is the core fix.",
       "beats": [
         {
           "kind": "problem",
@@ -340,7 +340,7 @@
       "check": "The default is `true`, matching the old behavior for any caller that doesn't pass the flag. All new call sites during drawing explicitly pass `false` or `informMutation` from their own parameter.",
       "focusNode": "dragEl",
       "tag": "fact",
-      "narration": "The function that adjusts an element's geometry as you drag it is refactored to accept a named option bag, and a new `informMutation` flag is added with a default of `true` for backward compatibility. Every call site that runs during active drawing now passes `false` for that flag.",
+      "narration": "The function that adjusts an element's geometry as you drag it is refactored to accept a named set of options, including a new flag for whether to announce the change, defaulting to true for backward compatibility. Every call site that runs during active drawing now turns that flag off.",
       "beats": [
         {
           "kind": "change",
@@ -521,7 +521,7 @@
       "say": "Suppressing the scene version bump means the static canvas no longer re-renders during drawing — but the user still needs to see the element being drawn. A new, lightweight canvas component is overlaid for exactly this purpose: it renders only the one element currently being created.",
       "focusNode": "newCanvas",
       "tag": "fact",
-      "narration": "Once mutations stop bumping the scene version, the static canvas won't show the drawing in progress. The solution is to add a second canvas layer that sits on top of the static canvas and renders only the single element being drawn. This canvas mounts when `newElement` enters state and unmounts when creation is done.",
+      "narration": "Once in-progress changes stop bumping the scene version, the static canvas won't show the drawing as it happens. The fix adds a second canvas layer on top of the static one that renders only the single element currently being drawn. This layer appears while that element is being created and disappears once it's done.",
       "beats": [
         {
           "kind": "change",
@@ -725,7 +725,7 @@
       "check": "The comment in the code notes that the first render of `newElement` will always bust the memoization cache. That's expected but worth confirming doesn't cause a flicker on first stroke.",
       "focusNode": "renderer",
       "tag": "fact",
-      "narration": "The renderer that builds the list of elements for the static canvas is extended with a `newElementId` parameter. Any element whose ID matches that is excluded from the map. This means the static canvas never shows the in-progress element, while the new canvas always does.",
+      "narration": "The code that builds the list of elements for the static canvas is extended to take the id of the element currently being drawn. Any element with that id is left out of the list. This means the static canvas never shows the in-progress element, while the new top layer always does.",
       "beats": [
         {
           "kind": "change",
@@ -894,7 +894,7 @@
       "say": "Because mutations during drawing no longer bump the scene version, a single explicit scene update is needed at the end to incorporate the finished element into the static canvas. This replaces the cascade of updates that used to happen on every move.",
       "focusNode": "scene",
       "tag": "fact",
-      "narration": "Since the static canvas is no longer updated during drawing, the system needs to do one deliberate update at the moment the element is committed — when the pointer goes up or when the element creation is finalized. Several pointer-up handlers now call `scene.triggerUpdate()` after setting `newElement` back to null.",
+      "narration": "Since the static canvas is no longer updated while drawing, the system needs one deliberate update at the moment the element is finished — when the pointer goes up. Several of those handlers now explicitly tell the scene to update right after clearing the in-progress element.",
       "beats": [
         {
           "kind": "change",
@@ -1050,7 +1050,7 @@
       "minor": true,
       "focusNode": "app",
       "tag": "fact",
-      "narration": "The old `editingElement` field served double duty: it tracked both text editing and linear element editing during creation. Now that `newElement` covers the creation case, `editingElement` is renamed to `editingTextElement` and is only ever set when a text element is being typed into. This makes the pointer-blocking and rendering logic simpler.",
+      "narration": "A single field used to serve two purposes: tracking both text editing and shape editing during creation. Now that a dedicated marker covers the creation case, that field is renamed and only ever set while a text element is being typed into. This makes the surrounding logic simpler.",
       "beats": [
         {
           "kind": "current",
@@ -1235,7 +1235,7 @@
       "say": "In the collaboration Portal, image-status updates were sent unconditionally on every broadcast tick. This PR adds a check: if no element's status actually changed, the `updateScene` call is skipped entirely, avoiding a spurious scene-version bump during collaborative sessions.",
       "focusNode": "app",
       "tag": "fact",
-      "narration": "The collaboration layer has a timer that marks image elements as 'saved' after upload. Before this PR it called `updateScene` unconditionally, which bumped the scene version even when nothing changed. Now it checks whether any element was actually modified and skips the call if not.",
+      "narration": "The collaboration layer has a timer that marks image elements as 'saved' after upload. Before this PR it always told the scene to update, which bumped the version even when nothing had changed. Now it checks whether any element was actually modified and skips the update if not.",
       "beats": [
         {
           "kind": "current",
@@ -1463,7 +1463,7 @@
       "minor": true,
       "focusNode": "dragEl",
       "tag": "fact",
-      "narration": "A small but necessary detail: the free-draw element factory now accepts an optional initial pressures array. This allows the element created at pointer-down to carry the first pressure reading, consistent with how subsequent points accumulate pressures during the move events.",
+      "narration": "A small but necessary detail: the code that creates a new free-draw element now accepts an optional starting set of pressure readings. This lets the element created the moment you press down carry that first reading, consistent with how later points accumulate pressure as you move.",
       "beats": [
         {
           "kind": "change",
@@ -1582,7 +1582,7 @@
       "say": "The helper that decides which elements should be targeted by property-change actions (fill color, stroke, etc.) used to only check `editingElement`. Now it also checks `newElement`, so toolbar actions applied during drawing affect the element being drawn.",
       "focusNode": "app",
       "tag": "fact",
-      "narration": "The helper that decides which element an action should target — for example changing the stroke color while drawing — previously relied on `editingElement`. Since that field is now text-only, `newElement` is added as a fallback so actions still work on the shape being drawn.",
+      "narration": "The helper that decides which element an action should target — for example changing the stroke color while drawing — previously relied on the shared editing field. Since that field is now text-only, the dedicated in-progress marker is added as a fallback so actions still work on the shape being drawn.",
       "beats": [
         {
           "kind": "change",

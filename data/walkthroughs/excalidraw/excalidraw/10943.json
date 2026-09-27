@@ -152,7 +152,7 @@
       "say": "The visible popup box was a plain inner div, not the element Radix tracks. Radix only corrects the position of its own element, so the inner box still overflowed.",
       "focusNode": "popovercontent",
       "tag": "fact",
-      "narration": "Radix Popover places its content element in the DOM and watches its bounding box to decide whether to flip or shift the popup to avoid the viewport edge. Before this change, the Radix element had no visual appearance of its own — all the background, border, and padding belonged to a plain inner div. Because Radix only repositions its own element, it was nudging an invisible box while the real visible box kept overflowing. The measurement confirms this: at BASE the picker element's computed position is absolute and it carries no Radix data-side attribute, meaning Radix's tracking never reached the visible surface.",
+      "narration": "Radix Popover places its content element in the DOM and watches its bounding box to decide whether to flip or shift the popup to avoid the viewport edge. Before this change, the popup's visual box was a separate, plain inner layer with no connection to that tracked element. Because Radix only repositions its own element, it was nudging an invisible box while the real visible box kept overflowing.",
       "beats": [
         {
           "kind": "current",
@@ -276,7 +276,7 @@
       "say": "Simply removing the absolute positioning leaves the visual styling on a wrapper that Radix still does not measure. The right fix is to collapse the two layers into one — so the next step does exactly that.",
       "focusNode": "pickerdiv",
       "tag": "fact",
-      "narration": "You might think just removing position absolute from the inner div would fix the overflow. The ablation confirms it does not: applying only the CSS removal to the base still reports the bug present. The core problem is the two-layer structure itself — Radix measures the outer element it owns, while the visual popup lives on the inner div. The right fix is to make those two elements one.",
+      "narration": "You might think just removing that stray positioning rule from the inner layer would fix the overflow. It does not, on its own: the core problem is the two-layer structure itself, where Radix measures one element while the visible popup lives on another. The right fix is to make those two layers one, which the next step does.",
       "beats": [
         {
           "kind": "current",
@@ -355,7 +355,7 @@
       "say": "The picker class and all visual styling move directly onto the Radix element, and the inner wrapper div is deleted. Ablation confirms this single change is sufficient to fix the overflow.",
       "focusNode": "popovercontent",
       "tag": "fact",
-      "narration": "The fix collapses two elements into one: the class name, dialog role, and alignment offset all move onto the Radix element directly, and the inner wrapper is gone. Now when Radix decides the popup needs to shift, it moves the visible surface itself. The ablation confirms this change alone is sufficient — applying only it to the base code fixes the bug. At the fixed version, the picker carries Radix's own tracking marker, proof that Radix now sees the right element.",
+      "narration": "The fix collapses two elements into one: the class name, dialog role, and alignment all move onto the element Radix actually tracks, and the separate inner layer is gone. Now when Radix decides the popup needs to shift, it moves the visible surface itself, and that alone is enough to fix the overflow.",
       "beats": [
         {
           "kind": "change",
@@ -487,7 +487,7 @@
       "focusNode": "iconpicker_scss",
       "tag": "fact",
       "minor": true,
-      "narration": "With the inner wrapper gone, its position-absolute CSS rule would do nothing useful. Leaving it in place would be harmless, but cleaning it up keeps the stylesheet consistent. The ablation measurement confirms that applying this CSS change alone to the base code does not fix the overflow — the real fix is the DOM restructure in the previous step.",
+      "narration": "With the inner layer deleted, its old positioning rule in the stylesheet no longer does anything useful. Leaving it in place would be harmless, but removing it keeps the stylesheet consistent. It is cleanup, not the fix itself.",
       "beats": [
         {
           "kind": "change",
@@ -568,7 +568,7 @@
       "say": "The picker previously opened to the right on phones. Whether this was a deliberate UX choice or a workaround for the overflow is untested — the app did not build when this hunk was applied in isolation.",
       "focusNode": "iconpicker",
       "tag": "inferred",
-      "narration": "Before this PR, on mobile the picker was configured to open to the right of its trigger rather than below it, with a smaller gap. This could have been a workaround for the same overflow bug on small screens, or a deliberate mobile UX choice. The ablation could not produce a verdict for this hunk because the app failed to build when it was applied in isolation, so whether it is needed for the fix, or is independent cleanup, is not measured.",
+      "narration": "Before this PR, on mobile the picker was configured to open to the right of its trigger rather than below it, with a smaller gap. Whether that was a deliberate design choice or just a workaround for the same overflow bug is not clear from the change itself.",
       "beats": [
         {
           "kind": "current",

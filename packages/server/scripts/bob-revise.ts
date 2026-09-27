@@ -133,6 +133,12 @@ Rewrite ONLY the steps whose claims the table above contradicts:
   table, or the viewport/scenario tested doesn't cover what the step claims — e.g. a mobile-only claim
   tested only at desktop width), leave the step tagged "inferred" and say in \`notes\` that it is
   untested by this measurement — do not guess a verdict for it.
+- \`say\` and \`notes\` may cite the evidence ("confirmed by testing this change on its own", a value
+  from the measurement, etc.) — that is what they are for. \`narration\` must NEVER mention the
+  ablation, the measurement, or how any claim was checked — no "ablation", "confirms", "the
+  measurement shows", or similar. It is a plain, spoken explanation of the change itself, exactly like
+  every other step's narration; rewrite it to state the (now evidence-backed) conclusion directly, the
+  same way you would if you had simply known it from the start.
 Leave every step the evidence does NOT contradict exactly as it is.
 
 Return the COMPLETE corrected JSON object again — same rules as the original analysis: no prose, no

@@ -99,6 +99,20 @@ describe("checkQuality", () => {
     expect(codes).toContain("narration-too-long");
   });
 
+  it("flags narration that mentions how a claim was checked instead of just stating it", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep({ narration: "The ablation confirms this change alone is sufficient to fix it.", check: "x" })],
+    });
+    expect(checkQuality(w).map((x) => x.code)).toContain("narration-mentions-process");
+  });
+
+  it("does not flag plain narration that states the conclusion directly", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep({ narration: "This change on its own is enough to fix the overflow.", check: "x" })],
+    });
+    expect(checkQuality(w).map((x) => x.code)).not.toContain("narration-mentions-process");
+  });
+
   it("flags a headline longer than 9 words", () => {
     const w = makeWalkthrough({ steps: [makeStep({ headline: "one two three four five six seven eight nine ten", check: "x" })] });
     expect(checkQuality(w).map((x) => x.code)).toContain("headline-too-long");

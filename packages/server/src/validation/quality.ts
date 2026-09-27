@@ -22,6 +22,8 @@ const BACKTICK = /`[^`]+`/;
 const CAMEL_OR_PASCAL = /\b[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*\b|\b[A-Z][a-z0-9]+[A-Z][a-zA-Z0-9]*\b/;
 const CODE_FILE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|scss|css|json|py|go|rs|java|rb|kt|swift|yml|yaml|md)\b/i;
 const SNAKE_CASE = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/;
+/** Narration must state a conclusion, never how it was checked (ST12's evidence loop). */
+const PROCESS_WORDS = /\b(ablation|the measurement|measurement confirms|the backend (verified|confirmed)|verification confirms)\b/i;
 const PATH_SEGMENT = /\b[\w.-]+\/[\w.-]+\b/;
 
 /** Best-effort, deliberately over-eager — false positives are cheap for a warning a human reads. */
@@ -118,6 +120,11 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       const sentences = sentenceCount(step.narration);
       if (sentences > 4) {
         warn("narration-too-long", `Step ${step.id}'s narration has ${sentences} sentences (limit 4).`, step.id);
+      }
+      // ST12 evidence loop (bob-revise.ts): narration must read like every other
+      // step's — the listener isn't told how a claim was checked.
+      if (PROCESS_WORDS.test(step.narration)) {
+        warn("narration-mentions-process", `Step ${step.id}'s narration mentions how a claim was checked (e.g. "ablation", "confirms") instead of just stating it: "${step.narration}"`, step.id);
       }
     }
 

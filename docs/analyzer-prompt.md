@@ -135,7 +135,12 @@ Do not annotate imports, renames, types or boilerplate.
   voice reads it, and `useOutsideClick` comes out as noise. Bad: "Without the
   attribute, `onClickOutside` fires and closes the menu." Good: "Without that marker,
   the menu treats the tap on its own button as a click outside, and closes itself."
-  Count the sentences: more than 4 is too long.
+  Count the sentences: more than 4 is too long. **Never mention how a claim was
+  checked** — no "ablation", "measurement confirms", "the backend verified", or any
+  other reference to the analysis process itself. The listener hears a plain
+  explanation of the change, not a report on how it was produced; evidence for a
+  claim belongs in `say`/`notes`, never spoken. Bad: "The ablation confirms this
+  change alone is sufficient." Good: "This change on its own is enough to fix it."
 - `text` and `annotation`: precise, may use identifiers in backticks.
 
 ## Honesty tags (mandatory)
