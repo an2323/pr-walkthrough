@@ -19,9 +19,6 @@ interface Props {
   walkthrough: Walkthrough;
   plain: PlainData;
   flow: Step[];
-  onStart: () => void;
-  onListenAll: () => void;
-  onOpenMap?: () => void;
 }
 
 function HeroStats({ walkthrough, plain, flow }: Pick<Props, 'walkthrough' | 'plain' | 'flow'>) {
@@ -40,7 +37,7 @@ function HeroStats({ walkthrough, plain, flow }: Pick<Props, 'walkthrough' | 'pl
   );
 }
 
-export function StartScreen({ walkthrough, plain, flow, onStart, onListenAll, onOpenMap }: Props) {
+export function StartScreen({ walkthrough, plain, flow }: Props) {
   const pr = walkthrough.pr;
   const shots = walkthrough.shots;
   const [owner, repo] = (pr.repo ?? '/').split('/');
@@ -73,22 +70,9 @@ export function StartScreen({ walkthrough, plain, flow, onStart, onListenAll, on
 
       {SHOW_HERO_STATS && <HeroStats walkthrough={walkthrough} plain={plain} flow={flow} />}
 
-      <div className="cta">
-        <button className="v2btn primary" onClick={onStart}>
-          Start →
-        </button>
-        <button className="v2btn" onClick={onListenAll}>
-          ▶ Listen instead
-        </button>
-      </div>
-
-      {onOpenMap && (
-        <p className="note" style={{ marginTop: 4 }}>
-          <button type="button" className="link-btn" onClick={onOpenMap}>
-            How the pieces connect
-          </button>
-        </p>
-      )}
+      {/* Start / Listen live in the persistent bottom bar (BottomBarV2), and "How the
+          pieces connect" in the persistent top bar (TopBarV2's Diagram button) — both
+          already visible on this screen, so this card doesn't repeat them. */}
 
       <p className="note" style={{ marginTop: 4 }}>
         {pr.repo} #{pr.number} · {pr.filesChanged} files · +{pr.additions} −{pr.deletions}

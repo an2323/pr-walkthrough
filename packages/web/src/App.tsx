@@ -360,9 +360,6 @@ function AppInner({
             walkthrough={walkthrough}
             plain={plain}
             flow={flow}
-            onStart={() => go(0)}
-            onListenAll={() => { go(0); listen(true); }}
-            onOpenMap={openMap}
           />
         )}
 

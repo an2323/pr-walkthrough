@@ -18,13 +18,15 @@ interface ShotImageProps {
   repo: string;
   number: number;
   onOpen: (side: Side) => void;
+  /** Override the Before/After caption — e.g. "Now" on the summary screen. */
+  label?: string;
 }
 
-export function ShotImage({ shots, side, owner, repo, number, onOpen }: ShotImageProps) {
+export function ShotImage({ shots, side, owner, repo, number, onOpen, label }: ShotImageProps) {
   const tone = side === 'before' ? 'bad' : 'good';
   return (
     <figure className="shot-frame">
-      <figcaption className={`shot-cap shot-cap--${tone}`}>{LABEL[side]}</figcaption>
+      <figcaption className={`shot-cap shot-cap--${tone}`}>{label ?? LABEL[side]}</figcaption>
       <button
         type="button"
         className="shot-img-wrap"

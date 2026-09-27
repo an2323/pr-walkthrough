@@ -8,6 +8,7 @@ import type { PlainData } from './v2types';
 import { useState } from 'react';
 import { SHOW_TRY_IT, SHOW_CHECKS } from './features';
 import { useReview, targetLabel } from './review';
+import { ShotImage, ShotLightbox } from './ShotsVisual';
 
 interface Props {
   walkthrough: Walkthrough;
@@ -85,6 +86,10 @@ export function SummaryScreen({
   }
 
   const prUrl = walkthrough.pr.url;
+  const shots = walkthrough.shots;
+  const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
+  const [shotOpen, setShotOpen] = useState(false);
+  const coverage = walkthrough.coverage;
 
   return (
     <div className="v2card">
@@ -95,6 +100,27 @@ export function SummaryScreen({
         <p className="v2say"><span className="outro-label">Problem</span> {plain.problem}</p>
         <p className="v2say"><span className="outro-label">Fix</span> {plain.fix}</p>
       </div>
+
+      {shots && (
+        <ShotImage
+          shots={shots}
+          side="after"
+          owner={owner}
+          repo={repo}
+          number={walkthrough.pr.number}
+          onOpen={() => setShotOpen(true)}
+          label="Now"
+        />
+      )}
+      {shots && shotOpen && (
+        <ShotLightbox shots={shots} side="after" owner={owner} repo={repo} number={walkthrough.pr.number} onClose={() => setShotOpen(false)} />
+      )}
+
+      {coverage && (
+        <p className="note">
+          {coverage.explained + coverage.skipped} of {coverage.totalHunks} hunks accounted for: {coverage.explained} explained, {coverage.skipped} skipped.
+        </p>
+      )}
 
       {SHOW_CHECKS && withCheck.length > 0 && (
         <div className="sum-list">
