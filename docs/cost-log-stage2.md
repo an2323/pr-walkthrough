@@ -29,3 +29,6 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-26 23:17 | excalidraw/excalidraw#10943 | revise | 1 | 0.857 | 75s | 19 | 1 | 0 | yes | revised from ablation evidence (+ a mechanical elided-line fix, not from Bob) |
 | 2026-09-27 08:12 | excalidraw/excalidraw#10295 | full | 4 | 2.262 | 418s | 26 | 2 | 0 | no |  |
 | 2026-09-27 08:13 | excalidraw/excalidraw#10295 | repair | 1 | 0.164 | 102s | 26 | 2 | 1 | no |  |
+| 2026-09-27 08:22 | excalidraw/excalidraw#10295 | full | 4 | 3.751 | 325s | 40 | 2 | 0 | no |  |
+| 2026-09-27 08:24 | excalidraw/excalidraw#10295 | repair | 1 | 0.163 | 66s | 40 | 2 | 1 | no |  |
+| 2026-09-27 08:26 | excalidraw/excalidraw#10295 | repair | 0.6 | 0.340 | 81s | 41 | 2 | 1 | yes | targeted stitch fix |
