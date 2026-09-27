@@ -28,7 +28,9 @@ const EXAMPLES: ExampleCard[] = [
     repo: 'excalidraw',
     number: 10943,
     primary: true,
-    hasReplay: true,
+    // No recorded run to replay yet — its original live analysis hit the disk-full
+    // incident right as it tried to persist progress.ndjson (see cost-log-stage2.md).
+    hasReplay: false,
   },
   {
     owner: 'excalidraw',
