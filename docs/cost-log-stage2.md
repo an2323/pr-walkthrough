@@ -27,3 +27,5 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-26 23:09 | excalidraw/excalidraw#10943 | revise | 1 | 0.201 | 80s | 15 | 1 | 0 | no | step s6 beat 1 block 0 line 2: quoted lines 1 and 2 of packages/excalidraw/components/IconPicker.tsx are not adjacent in the file (line 251 then 256) with no "elided" line between them — the reader is shown stitched-together code as one continuous piece |
 | 2026-09-26 23:13 | excalidraw/excalidraw#10943 | revise | 2 | 0.702 | 93s | 17 | 1 | 1 | no | step s6 beat 1 block 0 line 2: quoted lines 1 and 2 of packages/excalidraw/components/IconPicker.tsx are not adjacent in the file (line 251 then 256) with no "elided" line between them — the reader is shown stitched-together code as one continuous piece |
 | 2026-09-26 23:17 | excalidraw/excalidraw#10943 | revise | 1 | 0.857 | 75s | 19 | 1 | 0 | yes | revised from ablation evidence (+ a mechanical elided-line fix, not from Bob) |
+| 2026-09-27 08:12 | excalidraw/excalidraw#10295 | full | 4 | 2.262 | 418s | 26 | 2 | 0 | no |  |
+| 2026-09-27 08:13 | excalidraw/excalidraw#10295 | repair | 1 | 0.164 | 102s | 26 | 2 | 1 | no |  |
