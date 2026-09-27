@@ -1,19 +1,22 @@
 /**
  * LandingPage — shown at "/" when no PR URL is present in the path.
  *
- * Static demo: primary CTA for #10295, quieter secondary for #8340.
- * Non-static: GitHub PR URL input that starts analysis.
+ * Static demo: cards for the cached walkthroughs only. Non-static: a GitHub PR
+ * URL input that starts a live analysis (ST6c).
+ *
+ * Cards show real numbers (cost, duration, sub-agents) fetched from each
+ * walkthrough's own JSON — not a hand-written blurb that can drift from what
+ * the run actually did.
  */
 
 import { useState, useEffect } from 'react';
-import { STATIC, walkthroughUrl } from './staticMode';
+import type { Walkthrough } from '@pr-walkthrough/shared';
+import { STATIC, walkthroughUrl, shotUrl } from './staticMode';
 
 interface ExampleCard {
   owner: string;
   repo: string;
   number: number;
-  title: string;
-  description: string;
   primary?: boolean;
   /** Whether a recorded analysis run exists at data/events/{owner}/{repo}/{number}.ndjson (ST6c). */
   hasReplay?: boolean;
@@ -23,18 +26,20 @@ const EXAMPLES: ExampleCard[] = [
   {
     owner: 'excalidraw',
     repo: 'excalidraw',
-    number: 10295,
-    title: 'excalidraw / excalidraw #10295',
-    description: 'Small fix: floating sidebar closes when the main menu opens (+19 −7)',
+    number: 10943,
     primary: true,
     hasReplay: true,
   },
   {
     owner: 'excalidraw',
     repo: 'excalidraw',
+    number: 10295,
+    hasReplay: true,
+  },
+  {
+    owner: 'excalidraw',
+    repo: 'excalidraw',
     number: 8340,
-    title: 'excalidraw / excalidraw #8340',
-    description: 'Large refactor: new-element drawing performance (339 hunks, mostly tests)',
     hasReplay: true,
   },
 ];
@@ -64,18 +69,35 @@ function replayHref(c: ExampleCard): string {
   return `/${c.owner}/${c.repo}/${c.number}/progress?replay=1`;
 }
 
+function fmtCost(usd?: number): string | null {
+  return usd === undefined ? null : `$${usd.toFixed(2)}`;
+}
+function fmtDuration(ms?: number): string | null {
+  if (ms === undefined) return null;
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+const HOW_IT_WORKS = [
+  { n: '1', t: 'Bob reads the PR', d: 'The diff, the commit history, and any file in the repo it needs — not just the changed lines.' },
+  { n: '2', t: 'Bob checks its own story', d: 'It starts the app at both versions and re-tests which changes the fix actually needs, instead of only guessing from the code.' },
+  { n: '3', t: 'You get a walkthrough', d: 'Ordered by reasoning, narrated, with the evidence attached to every step that has it.' },
+];
+
 export function LandingPage() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
-  const [availability, setAvailability] = useState<Record<string, boolean | null>>({});
+  const [cards, setCards] = useState<Record<string, Walkthrough | null | undefined>>({});
 
-  // Probe the API for each example card on mount.
+  // Fetch each example's own JSON once (undefined = loading, null = unavailable) — the
+  // card's numbers and title come from here, never a hand-written description.
   useEffect(() => {
     for (const card of EXAMPLES) {
       const key = cardHref(card);
-      fetch(apiHref(card), { method: 'HEAD' })
-        .then((res) => setAvailability((prev) => ({ ...prev, [key]: res.ok })))
-        .catch(() => setAvailability((prev) => ({ ...prev, [key]: false })));
+      fetch(apiHref(card))
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((wt: Walkthrough) => setCards((prev) => ({ ...prev, [key]: wt })))
+        .catch(() => setCards((prev) => ({ ...prev, [key]: null })));
     }
   }, []);
 
@@ -130,8 +152,18 @@ export function LandingPage() {
 
   return (
     <div className="landing">
+      <nav className="landing-nav">
+        <span className="landing-brand">PR Walkthrough</span>
+        <span className="landing-nav-links">
+          <a href="#how-it-works">How it works</a>
+          <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
+            GitHub ↗
+          </a>
+        </span>
+      </nav>
+
       <div className="landing-hero">
-        <h1 className="landing-title">PR Walkthrough</h1>
+        <h1 className="landing-title">Stop reverse-engineering pull requests.<br />Let Bob walk you through them.</h1>
         {STATIC ? (
           <>
             <p className="landing-sub">
@@ -173,22 +205,45 @@ export function LandingPage() {
         <div className="landing-cards">
           {EXAMPLES.map((card) => {
             const key = cardHref(card);
-            const ready = availability[key];   // true | false | undefined (loading)
-            if (STATIC && ready === false) return null;
+            const wt = cards[key]; // undefined = loading, null = unavailable, else the JSON
+            if (STATIC && wt === null) return null;
+            const cost = fmtCost(wt?.meta.run?.costUsd);
+            const dur = fmtDuration(wt?.meta.run?.durationMs);
+            const subagents = wt?.meta.run?.subagents;
+            const thumb = wt?.shots?.before;
             return (
               <div className={`landing-card${card.primary ? ' landing-card-primary' : ''}`} key={key}>
-                <div className="landing-card-title">{card.title}</div>
-                <div className="landing-card-desc">{card.description}</div>
+                {thumb && (
+                  <img className="landing-card-thumb" src={shotUrl(card.owner, card.repo, card.number, thumb.src)} alt="" />
+                )}
+                <div className="landing-card-title">
+                  {card.owner}/{card.repo} #{card.number}
+                  {wt?.plain?.title ? ` — ${wt.plain.title}` : ''}
+                </div>
+                {wt === undefined ? (
+                  <div className="landing-card-desc">Loading…</div>
+                ) : wt === null ? (
+                  <div className="landing-card-desc landing-status unavailable">Not analysed yet</div>
+                ) : (
+                  <>
+                    <div className="landing-card-desc">{wt.plain?.problem}</div>
+                    <div className="landing-card-meta">
+                      {cost && <span>{cost}</span>}
+                      {dur && <span>{dur}</span>}
+                      {subagents !== undefined && <span>{subagents} sub-agent{subagents === 1 ? '' : 's'}</span>}
+                      {wt.shots?.by === 'bob-verifier' && <span className="landing-card-badge">screenshots by Bob</span>}
+                      {wt.verification?.ablation && <span className="landing-card-badge">evidence-checked</span>}
+                    </div>
+                  </>
+                )}
                 <div className="landing-card-footer">
-                  {ready === undefined ? (
+                  {wt === undefined ? (
                     <span className="landing-status loading">Checking…</span>
-                  ) : ready ? (
+                  ) : wt ? (
                     <a className={`landing-card-link${card.primary ? ' landing-card-cta' : ''}`} href={key}>
                       Open walkthrough →
                     </a>
-                  ) : (
-                    <span className="landing-status unavailable">Not analysed yet</span>
-                  )}
+                  ) : null}
                   {card.hasReplay && (
                     <a className="landing-card-link landing-card-link-secondary" href={replayHref(card)}>
                       Watch the analysis →
@@ -198,6 +253,19 @@ export function LandingPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="landing-how" id="how-it-works">
+        <h2 className="landing-examples-h">How it works</h2>
+        <div className="landing-how-steps">
+          {HOW_IT_WORKS.map((s) => (
+            <div className="landing-how-step" key={s.n}>
+              <span className="landing-how-n">{s.n}</span>
+              <div className="landing-how-t">{s.t}</div>
+              <div className="landing-how-d">{s.d}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

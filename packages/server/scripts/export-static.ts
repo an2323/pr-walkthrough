@@ -21,7 +21,7 @@ import { splitSentences, sentenceHash } from "../src/tts/elevenlabs.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const ALLOWED_OWNERS = new Set(["excalidraw"]);
-const DEFAULT_PRS = ["excalidraw/excalidraw#10295", "excalidraw/excalidraw#8340"];
+const DEFAULT_PRS = ["excalidraw/excalidraw#10295", "excalidraw/excalidraw#8340", "excalidraw/excalidraw#10943"];
 
 const args = process.argv.slice(2);
 const outDir = path.resolve(args[0] ?? path.join(ROOT, "packages/web/dist"));
