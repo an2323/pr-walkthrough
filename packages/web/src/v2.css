@@ -1,7 +1,21 @@
 /* v2.css — Ported faithfully from docs/prototypes/walkthrough-ux-v2.html */
 
-/* Extra CSS vars used by v2 that aren't in styles.css */
+/* Extra CSS vars used by v2 that aren't in styles.css. Dark is the default
+   (see styles.css's :root for why) — light is the `[data-theme="light"]` opt-in. */
 :root {
+  --raised: #252525;
+  --shadow: 0 1px 4px rgba(0,0,0,.32);
+  --good: #42be65;
+  --good-soft: #0e2a17;
+  --bad: #fa4d56;
+  --bad-soft: #3a0c0f;
+  --warn: #f1c21b;
+  --warn-soft: #3a2f05;
+  --add: rgba(66, 190, 101, 0.14);
+  --del: rgba(250, 77, 86, 0.13);
+}
+
+:root[data-theme="light"] {
   --raised: #f0f2f5;
   --shadow: 0 1px 4px rgba(0,0,0,.08);
   --good: #198038;
@@ -12,21 +26,6 @@
   --warn-soft: #fcf4d6;
   --add: rgba(25, 128, 56, 0.11);
   --del: rgba(218, 30, 40, 0.09);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --raised: #252525;
-    --shadow: 0 1px 4px rgba(0,0,0,.32);
-    --good: #42be65;
-    --good-soft: #0e2a17;
-    --bad: #fa4d56;
-    --bad-soft: #3a0c0f;
-    --warn: #f1c21b;
-    --warn-soft: #3a2f05;
-    --add: rgba(66, 190, 101, 0.14);
-    --del: rgba(250, 77, 86, 0.13);
-  }
 }
 
 /* ---- App shell ---- */

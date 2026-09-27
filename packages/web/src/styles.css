@@ -1,6 +1,43 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400&display=swap');
 
+/*
+ * Dark is the product's default theme (chosen after the 26.09 design review),
+ * regardless of the visitor's OS setting — a judge on a light-OS machine
+ * should still see the intended design, not the light fallback. `[data-theme
+ * ="light"]` is the only opt-in for light (nothing currently sets it; it's
+ * here so a future toggle can). Keep this block's variable set and every
+ * selector in sync with the matching block in v2.css.
+ */
 :root {
+  color-scheme: dark;
+  --paper: #121212;
+  --panel: #1c1c1c;
+  --ink: #f4f4f4;
+  --muted: #b0b7c0;
+  --faint: #7d8590;
+  --line: #333a42;
+  --accent: #78a9ff;
+  --accent-soft: #0f2a5c;
+  --fact: #42be65;
+  --fact-soft: #0e2a17;
+  --commit: #be95ff;
+  --commit-soft: #2a1747;
+  --inferred: #f1c21b;
+  --inferred-soft: #3a2f05;
+  --unverified: #c6c6c6;
+  --unverified-soft: #2c2c2c;
+  --danger: #fa4d56;
+  --danger-soft: #3a0c0f;
+  --add: rgba(66, 190, 101, 0.14);
+  --del: rgba(250, 77, 86, 0.13);
+  --focus: rgba(241, 194, 27, 0.16);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif: "IBM Plex Serif", Georgia, serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
   --paper: #f4f5f7;
   --panel: #ffffff;
   --ink: #161616;
@@ -22,35 +59,6 @@
   --add: rgba(25, 128, 56, 0.11);
   --del: rgba(218, 30, 40, 0.09);
   --focus: rgba(241, 194, 27, 0.22);
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --serif: "IBM Plex Serif", Georgia, serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #121212;
-    --panel: #1c1c1c;
-    --ink: #f4f4f4;
-    --muted: #b0b7c0;
-    --faint: #7d8590;
-    --line: #333a42;
-    --accent: #78a9ff;
-    --accent-soft: #0f2a5c;
-    --fact: #42be65;
-    --fact-soft: #0e2a17;
-    --commit: #be95ff;
-    --commit-soft: #2a1747;
-    --inferred: #f1c21b;
-    --inferred-soft: #3a2f05;
-    --unverified: #c6c6c6;
-    --unverified-soft: #2c2c2c;
-    --danger: #fa4d56;
-    --danger-soft: #3a0c0f;
-    --add: rgba(66, 190, 101, 0.14);
-    --del: rgba(250, 77, 86, 0.13);
-    --focus: rgba(241, 194, 27, 0.16);
-  }
 }
 
 *, *::before, *::after {
