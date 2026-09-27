@@ -121,11 +121,13 @@ html, body { height: 100%; }
 .symptoms-with-shots {
   grid-template-columns: 1fr;
   gap: 16px;
+  align-items: stretch;
 }
 @media (min-width: 720px) {
   .symptoms-with-shots { grid-template-columns: 1fr 1fr; gap: 18px; }
 }
 .symptoms-with-shots .symptom-card {
+  display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
@@ -133,6 +135,34 @@ html, body { height: 100%; }
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px;
+  transition: border-color 0.2s ease, outline-color 0.2s ease;
+  height: 100%;
+  box-sizing: border-box;
+}
+.symptoms-with-shots .symptom-card .symptom-copy {
+  margin-top: auto;
+}
+.symptoms li.is-narrating,
+.symptoms-with-shots .symptom-card.is-narrating {
+  border-color: color-mix(in srgb, var(--bad) 70%, var(--line));
+  background: color-mix(in srgb, var(--bad-soft) 55%, var(--raised));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 35%, transparent);
+  outline: none;
+  animation: symptom-narrate-pulse 1s ease-out;
+}
+@keyframes symptom-narrate-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 55%, transparent);
+    transform: scale(1);
+  }
+  35% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--bad) 30%, transparent);
+    transform: scale(1.015);
+  }
+  100% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 35%, transparent);
+    transform: scale(1);
+  }
 }
 .symptom-shot {
   display: block;

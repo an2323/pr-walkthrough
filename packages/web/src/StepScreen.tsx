@@ -38,6 +38,8 @@ interface Props {
   verifiedItems: Record<number, boolean>;
   onVerify: (k: number, v: boolean) => void;
   onOpenDrawer: () => void;
+  /** Index of the narration sentence currently playing, or null when silent. */
+  narrationSentence?: number | null;
 }
 
 export function StepScreen({
@@ -55,6 +57,7 @@ export function StepScreen({
   verifiedItems,
   onVerify,
   onOpenDrawer,
+  narrationSentence = null,
 }: Props) {
   const p = plain.steps[step.id];
   const pr = walkthrough.pr;
@@ -99,6 +102,7 @@ export function StepScreen({
           edgesPlain={plain.edges}
           verifiedItems={verifiedItems}
           onVerify={onVerify}
+          narrationSentence={narrationSentence}
         />
       )}
 

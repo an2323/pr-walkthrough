@@ -156,7 +156,8 @@
         "type": "symptoms",
         "items": [
           {
-            "text": "Top-right toolbar sits above the open sidebar in the stacking order (z-index 80 vs 100) \u2014 hard to see in a still; next step shows the layers"
+            "text": "Top-right toolbar sits above the open sidebar in the stacking order (z-index 80 vs 100)",
+            "src": "symptom-toolbar-before.png"
           },
           {
             "text": "On mobile, opening the main menu leaves the sidebar covering it",
@@ -168,7 +169,7 @@
         {
           "kind": "current",
           "heading": "How it works now",
-          "text": "The sidebar gets its stacking order from `--zIndex-ui-library`, which sits at 80 \u2014 below the top-bar layer at 100.",
+          "text": "The sidebar gets its stacking order from `--zIndex-ui-library`, which sits at 80 — below the top-bar layer at 100.",
           "code": [
             {
               "file": "packages/excalidraw/css/styles.scss",
@@ -183,7 +184,7 @@
                 {
                   "kind": "focus",
                   "text": "  --zIndex-ui-library: 80;",
-                  "annotation": "Sidebar z-index \u2014 below the top bar at 100.",
+                  "annotation": "Sidebar z-index — below the top bar at 100.",
                   "annotationTag": "fact",
                   "n": 16,
                   "change": "removed"
@@ -201,7 +202,7 @@
                 {
                   "kind": "focus",
                   "text": "  --zIndex-ui-top: 100;",
-                  "annotation": "Top-bar (toolbar buttons) z-index \u2014 above the sidebar.",
+                  "annotation": "Top-bar (toolbar buttons) z-index — above the sidebar.",
                   "annotationTag": "fact",
                   "n": 19
                 }
@@ -277,7 +278,7 @@
                 },
                 {
                   "kind": "elided",
-                  "text": "\u2026"
+                  "text": "…"
                 },
                 {
                   "kind": "focus",
@@ -361,7 +362,7 @@
       "say": "Once the sidebar is above everything, the main menu opens behind it on mobile. The sidebar has to close when the menu button is pressed, so the next steps address that.",
       "focusNode": "mainmenu",
       "tag": "fact",
-      "narration": "Raising the sidebar above the toolbar fixes the desktop stacking \u2014 but it creates a new problem on mobile. The main menu renders inside the top-bar layer, which is now below the sidebar. If the sidebar is already open when the user taps the hamburger, the menu appears behind the sidebar. The fix must ensure that tapping the menu button closes the floating sidebar first.",
+      "narration": "Raising the sidebar above the toolbar fixes the desktop stacking — but it creates a new problem on mobile. The main menu renders inside the top-bar layer, which is now below the sidebar. If the sidebar is already open when the user taps the hamburger, the menu appears behind the sidebar. The fix must ensure that tapping the menu button closes the floating sidebar first.",
       "beats": [
         {
           "kind": "current",
@@ -371,7 +372,7 @@
             {
               "file": "packages/excalidraw/components/main-menu/MainMenu.tsx",
               "revision": "head",
-              "label": "main menu toggle \u2014 no sidebar close",
+              "label": "main menu toggle — no sidebar close",
               "lines": [
                 {
                   "kind": "context",
@@ -417,7 +418,7 @@
       "sources": [
         {
           "type": "pr_description",
-          "ref": "close sidebar when not docked when opening main menu \u2014 necessary otherwise the previous change would make the main menu below the sidebar on mobile"
+          "ref": "close sidebar when not docked when opening main menu — necessary otherwise the previous change would make the main menu below the sidebar on mobile"
         },
         {
           "type": "code",
@@ -464,7 +465,7 @@
                 {
                   "kind": "focus",
                   "text": "          if ((event.target as Element).closest(\".sidebar-trigger\")) {",
-                  "annotation": "The library toggle button is deliberately excluded \u2014 clicking it should not close the sidebar via this path.",
+                  "annotation": "The library toggle button is deliberately excluded — clicking it should not close the sidebar via this path.",
                   "annotationTag": "fact",
                   "n": 117
                 },
@@ -526,7 +527,7 @@
         {
           "kind": "current",
           "heading": "Global escape hatch in the hook",
-          "text": "Any click landing on or inside a `[data-prevent-outside-click]` element is silently ignored by `useOutsideClick` \u2014 for every listener in the app.",
+          "text": "Any click landing on or inside a `[data-prevent-outside-click]` element is silently ignored by `useOutsideClick` — for every listener in the app.",
           "code": [
             {
               "file": "packages/excalidraw/hooks/useOutsideClick.ts",
@@ -582,7 +583,7 @@
                 {
                   "kind": "focus",
                   "text": "      data-prevent-outside-click",
-                  "annotation": "Clicking this button never reached any outside-click callback \u2014 including the sidebar's.",
+                  "annotation": "Clicking this button never reached any outside-click callback — including the sidebar's.",
                   "annotationTag": "fact",
                   "n": 27,
                   "change": "removed"
@@ -620,10 +621,10 @@
       "routeLabel": "Container check",
       "title": "Replace the global attribute with a DOM containment check",
       "headline": "Menu content checks containment instead of a marker",
-      "say": "A wrapper is added around both the button and the open content. When an outside-click fires, the content checks whether the click landed inside that wrapper \u2014 if so, it is really an inside click on the trigger button.",
+      "say": "A wrapper is added around both the button and the open content. When an outside-click fires, the content checks whether the click landed inside that wrapper — if so, it is really an inside click on the trigger button.",
       "focusNode": "dropdown",
       "tag": "fact",
-      "narration": "The replacement wraps the menu's trigger and its open content in one container. When an outside click is detected, the handler checks whether the click came from inside that container. A click on the trigger itself is ignored, so opening the menu doesn't immediately close it. Any other click \u2014 the canvas, the sidebar, anywhere else \u2014 now closes the sidebar as before.",
+      "narration": "The replacement wraps the menu's trigger and its open content in one container. When an outside click is detected, the handler checks whether the click came from inside that container. A click on the trigger itself is ignored, so opening the menu doesn't immediately close it. Any other click — the canvas, the sidebar, anywhere else — now closes the sidebar as before.",
       "beats": [
         {
           "kind": "change",
@@ -827,7 +828,7 @@
         {
           "kind": "change",
           "heading": "What we remove",
-          "text": "`data-prevent-outside-click` is dropped from the trigger button. The containment check in `DropdownMenuContent` now serves the same purpose \u2014 but only for the menu's own outside-click callback, not globally.",
+          "text": "`data-prevent-outside-click` is dropped from the trigger button. The containment check in `DropdownMenuContent` now serves the same purpose — but only for the menu's own outside-click callback, not globally.",
           "code": [
             {
               "file": "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx",
@@ -890,7 +891,7 @@
       "question": "The class name 'dropdown-menu-container' is already used inside DropdownMenuContent as the inner Island/Stack.Col wrapper. Does `closest('.dropdown-menu-container')` from the menuRef potentially match the inner element instead of the outer wrapper added by DropdownMenu, and could that break the trigger-button check?",
       "why": "DropdownMenuContent renders a child with className='dropdown-menu-container' (lines 84 and 87 of DropdownMenuContent.tsx), and the outer DropdownMenu now also wraps everything in a div with that same class name.",
       "tag": "inferred",
-      "short": "Inner and outer elements share the same class \u2014 does closest() find the right one?"
+      "short": "Inner and outer elements share the same class — does closest() find the right one?"
     },
     {
       "id": "q2",

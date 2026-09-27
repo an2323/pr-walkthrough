@@ -49,6 +49,8 @@ export default function App() {
 
   // ---- Voice state ----
   const [isPlaying, setIsPlaying] = useState(false);
+  /** Which narration sentence is currently speaking (drives symptom-card highlights). */
+  const [narrationCue, setNarrationCue] = useState<{ stepId: string; sentence: number } | null>(null);
   const tokenRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -118,6 +120,8 @@ export default function App() {
       setMapFocusNode={setMapFocusNode}
       isPlaying={isPlaying}
       setIsPlaying={setIsPlaying}
+      narrationCue={narrationCue}
+      setNarrationCue={setNarrationCue}
       tokenRef={tokenRef}
       timerRef={timerRef}
       audioRef={audioRef}
@@ -151,6 +155,8 @@ interface InnerProps {
   setMapFocusNode: (v: string | undefined) => void;
   isPlaying: boolean;
   setIsPlaying: (v: boolean) => void;
+  narrationCue: { stepId: string; sentence: number } | null;
+  setNarrationCue: (v: { stepId: string; sentence: number } | null) => void;
   tokenRef: React.MutableRefObject<number>;
   timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
@@ -179,6 +185,8 @@ function AppInner({
   setMapFocusNode,
   isPlaying,
   setIsPlaying,
+  narrationCue,
+  setNarrationCue,
   tokenRef,
   timerRef,
   audioRef,
@@ -193,13 +201,14 @@ function AppInner({
   const stopListen = useCallback(() => {
     tokenRef.current++;
     setIsPlaying(false);
+    setNarrationCue(null);
     if (timerRef.current) clearTimeout(timerRef.current);
     try {
       audioRef.current?.pause();
       audioRef.current = null;
     } catch {}
     try { synth?.cancel(); } catch {}
-  }, [synth, audioRef, setIsPlaying, tokenRef, timerRef]);
+  }, [synth, audioRef, setIsPlaying, setNarrationCue, tokenRef, timerRef]);
 
   const go = useCallback((i: number, keepAudio = false) => {
     const clamped = Math.max(-1, Math.min(END, i));
@@ -254,6 +263,7 @@ function AppInner({
 
       for (let i = 0; i < sentences.length; i++) {
         if (t !== tokenRef.current) return;
+        setNarrationCue({ stepId: step.id, sentence: i });
         const url = audioUrl(ownerStr, repoStr, prNumber, step.id, i);
         // Try the recorded audio first; if there is none (no key, missing static file) fall back to Web Speech.
         let usedApi = false;
@@ -272,6 +282,7 @@ function AppInner({
       }
 
       if (t !== tokenRef.current) return;
+      setNarrationCue(null);
       if (all && idx < END - 1) {
         const next = idx + 1;
         screenIndexRef.current = next;
@@ -283,7 +294,7 @@ function AppInner({
     };
 
     void speakStep(startIdx);
-  }, [flow, END, synth, audioRef, setIsPlaying, setScreenIndex, tokenRef, timerRef, walkthrough.meta, walkthrough.pr]);
+  }, [flow, END, synth, audioRef, setIsPlaying, setNarrationCue, setScreenIndex, tokenRef, timerRef, walkthrough.meta, walkthrough.pr]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -392,6 +403,9 @@ function AppInner({
               verifiedItems={verifiedItems}
               onVerify={(k, v) => setVerifiedItems((prev) => ({ ...prev, [k]: v }))}
               onOpenDrawer={() => setDrawerStepId(currentStep.id)}
+              narrationSentence={
+                narrationCue?.stepId === currentStep.id ? narrationCue.sentence : null
+              }
             />
           );
         })()}

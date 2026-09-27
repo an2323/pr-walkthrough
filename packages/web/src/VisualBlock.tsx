@@ -23,11 +23,14 @@ function SymptomsVisual({
   owner,
   repo,
   number,
+  activeIndex,
 }: {
   items: SymptomItem[];
   owner: string;
   repo: string;
   number: number;
+  /** Which symptom card the current narration sentence maps to (or null). */
+  activeIndex: number | null;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const withShots = items.some((i) => symptomSrc(i));
@@ -38,8 +41,14 @@ function SymptomsVisual({
         {items.map((item, i) => {
           const text = symptomText(item);
           const src = symptomSrc(item);
+          const narrating = activeIndex === i;
           return (
-            <li key={i} className={src ? 'symptom-card' : undefined}>
+            <li
+              key={i}
+              className={[src ? 'symptom-card' : undefined, narrating ? 'is-narrating' : undefined]
+                .filter(Boolean)
+                .join(' ') || undefined}
+            >
               {src && (
                 <button
                   type="button"
@@ -82,6 +91,20 @@ interface Props {
   edgesPlain?: Record<string, string>;
   verifiedItems: Record<number, boolean>;
   onVerify: (k: number, v: boolean) => void;
+  /** Index of the narration sentence currently playing, or null when silent. */
+  narrationSentence?: number | null;
+}
+
+/**
+ * Map a narration sentence index → symptom card index.
+ * Typical pattern (as on #10295 s1): intro → one sentence per symptom → wrap-up.
+ * So sentence 1 highlights item 0, sentence 2 → item 1, etc.
+ */
+function symptomIndexForSentence(sentence: number | null | undefined, itemCount: number): number | null {
+  if (sentence == null || itemCount <= 0) return null;
+  const idx = sentence - 1;
+  if (idx < 0 || idx >= itemCount) return null;
+  return idx;
 }
 
 function edgeSet(
@@ -108,6 +131,7 @@ export function VisualBlock({
   edgesPlain = {},
   verifiedItems,
   onVerify,
+  narrationSentence = null,
 }: Props) {
   if (visual.type === 'symptoms') {
     const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
@@ -117,6 +141,7 @@ export function VisualBlock({
         owner={owner}
         repo={repo}
         number={walkthrough.pr.number}
+        activeIndex={symptomIndexForSentence(narrationSentence, visual.items.length)}
       />
     );
   }
