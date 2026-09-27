@@ -47,7 +47,7 @@ import { NdjsonBuffer } from "../analyzer/ndjson-buffer.js";
 import { ensureWorktree } from "../git/workspace.js";
 import { annotateShot } from "../shots/annotate.js";
 import { ensureInstalled, scrubbedEnv, startApp, type AppServer } from "./app-servers.js";
-import { normalizeHighlights } from "./highlights.js";
+import { normalizeHighlights, maybeCropRegion } from "./highlights.js";
 import { recipeFor, type AppRecipe } from "./recipes.js";
 import { runRepro } from "./ablation.js";
 
@@ -323,9 +323,10 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     }
 
     const hl = normalizeHighlights(beforeResult.highlights ?? [], afterResult.highlights ?? []);
+    const crop = maybeCropRegion(hl.before, hl.after);
     await mkdir(outDir, { recursive: true });
-    await annotateShot(path.join(outDir, "before.png"), path.join(outDir, "before-annotated.png"), hl.before, "bad");
-    await annotateShot(path.join(outDir, "after.png"), path.join(outDir, "after-annotated.png"), hl.after, "good");
+    await annotateShot(path.join(outDir, "before.png"), path.join(outDir, "before-annotated.png"), hl.before, "bad", crop);
+    await annotateShot(path.join(outDir, "after.png"), path.join(outDir, "after-annotated.png"), hl.after, "good", crop);
 
     // Persist the CONFIRMED script (not a throwaway build artifact — the ablation
     // runner reuses it verbatim, at $0, against disposable partial-patch checkouts).

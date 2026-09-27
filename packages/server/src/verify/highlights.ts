@@ -62,3 +62,49 @@ export function normalizeHighlights(
   }
   return { before, after };
 }
+
+export interface CropRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const CROP_AREA_THRESHOLD = 0.25; // only crop when the marked area is well under this fraction of the image
+// Extra context around the union box, as a fraction of the box's own size. Generous on
+// purpose: a label drawn below/beside a box (annotate.ts) needs room too, and a crop
+// that clips the label it was meant to make readable defeats the point (seen on #10943
+// at a tighter padding — the label ran off the crop's own edge).
+const CROP_PADDING = 1.3;
+
+/**
+ * When the marked area is a small fraction of a large screenshot — a real risk
+ * on a desktop-resolution capture where the change itself is a small element
+ * (confirmed on #10943: a 1280×800 shot where the picker's box covers ~1% of
+ * the image and the actual pixel shift is a few px, invisible at normal
+ * viewing size) — return one padded crop rectangle for BOTH sides to share, so
+ * before/after zoom into the same window instead of the reader hunting for a
+ * tiny box on a full desktop screenshot. Returns undefined when the marked
+ * area is already a meaningful fraction of the image (cropping would remove
+ * context without adding legibility).
+ */
+export function maybeCropRegion(before: ShotHighlight[], after: ShotHighlight[]): CropRegion | undefined {
+  const all = [...before, ...after];
+  if (all.length === 0) return undefined;
+  const x0 = Math.min(...all.map((h) => h.x));
+  const y0 = Math.min(...all.map((h) => h.y));
+  const x1 = Math.max(...all.map((h) => h.x + h.w));
+  const y1 = Math.max(...all.map((h) => h.y + h.h));
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w * h > CROP_AREA_THRESHOLD) return undefined;
+  const padX = w * CROP_PADDING;
+  const padY = h * CROP_PADDING;
+  // A label usually sits just below its box (annotate.ts's labelStyle) and can run to a
+  // few lines — a flat extra allowance (independent of the box's own, possibly tiny,
+  // height) so the crop doesn't clip the very thing it exists to make readable.
+  const LABEL_ROOM = 0.18;
+  const x = Math.max(0, x0 - padX);
+  const y = Math.max(0, y0 - padY);
+  return { x, y, w: Math.min(1, x1 + padX) - x, h: Math.min(1, y1 + padY + LABEL_ROOM) - y };
+}

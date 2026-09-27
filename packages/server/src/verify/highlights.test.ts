@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanHighlight, normalizeHighlights } from "./highlights.js";
+import { cleanHighlight, normalizeHighlights, maybeCropRegion } from "./highlights.js";
 
 describe("cleanHighlight", () => {
   it("clamps a box that runs off the image", () => {
@@ -36,5 +36,34 @@ describe("normalizeHighlights", () => {
     const { before, after } = normalizeHighlights(many, [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, pair: "x" }]);
     expect(before).toHaveLength(3);
     expect(after[0]).toMatchObject({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 });
+  });
+});
+
+describe("maybeCropRegion", () => {
+  it("returns a padded crop when the marked area is a small fraction of the image", () => {
+    const hl = [{ x: 0.05, y: 0.63, w: 0.14, h: 0.09 }];
+    const crop = maybeCropRegion(hl, hl);
+    expect(crop).toBeDefined();
+    expect(crop!.w).toBeGreaterThan(0.14);
+    expect(crop!.h).toBeGreaterThan(0.09);
+    expect(crop!.x).toBeLessThanOrEqual(0.05);
+    expect(crop!.x + crop!.w).toBeGreaterThanOrEqual(0.05 + 0.14);
+  });
+
+  it("returns undefined when the marked area is already a meaningful fraction of the image", () => {
+    const hl = [{ x: 0.1, y: 0.1, w: 0.6, h: 0.6 }];
+    expect(maybeCropRegion(hl, hl)).toBeUndefined();
+  });
+
+  it("returns undefined with no highlights on either side", () => {
+    expect(maybeCropRegion([], [])).toBeUndefined();
+  });
+
+  it("clamps the padded crop to the image bounds", () => {
+    const hl = [{ x: 0.0, y: 0.0, w: 0.05, h: 0.05 }];
+    const crop = maybeCropRegion(hl, []);
+    expect(crop!.x).toBe(0);
+    expect(crop!.y).toBe(0);
+    expect(crop!.x + crop!.w).toBeLessThanOrEqual(1);
   });
 });
