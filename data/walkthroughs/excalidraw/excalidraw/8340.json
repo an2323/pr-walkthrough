@@ -2868,14 +2868,15 @@
     }
   ],
   "verification": {
-    "status": "not_run",
+    "status": "skipped",
     "scenario": [
       "Open a scene with many (50+) elements",
       "Draw a free-draw stroke — observe no stutter, static canvas elements do not repaint during drawing",
       "Release pointer — finished stroke appears on static canvas",
       "Draw a rectangle — observe NewElementCanvas showing it, static canvas stays frozen",
       "Open collaboration session and draw — confirm in-progress element is still visible to other participants"
-    ]
+    ],
+    "skipReason": "title suggests a non-visual change (perf: improve new element drawing) and no UI files in the diff"
   },
   "meta": {
     "analyzer": "bob-shell",

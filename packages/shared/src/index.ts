@@ -29,6 +29,7 @@ export type {
   Ablation,
   AblationRun,
   StepEvidence,
+  SymptomItem,
 } from "./walkthrough.js";
 
 // Zod schemas (for runtime validation)

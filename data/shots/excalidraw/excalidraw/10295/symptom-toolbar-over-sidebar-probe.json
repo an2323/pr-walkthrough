@@ -1,0 +1,73 @@
+{
+  "sidebar": {
+    "x": 986,
+    "y": 0,
+    "w": 294,
+    "h": 800
+  },
+  "toolbar": {
+    "x": 960,
+    "y": 16,
+    "w": 304,
+    "h": 36
+  },
+  "toolbarClass": "layer-ui__wrapper__top-right zen-mode-transition layer-ui__wrapper__top-right--compact",
+  "topRightBtns": [
+    {
+      "title": "",
+      "x": 1002,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "",
+      "x": 1038,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "",
+      "x": 1074,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "",
+      "x": 1110,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "Keep sidebar open",
+      "x": 1196,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "Close",
+      "x": 1232,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "Live collaboration...",
+      "x": 1184,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "title": "Library",
+      "x": 1228,
+      "y": 16,
+      "w": 36,
+      "h": 36
+    }
+  ]
+}

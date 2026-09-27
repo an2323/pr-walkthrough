@@ -32,3 +32,4 @@ Raw output for each run is in `data/runs/<stamp>/` (gitignored).
 | 2026-09-27 08:22 | excalidraw/excalidraw#10295 | full | 4 | 3.751 | 325s | 40 | 2 | 0 | no |  |
 | 2026-09-27 08:24 | excalidraw/excalidraw#10295 | repair | 1 | 0.163 | 66s | 40 | 2 | 1 | no |  |
 | 2026-09-27 08:26 | excalidraw/excalidraw#10295 | repair | 0.6 | 0.340 | 81s | 41 | 2 | 1 | yes | targeted stitch fix |
+| 2026-09-27 10:26 | excalidraw/excalidraw#10295 | pr-verifier | 2 | 1.843 | 174s | 44 | 0 | 0 | yes | repro confirmed true@BASE/false@HEAD, screenshots taken |

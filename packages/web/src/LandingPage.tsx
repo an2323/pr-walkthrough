@@ -1,12 +1,9 @@
 /**
  * LandingPage — shown at "/" when no PR URL is present in the path.
  *
- * Static demo: cards for the cached walkthroughs only. Non-static: a GitHub PR
- * URL input that starts a live analysis (ST6c).
- *
- * Cards show real numbers (cost, duration, sub-agents) fetched from each
- * walkthrough's own JSON — not a hand-written blurb that can drift from what
- * the run actually did.
+ * Layout follows docs/prototypes/landing-variants.html board Variant2a:
+ * centered hero, layered rotated Before/After shot cards, example cards,
+ * how-it-works, footer. Cards show real numbers from each walkthrough JSON.
  */
 
 import { useState, useEffect } from 'react';
@@ -26,16 +23,8 @@ const EXAMPLES: ExampleCard[] = [
   {
     owner: 'excalidraw',
     repo: 'excalidraw',
-    number: 10943,
-    primary: true,
-    // No recorded run to replay yet — its original live analysis hit the disk-full
-    // incident right as it tried to persist progress.ndjson (see cost-log-stage2.md).
-    hasReplay: false,
-  },
-  {
-    owner: 'excalidraw',
-    repo: 'excalidraw',
     number: 10295,
+    primary: true,
     hasReplay: true,
   },
   {
@@ -46,14 +35,15 @@ const EXAMPLES: ExampleCard[] = [
   },
 ];
 
+/** Hero stack always uses #10295's before/after shots (Variant2a demo focus). */
+const HERO = { owner: 'excalidraw', repo: 'excalidraw', number: 10295 };
+
 function parsePRUrl(raw: string): { owner: string; repo: string; number: number } | null {
   const trimmed = raw.trim().replace(/\/$/, '');
-  // https://github.com/owner/repo/pull/123
   const m = trimmed.match(
     /(?:https?:\/\/github\.com\/)?([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/
   );
   if (m) return { owner: m[1], repo: m[2], number: parseInt(m[3], 10) };
-  // owner/repo#123 shorthand
   const s = trimmed.match(/^([^/\s]+)\/([^/\s#]+)#(\d+)$/);
   if (s) return { owner: s[1], repo: s[2], number: parseInt(s[3], 10) };
   return null;
@@ -81,33 +71,35 @@ function fmtDuration(ms?: number): string | null {
 }
 
 const HOW_IT_WORKS = [
-  { n: '1', t: 'Bob reads the PR', d: 'The diff, the commit history, and any file in the repo it needs — not just the changed lines.' },
-  { n: '2', t: 'Bob checks its own story', d: 'It starts the app at both versions and re-tests which changes the fix actually needs, instead of only guessing from the code.' },
-  { n: '3', t: 'You get a walkthrough', d: 'Ordered by reasoning, narrated, with the evidence attached to every step that has it.' },
+  { n: '1', t: 'Reads the PR', d: 'The diff, commit history and any file it needs.' },
+  { n: '2', t: 'Checks its own story', d: 'Runs the app to see which changes the fix needs.' },
+  { n: '3', t: 'Narrates it', d: 'Ordered by reasoning, evidence attached.' },
 ];
 
 export function LandingPage() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [cards, setCards] = useState<Record<string, Walkthrough | null | undefined>>({});
+  const [hero, setHero] = useState<Walkthrough | null | undefined>(undefined);
 
-  // Fetch each example's own JSON once (undefined = loading, null = unavailable) — the
-  // card's numbers and title come from here, never a hand-written description.
   useEffect(() => {
     for (const card of EXAMPLES) {
       const key = cardHref(card);
       fetch(apiHref(card))
         .then((res) => (res.ok ? res.json() : Promise.reject()))
-        .then((wt: Walkthrough) => setCards((prev) => ({ ...prev, [key]: wt })))
-        .catch(() => setCards((prev) => ({ ...prev, [key]: null })));
+        .then((wt: Walkthrough) => {
+          setCards((prev) => ({ ...prev, [key]: wt }));
+          if (card.number === HERO.number) setHero(wt);
+        })
+        .catch(() => {
+          setCards((prev) => ({ ...prev, [key]: null }));
+          if (card.number === HERO.number) setHero(null);
+        });
     }
   }, []);
 
   const [starting, setStarting] = useState(false);
 
-  // If the PR is already cached, jump straight to the viewer (today's
-  // behaviour). Otherwise kick off a job via POST /api/analyze and go to the
-  // live progress screen (ST6c) instead of blocking on a 3+ minute request.
   async function handleGo() {
     const parsed = parsePRUrl(input);
     if (!parsed) {
@@ -118,14 +110,21 @@ export function LandingPage() {
     const viewerPath = `/${parsed.owner}/${parsed.repo}/${parsed.number}`;
 
     setStarting(true);
+    // Prefer an already-finished walkthrough (works in both live and static demo).
     try {
-      const probe = await fetch(`/api/walkthroughs/${parsed.owner}/${parsed.repo}/${parsed.number}`, { method: 'HEAD' });
+      const probe = await fetch(apiHref(parsed), { method: STATIC ? 'GET' : 'HEAD' });
       if (probe.ok) {
         window.location.href = viewerPath;
         return;
       }
     } catch {
-      // couldn't reach the API to check — fall through and try to start an analysis anyway
+      // fall through
+    }
+
+    if (STATIC) {
+      setError('This demo only opens finished walkthroughs below — live analysis needs a local/server build.');
+      setStarting(false);
+      return;
     }
 
     try {
@@ -152,10 +151,21 @@ export function LandingPage() {
     if (e.key === 'Enter') void handleGo();
   }
 
+  const beforeSrc = hero?.shots?.before?.src;
+  const afterSrc = hero?.shots?.after?.src;
+
   return (
-    <div className="landing">
+    <div className="landing landing-v2a">
       <nav className="landing-nav">
-        <span className="landing-brand">PR Walkthrough</span>
+        <span className="landing-brand-row">
+          <svg className="landing-logo" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+            <rect x="0.75" y="0.75" width="28.5" height="28.5" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5" />
+            <circle cx="10" cy="20" r="2.4" fill="var(--accent)" />
+            <circle cx="20" cy="10" r="2.4" fill="var(--good)" />
+            <path d="M10 20 L10 13 L20 13 L20 10" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="landing-brand">PR Walkthrough</span>
+        </span>
         <span className="landing-nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
@@ -164,27 +174,15 @@ export function LandingPage() {
         </span>
       </nav>
 
-      <div className="landing-hero">
-        <h1 className="landing-title">Stop reverse-engineering pull requests.<br />Let Bob walk you through them.</h1>
-        {STATIC ? (
-          <>
-            <p className="landing-sub">
-              A narrated tour of a pull request — what broke, why, and how the fix lands —
-              written by IBM Bob 2.0 with the whole repository in view.
-            </p>
-            <p className="landing-note">
-              This demo ships finished walkthroughs; paste-a-PR needs a local/server build.
-            </p>
-          </>
-        ) : (
-          <p className="landing-sub">
-            Paste a GitHub pull request URL to get a narrated, step-by-step walkthrough
-            written by IBM Bob 2.0.
-          </p>
-        )}
+      <div className="landing-hero landing-hero-v2a">
+        <h1 className="landing-title">
+          Stop reverse-engineering pull requests.<br />Let Bob walk you through them.
+        </h1>
+        <p className="landing-sub landing-sub-centered">
+          A narrated tour of a pull request — what broke, why, and how the fix lands.
+        </p>
 
-        {!STATIC && (<>
-        <div className="landing-input-row">
+        <div className="landing-input-row landing-input-centered">
           <input
             className="landing-input"
             type="text"
@@ -198,16 +196,49 @@ export function LandingPage() {
             {starting ? 'Starting…' : 'Analyse →'}
           </button>
         </div>
-        {error && <p className="landing-error">{error}</p>}
-        </>)}
+        {error && <p className="landing-error landing-error-centered">{error}</p>}
+        {STATIC && (
+          <p className="landing-note landing-note-centered">
+            Demo: finished walkthroughs below open here; new PRs need a local/server build.
+          </p>
+        )}
       </div>
+
+      {(beforeSrc || afterSrc) && (
+        <div className="landing-stack" aria-hidden={false}>
+          {beforeSrc && (
+            <figure className="landing-stack-card landing-stack-before">
+              <span className="landing-stack-badge landing-stack-badge-bad">Before</span>
+              <div className="landing-stack-frame">
+                <img
+                  src={shotUrl(HERO.owner, HERO.repo, HERO.number, beforeSrc)}
+                  alt="Before: toolbar draws over the floating sidebar"
+                />
+              </div>
+              <figcaption>Toolbar draws over the sidebar</figcaption>
+            </figure>
+          )}
+          {afterSrc && (
+            <figure className="landing-stack-card landing-stack-after">
+              <span className="landing-stack-badge landing-stack-badge-good">After</span>
+              <div className="landing-stack-frame">
+                <img
+                  src={shotUrl(HERO.owner, HERO.repo, HERO.number, afterSrc)}
+                  alt="After: sidebar sits above the toolbar"
+                />
+              </div>
+              <figcaption>Sidebar sits on top</figcaption>
+            </figure>
+          )}
+        </div>
+      )}
 
       <div className="landing-examples">
         <h2 className="landing-examples-h">Try a walkthrough</h2>
-        <div className="landing-cards">
+        <div className="landing-cards landing-cards-2">
           {EXAMPLES.map((card) => {
             const key = cardHref(card);
-            const wt = cards[key]; // undefined = loading, null = unavailable, else the JSON
+            const wt = cards[key];
             if (STATIC && wt === null) return null;
             const cost = fmtCost(wt?.meta.run?.costUsd);
             const dur = fmtDuration(wt?.meta.run?.durationMs);
@@ -235,6 +266,7 @@ export function LandingPage() {
                       {subagents !== undefined && <span>{subagents} sub-agent{subagents === 1 ? '' : 's'}</span>}
                       {wt.shots?.by === 'bob-verifier' && <span className="landing-card-badge">screenshots by Bob</span>}
                       {wt.verification?.ablation && <span className="landing-card-badge">evidence-checked</span>}
+                      {!wt.shots && <span className="landing-card-badge">no screenshots</span>}
                     </div>
                   </>
                 )}
@@ -263,13 +295,19 @@ export function LandingPage() {
         <div className="landing-how-steps">
           {HOW_IT_WORKS.map((s) => (
             <div className="landing-how-step" key={s.n}>
-              <span className="landing-how-n">{s.n}</span>
-              <div className="landing-how-t">{s.t}</div>
+              <div className="landing-how-t">{s.n} · {s.t}</div>
               <div className="landing-how-d">{s.d}</div>
             </div>
           ))}
         </div>
       </div>
+
+      <footer className="landing-footer">
+        <span>MIT licensed</span>
+        <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
+          github.com/an2323/pr-walkthrough
+        </a>
+      </footer>
     </div>
   );
 }

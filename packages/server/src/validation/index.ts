@@ -80,5 +80,5 @@ export async function validate(
 export { validateSchema } from "./schema.js";
 export { checkVerbatim } from "./verbatim.js";
 export { computeCoverage } from "./coverage.js";
-export { checkQuality } from "./quality.js";
+export { checkQuality, criticalQualityWarnings, CRITICAL_QUALITY_CODES } from "./quality.js";
 export type { QualityWarning } from "./quality.js";

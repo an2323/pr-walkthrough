@@ -1,6 +1,5 @@
 /**
- * SummaryScreen — short "Done" outro after the last step.
- * Problem/fix recap, optional asked questions, links back out.
+ * SummaryScreen — "Done" outro: problem/fix recap, inline Before/After diagram (no screenshot).
  */
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
@@ -8,7 +7,8 @@ import type { PlainData } from './v2types';
 import { useState } from 'react';
 import { SHOW_TRY_IT, SHOW_CHECKS } from './features';
 import { useReview, targetLabel } from './review';
-import { ShotImage, ShotLightbox } from './ShotsVisual';
+import { MapSvg, MapLegend } from './MapSvg';
+import { edgesFor } from './MapModal';
 
 interface Props {
   walkthrough: Walkthrough;
@@ -54,6 +54,7 @@ export function SummaryScreen({
   const [posting, setPosting] = useState(false);
   const [postedUrl, setPostedUrl] = useState<{ url: string; text: string } | null>(null);
   const [postError, setPostError] = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<'before' | 'after'>('after');
 
   async function postQuestions() {
     if (!comment) return;
@@ -86,10 +87,9 @@ export function SummaryScreen({
   }
 
   const prUrl = walkthrough.pr.url;
-  const shots = walkthrough.shots;
-  const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
-  const [shotOpen, setShotOpen] = useState(false);
   const coverage = walkthrough.coverage;
+  const hasGraph = (walkthrough.graph?.nodes?.length ?? 0) > 0;
+  const mapEdges = hasGraph ? edgesFor(walkthrough, mapMode) : [];
 
   return (
     <div className="v2card">
@@ -101,19 +101,40 @@ export function SummaryScreen({
         <p className="v2say"><span className="outro-label">Fix</span> {plain.fix}</p>
       </div>
 
-      {shots && (
-        <ShotImage
-          shots={shots}
-          side="after"
-          owner={owner}
-          repo={repo}
-          number={walkthrough.pr.number}
-          onOpen={() => setShotOpen(true)}
-          label="Now"
-        />
-      )}
-      {shots && shotOpen && (
-        <ShotLightbox shots={shots} side="after" owner={owner} repo={repo} number={walkthrough.pr.number} onClose={() => setShotOpen(false)} />
+      {hasGraph && (
+        <div className="outro-map">
+          <div className="outro-map-h">
+            <h2>How the pieces connect</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div className="seg" role="group" aria-label="Map mode">
+                {(['after', 'before'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={mapMode === m}
+                    onClick={() => setMapMode(m)}
+                  >
+                    {m === 'before' ? 'Before' : 'After'}
+                  </button>
+                ))}
+              </div>
+              {onOpenMap && (
+                <button type="button" className="outro-map-link" onClick={onOpenMap}>
+                  View full diagram ↗
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="outro-map-body">
+            <MapSvg
+              graph={walkthrough.graph}
+              edges={mapEdges}
+              allNodes={true}
+              edgesPlain={plain.edges}
+            />
+            <MapLegend />
+          </div>
+        </div>
       )}
 
       {coverage && (

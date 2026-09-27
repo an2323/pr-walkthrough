@@ -1,0 +1,21 @@
+{
+  "sidebar": {
+    "x": 986,
+    "y": 0,
+    "w": 294,
+    "h": 800
+  },
+  "toolbar": {
+    "x": 960,
+    "y": 16,
+    "w": 304,
+    "h": 36
+  },
+  "zSidebar": "120",
+  "zToolbar": "auto",
+  "topAtSidebarHeader": {
+    "cls": "[object SVGAnimatedString]",
+    "inSidebar": true,
+    "inTopRight": false
+  }
+}

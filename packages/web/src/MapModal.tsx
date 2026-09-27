@@ -1,24 +1,25 @@
 /**
  * MapModal — on-demand "How the pieces connect".
- * Before / After / Both; optional focusNode = "you are here" when opened from a step.
+ * Before / After only (no Both); defaults to After.
  */
 
 import { useEffect, useState } from 'react';
 import type { Walkthrough, GraphEdge } from '@pr-walkthrough/shared';
 import { MapSvg, MapLegend } from './MapSvg';
 
-type Mode = 'before' | 'after' | 'both';
+type Mode = 'before' | 'after';
 
 interface Props {
   walkthrough: Walkthrough;
   edgesPlain?: Record<string, string>;
   focusNode?: string;
   onClose: () => void;
+  /** Initial mode when opened (default after). */
+  initialMode?: Mode;
 }
 
-function edgesFor(w: Walkthrough, mode: Mode): GraphEdge[] {
+export function edgesFor(w: Walkthrough, mode: Mode): GraphEdge[] {
   return w.graph.edges.filter((e) => {
-    if (mode === 'both') return true;
     if (mode === 'before') {
       return e.state === 'before' || (e.state === 'unchanged' && !e.visibleFrom);
     }
@@ -26,8 +27,8 @@ function edgesFor(w: Walkthrough, mode: Mode): GraphEdge[] {
   });
 }
 
-export function MapModal({ walkthrough, edgesPlain = {}, focusNode, onClose }: Props) {
-  const [mode, setMode] = useState<Mode>('both');
+export function MapModal({ walkthrough, edgesPlain = {}, focusNode, onClose, initialMode = 'after' }: Props) {
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -54,14 +55,14 @@ export function MapModal({ walkthrough, edgesPlain = {}, focusNode, onClose }: P
         </div>
         <div className="map-top" style={{ padding: '0 20px' }}>
           <div className="seg" role="group" aria-label="Map mode">
-            {(['before', 'after', 'both'] as const).map((m) => (
+            {(['after', 'before'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 aria-pressed={mode === m}
                 onClick={() => setMode(m)}
               >
-                {m === 'both' ? 'Both' : m === 'before' ? 'Before' : 'After'}
+                {m === 'before' ? 'Before' : 'After'}
               </button>
             ))}
           </div>

@@ -2,8 +2,9 @@
  * scripts/tts-pregen.ts
  *
  * Usage:
- *   pnpm --filter @pr-walkthrough/server tts:pregen <owner/repo#number>
+ *   pnpm --filter @pr-walkthrough/server tts:pregen <owner/repo#number> [--steps s1,s2]
  *   e.g. pnpm --filter @pr-walkthrough/server tts:pregen excalidraw/excalidraw#10295
+ *   e.g. pnpm --filter @pr-walkthrough/server tts:pregen excalidraw/excalidraw#10295 --steps s1,s2
  *
  * - Reads ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID from root .env
  * - Loads walkthrough from data/walkthroughs/{owner}/{repo}/{number}.json
@@ -53,8 +54,9 @@ async function loadDotEnv(): Promise<Record<string, string>> {
 async function main() {
   const arg = process.argv[2];
   if (!arg) {
-    console.error("Usage: tts:pregen <owner/repo#number>");
+    console.error("Usage: tts:pregen <owner/repo#number> [--steps s1,s2]");
     console.error("  e.g. tts:pregen excalidraw/excalidraw#10295");
+    console.error("  e.g. tts:pregen excalidraw/excalidraw#10295 --steps s1,s2");
     process.exit(1);
   }
 
@@ -66,6 +68,17 @@ async function main() {
   }
   const [, owner, repo, numberStr] = match;
   const number = parseInt(numberStr, 10);
+
+  let stepIds: string[] | undefined;
+  const stepsFlag = process.argv.indexOf("--steps");
+  if (stepsFlag >= 0) {
+    const raw = process.argv[stepsFlag + 1] ?? "";
+    stepIds = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    if (stepIds.length === 0) {
+      console.error("--steps requires a comma-separated list, e.g. s1,s2");
+      process.exit(1);
+    }
+  }
 
   // Load env vars from root .env (fall back to process.env for CI/container use).
   const envVars = await loadDotEnv();
@@ -99,9 +112,10 @@ async function main() {
   // Dynamically import pregen from the src module (tsx resolves it at runtime).
   const { pregen } = await import("../src/tts/elevenlabs.js");
 
-  console.log(`Pre-generating audio for ${owner}/${repo}#${number}…`);
+  const scope = stepIds ? ` (steps ${stepIds.join(",")})` : "";
+  console.log(`Pre-generating audio for ${owner}/${repo}#${number}${scope}…`);
   const startedAt = Date.now();
-  const { generated, cached, totalChars } = await pregen(wt, outDir, voiceId, apiKey);
+  const { generated, cached, totalChars } = await pregen(wt, outDir, voiceId, apiKey, stepIds);
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
 
   console.log(`Done in ${elapsed}s:`);
@@ -113,7 +127,7 @@ async function main() {
   const costLogPath = path.join(ROOT, "docs/cost-log.md");
   const timestamp = new Date().toISOString().slice(0, 16).replace("T", " ");
   const logLine =
-    `| ${timestamp} | tts:pregen ${owner}/${repo}#${number} | ` +
+    `| ${timestamp} | tts:pregen ${owner}/${repo}#${number}${stepIds ? ` steps=${stepIds.join(",")}` : ""} | ` +
     `generated=${generated} cached=${cached} chars=${totalChars} elapsed=${elapsed}s |\n`;
 
   try {

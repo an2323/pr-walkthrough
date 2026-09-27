@@ -7,7 +7,8 @@
  *   pnpm --filter @pr-walkthrough/server bob:verify-shots excalidraw/excalidraw#10295
  *     → writes data/shots/{owner}/{repo}/{n}-bob-trial/, leaves the walkthrough alone
  *   … bob:verify-shots excalidraw/excalidraw#10295 --apply
- *     → writes data/shots/{owner}/{repo}/{n}/ and sets walkthrough.shots
+ *     → writes data/shots/{owner}/{repo}/{n}/, sets walkthrough.shots, and
+ *       attaches per-symptom src paths when Bob produced symptoms.json
  *
  * VERIFY_MAX_COST (default 2) caps the Bob run.
  */
@@ -19,6 +20,7 @@ import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
 import { verifyShots } from "../src/verify/bob-verifier.js";
 import { runAblation, verdictForStep } from "../src/verify/ablation.js";
 import { recipeFor } from "../src/verify/recipes.js";
+import { attachSymptomShots } from "../src/verify/symptom-shots.js";
 import { prepareWorkspace } from "../src/git/workspace.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -47,8 +49,18 @@ if (result.status === "skipped") {
   console.log(`skipped: ${result.reason}`);
 } else {
   console.log(JSON.stringify(result.shots, null, 2));
+  if (result.symptomSrcs && result.symptomSrcs.size > 0) {
+    console.log(
+      "symptom srcs:",
+      Object.fromEntries([...result.symptomSrcs.entries()].map(([k, v]) => [String(k), v]))
+    );
+  }
   if (apply) {
     wt.shots = result.shots;
+    if (result.symptomSrcs && result.symptomSrcs.size > 0) {
+      attachSymptomShots(wt, result.symptomSrcs);
+      console.log(`attached ${result.symptomSrcs.size} per-symptom screenshot(s)`);
+    }
     await saveWalkthrough(wt);
     console.log("walkthrough.shots updated");
   }

@@ -1,5 +1,5 @@
 /**
- * StartScreen — Problem (+ before screenshot), Fix (+ after screenshot), Start / Listen.
+ * StartScreen — StartS1: wide side-by-side Problem | Fix with screenshots above copy.
  */
 
 import { useState } from 'react';
@@ -45,20 +45,26 @@ export function StartScreen({ walkthrough, plain, flow }: Props) {
   const shotProps = shots ? { shots, owner, repo, number: pr.number, onOpen: setOpen } : null;
 
   return (
-    <div className="v2card">
+    <div className={`v2card${shots ? ' start-s1' : ''}`}>
       <div className="v2eyebrow">Pull request walkthrough</div>
       <h1 className="v2h1">{plain.title}</h1>
 
-      <div className={`pf${shots ? ' stacked' : ''}`}>
+      <div className={`pf${shots ? ' start-s1' : ''}`}>
         <section className="p">
-          <h3>Problem</h3>
-          <p>{plain.problem}</p>
           {shotProps && <ShotImage {...shotProps} side="before" />}
+          <h3 className="pf-label pf-label-bad">
+            <span className="pf-dot" aria-hidden="true" />
+            Problem
+          </h3>
+          <p>{plain.problem}</p>
         </section>
         <section className="f">
-          <h3>Fix</h3>
-          <p>{plain.fix}</p>
           {shotProps && <ShotImage {...shotProps} side="after" />}
+          <h3 className="pf-label pf-label-good">
+            <span className="pf-dot" aria-hidden="true" />
+            Fix
+          </h3>
+          <p>{plain.fix}</p>
         </section>
       </div>
 
@@ -68,11 +74,15 @@ export function StartScreen({ walkthrough, plain, flow }: Props) {
         </p>
       )}
 
-      {SHOW_HERO_STATS && <HeroStats walkthrough={walkthrough} plain={plain} flow={flow} />}
+      {!shots && (
+        <p className="note" style={{ marginTop: -8 }}>
+          {walkthrough.verification?.status === 'skipped' && walkthrough.verification.skipReason
+            ? `No before/after screenshots — ${walkthrough.verification.skipReason}`
+            : 'No before/after screenshots — this change isn’t visible in the UI (or screenshots weren’t taken for this walkthrough).'}
+        </p>
+      )}
 
-      {/* Start / Listen live in the persistent bottom bar (BottomBarV2), and "How the
-          pieces connect" in the persistent top bar (TopBarV2's Diagram button) — both
-          already visible on this screen, so this card doesn't repeat them. */}
+      {SHOW_HERO_STATS && <HeroStats walkthrough={walkthrough} plain={plain} flow={flow} />}
 
       <p className="note" style={{ marginTop: 4 }}>
         {pr.repo} #{pr.number} · {pr.filesChanged} files · +{pr.additions} −{pr.deletions}

@@ -252,6 +252,10 @@ Labels follow the same no-identifiers rule as `headline`/`say` (plain words, ≤
 words per label). Types:
 
 - `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them.
+  Prefer objects: `items: [{ "text": "..." }, ...]`, not bare strings. Each item should
+  be a distinct user-visible scenario (different viewport or UI state when that matters),
+  so the verifier can later attach a dedicated BASE screenshot per item when useful.
+  **Never invent `src`** — image paths are filled by the backend after verification.
 - `shot` — one screenshot (usually the broken Before state) as Problem evidence.
   Prefer this only when screenshots already exist; do not invent image paths.
 - `layers` — order or priority: z-index / stacking, middleware or

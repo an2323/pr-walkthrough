@@ -131,7 +131,16 @@ export const VisualSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("symptoms"),
-    items: z.array(z.string()),
+    items: z.array(
+      z.union([
+        z.string(),
+        z.object({
+          text: z.string().min(1),
+          /** Screenshot under data/shots/{owner}/{repo}/{number}/ for this scenario. */
+          src: z.string().min(1).optional(),
+        }),
+      ])
+    ),
   }),
   z.object({
     type: z.literal("map"),
@@ -311,8 +320,9 @@ export const AblationSchema = z.object({
 });
 
 export const VerificationSchema = z.object({
-  status: z.enum(["not_run", "passed", "failed"]),
+  status: z.enum(["not_run", "passed", "failed", "skipped"]),
   scenario: z.array(z.string()),
+  skipReason: z.string().optional(),
   baseVideoUrl: z.string().optional(),
   headVideoUrl: z.string().optional(),
   testOutput: z.string().optional(),

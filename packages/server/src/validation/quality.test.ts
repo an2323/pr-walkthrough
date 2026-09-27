@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Walkthrough, Step } from "@pr-walkthrough/shared";
-import { checkQuality } from "./quality.js";
+import { checkQuality, criticalQualityWarnings } from "./quality.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, "../../../../");
@@ -210,5 +210,21 @@ describe("checkQuality", () => {
     // against — it should be clean. A regression here means either the
     // example or the checker drifted from docs/output-contract.md.
     expect(checkQuality(w)).toEqual([]);
+  });
+
+  it("flags critical codes via criticalQualityWarnings", () => {
+    const w = makeWalkthrough({
+      steps: [
+        makeStep({
+          id: "s1",
+          say: "Calls `getTotalChangesCount` here.",
+          narration: "The ablation confirms this is required.",
+        }),
+      ],
+    });
+    const codes = criticalQualityWarnings(checkQuality(w)).map((x) => x.code);
+    expect(codes).toContain("identifier-in-say");
+    expect(codes).toContain("narration-mentions-process");
+    expect(codes).not.toContain("say-too-long");
   });
 });

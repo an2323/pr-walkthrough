@@ -101,7 +101,8 @@ export async function generateSentenceAudio(
 // ---------------------------------------------------------------------------
 
 /**
- * Pre-generate all narration audio for a walkthrough (one file per sentence).
+ * Pre-generate narration audio for a walkthrough (one file per sentence).
+ * Pass `stepIds` to limit generation (e.g. voice-check samples for s1+s2 only).
  * Returns counts of newly generated vs cached files and total characters.
  */
 export async function pregen(
@@ -109,12 +110,15 @@ export async function pregen(
   outDir: string,
   voiceId: string,
   apiKey: string,
+  stepIds?: string[],
 ): Promise<{ generated: number; cached: number; totalChars: number }> {
   let generated = 0;
   let cached = 0;
   let totalChars = 0;
+  const allow = stepIds && stepIds.length > 0 ? new Set(stepIds) : null;
 
   for (const step of wt.steps) {
+    if (allow && !allow.has(step.id)) continue;
     if (!step.narration) continue;
     const sentences = splitSentences(step.narration);
 

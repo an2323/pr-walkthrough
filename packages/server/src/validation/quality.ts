@@ -14,6 +14,22 @@ export interface QualityWarning {
   stepId?: string;
 }
 
+/**
+ * Codes worth one automatic `--resume` repair (Q2). Soft style warnings
+ * (length, step count, …) stay warnings only — they must not churn the draft.
+ */
+export const CRITICAL_QUALITY_CODES = new Set([
+  "identifier-in-say",
+  "identifier-in-headline",
+  "identifier-in-narration",
+  "identifier-in-plain",
+  "narration-mentions-process",
+]);
+
+export function criticalQualityWarnings(warnings: QualityWarning[]): QualityWarning[] {
+  return warnings.filter((w) => CRITICAL_QUALITY_CODES.has(w.code));
+}
+
 // ---------------------------------------------------------------------------
 // "Does this look like an identifier / file name?" heuristics
 // ---------------------------------------------------------------------------

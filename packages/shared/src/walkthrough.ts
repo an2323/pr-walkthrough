@@ -78,10 +78,26 @@ export interface WalkthroughPart {
   stepIds: string[];
 }
 
+/**
+ * One symptom on a symptom step. Plain string is legacy; prefer `{ text, src?, schematic? }`
+ * so each scenario can carry a screenshot and/or a small schematic diagram.
+ */
+export type SymptomSchematic = "stack" | "overlap";
+
+export type SymptomItem =
+  | string
+  | {
+      text: string;
+      /** Screenshot under data/shots/{owner}/{repo}/{number}/ for this scenario. */
+      src?: string;
+      /** Built-in mini-diagram instead of (or as well as) a screenshot. */
+      schematic?: SymptomSchematic;
+    };
+
 /** Visual types for step screens. */
 export type Visual =
   | { type: "flow"; rows: [string, string][][] }
-  | { type: "symptoms"; items: string[] }
+  | { type: "symptoms"; items: SymptomItem[] }
   | { type: "map"; caption?: string }
   | { type: "layers"; before: [string, number, string?][]; after: [string, number, string?][] }
   | { type: "try" }
@@ -338,9 +354,15 @@ export interface Coverage {
 }
 
 export interface Verification {
-  status: "not_run" | "passed" | "failed";
+  /**
+   * "skipped" = pipeline decided screenshots/repro aren't meaningful for this
+   * PR (e.g. pure perf) — not a failure, just no visual evidence path.
+   */
+  status: "not_run" | "passed" | "failed" | "skipped";
   /** Human-readable scenario, one action → expectation per line. */
   scenario: string[];
+  /** Why verification was skipped (when status === "skipped"). */
+  skipReason?: string;
   baseVideoUrl?: string;
   headVideoUrl?: string;
   testOutput?: string;

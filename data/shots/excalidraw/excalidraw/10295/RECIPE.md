@@ -10,4 +10,24 @@
 Before: sidebar stays open with the menu (bug).
 After: opening the menu closes the undocked sidebar (fix).
 
-Automated by: `pnpm --filter @pr-walkthrough/server verify-shots excalidraw/excalidraw#10295`
+Automated by: `pnpm --filter @pr-walkthrough/server bob:verify-shots excalidraw/excalidraw#10295`
+(or `verify-shots` for the $0 Playwright fallback path, when present).
+
+## Per-symptom evidence (step s1)
+
+The Bob verifier (`pr-verifier` in `bob-verifier.ts`) attaches one screenshot per
+symptom when useful, via `visual.symptoms.items[].src` (paths relative to this
+folder). After a confirmed `repro.cjs`, Bob may write `.walkthrough/verify/symptoms.json`
+plus optional `symptom-N.cjs` scripts; the backend runs those against BASE only and
+skips items that are not visible in a still (or already covered by `before.png`).
+
+Hand crops / one-off scripts below are fallbacks for demo polish — not required once
+a paid `bob:verify-shots … --apply` has produced the files:
+
+| File | Scenario |
+|---|---|
+| `symptom-toolbar-over-sidebar.png` | Desktop — top-right toolbar sitting on the open sidebar (often skipped: not visible in a still) |
+| `symptom-menu-under-sidebar-mobile.png` | Mobile 390×844 BASE — sidebar covering the open main menu. Re-capture: `pnpm --filter @pr-walkthrough/server exec tsx scripts/capture-mobile-symptom.ts` |
+
+**Paid re-verify needs an explicit go-ahead** (Bobcoins). Until then, keep the hand
+assets committed for the static demo.

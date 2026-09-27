@@ -300,6 +300,35 @@ export function repairBob(
   return runBob(prompt, repoPath, maxCost, { resumeTaskId: taskId, onEvent });
 }
 
+/**
+ * Resume to fix critical output-contract issues (Q2). Same session; never a
+ * new full analysis. `issues` should already be filtered to critical codes.
+ */
+export function qualityRepairBob(
+  taskId: string,
+  issues: string[],
+  repoPath: string,
+  maxCost: string,
+  onEvent?: (e: unknown) => void
+): Promise<BobRun> {
+  const prompt = [
+    "The walkthrough JSON you returned is schema-valid but fails critical quality checks",
+    "from the output contract. Fix ONLY the issues below — rewrite the listed fields,",
+    "leave every other step exactly as it is. Return the complete corrected JSON object",
+    "again: no prose, no markdown fence, omit hunks/coverage/pr.",
+    "",
+    "Rules that apply to the listed fields:",
+    "- `say`, `headline`, `narration`, and `plain.*` must not contain code identifiers,",
+    "  file names, or backticked names — plain language only.",
+    "- `narration` must NEVER mention how a claim was checked (no \"ablation\", \"measurement",
+    "  confirms\", \"the backend verified\", etc.) — state the conclusion directly.",
+    "",
+    "Quality issues:",
+    ...issues.map((e) => `- ${e}`),
+  ].join("\n");
+  return runBob(prompt, repoPath, maxCost, { resumeTaskId: taskId, onEvent });
+}
+
 // ---------------------------------------------------------------------------
 // extractJsonObject — ported verbatim from bob-spike.ts
 // ---------------------------------------------------------------------------

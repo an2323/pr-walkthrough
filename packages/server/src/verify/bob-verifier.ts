@@ -50,6 +50,7 @@ import { ensureInstalled, scrubbedEnv, startApp, type AppServer } from "./app-se
 import { normalizeHighlights, maybeCropRegion } from "./highlights.js";
 import { recipeFor, type AppRecipe } from "./recipes.js";
 import { runRepro } from "./ablation.js";
+import { captureSymptomShots, listSymptomTexts } from "./symptom-shots.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
@@ -67,7 +68,14 @@ export interface VerifyOptions {
 }
 
 export type VerifyResult =
-  | { status: "ok"; shots: Shots; costUsd: number; reproPath: string }
+  | {
+      status: "ok";
+      shots: Shots;
+      costUsd: number;
+      reproPath: string;
+      /** Per-symptom BASE screenshot paths (relative to outDir), keyed by item index. */
+      symptomSrcs?: Map<number, string>;
+    }
   | { status: "skipped"; reason: string; costUsd: number };
 
 /** Does this repo have a way to start its app at all? (cheap pre-check, no side effects) */
@@ -83,6 +91,30 @@ function buildPrompt(wt: Walkthrough, recipe: AppRecipe, baseUrl: string, headUr
     .map((s) => `- ${s.headline ?? s.title}${s.say ? ` — ${s.say}` : ""}`)
     .join("\n");
   const scenario = (wt.verification?.scenario ?? []).map((l) => `- ${l}`).join("\n") || "(none)";
+  const symptomTexts = listSymptomTexts(wt);
+  const symptomsBlock =
+    symptomTexts.length === 0
+      ? ""
+      : `
+## Per-symptom BASE frames (after repro.cjs works)
+The walkthrough lists these distinct user-visible problems (0-based index):
+${symptomTexts.map((t, i) => `${i}. ${t}`).join("\n")}
+
+After repro.cjs is confirmed against BOTH urls, ALSO write \`.walkthrough/verify/symptoms.json\`
+describing one entry per index above. For each item either:
+- skip it: \`{"index": N, "skip": "<one sentence why>"}\` when the problem is not visible in a still
+  (e.g. pure stacking with identical pixels), or when the main before.png already shows it equally well; OR
+- capture it: write \`.walkthrough/verify/symptom-N.cjs\` (CommonJS, same \`pw.cjs\` helper) run as
+  \`node symptom-N.cjs <url> [pngPath]\`. The script opens the page (viewport may differ from the
+  main repro — e.g. 390×844 for a mobile-only symptom), runs ONLY the actions for THAT symptom,
+  saves a screenshot when pngPath is given, and prints one JSON line:
+  \`{"ok": true, "highlights": [{x,y,w,h,label}]}\` (highlights may be \`[]\`).
+  Then list it in symptoms.json as \`{"index": N, "file": "symptom-N.cjs", "src": "symptom-N.png"}\`.
+
+These scripts are run by the backend against BASE only — they do not need a bugPresent true/false
+split. Do not spend more than 2 extra script runs testing them. Prefer skip over a weak or
+duplicate frame.
+`;
   const { width, height } = recipe.viewport;
   return `You are checking a pull request by writing a script that PROVES its user-visible change is
 real: one script, run against a URL you're given, that reports whether the bug is present there.
@@ -106,7 +138,7 @@ Steps of the analysis:
 ${steps}
 Scenario ideas from the analysis (not verified, may be wrong):
 ${scenario}
-
+${symptomsBlock}
 ## App tips
 ${recipe.hints}
 
@@ -139,6 +171,8 @@ ${recipe.hints}
    for BASE and \`bugPresent: false\` for HEAD. If not, fix the script and retry — at most 3 runs of any
    script in total (probes included). Your budget is small: if you still can't get a reliable true/false
    split after that, write the skip file instead of continuing to explore.
+5. If the walkthrough listed per-symptom problems above, write symptoms.json (+ optional symptom-N.cjs)
+   as described — after repro works. Missing symptoms.json is fine only when there were no symptoms listed.
 
 ## Rules
 - Write files ONLY under \`.walkthrough/verify/\` — not \`/tmp\`, not anywhere else. Never edit the
@@ -342,7 +376,36 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       by: "bob-verifier",
       run: { costUsd: run.sessionCost, durationMs: run.ms, toolCalls: run.toolCalls },
     };
-    return { status: "ok", shots, costUsd, reproPath: path.join(persistDir, "repro.cjs") };
+
+    // Optional per-symptom BASE frames (same running BASE server) — never fatal.
+    let symptomSrcs: Map<number, string> | undefined;
+    const symptomTexts = listSymptomTexts(wt);
+    if (symptomTexts.length > 0) {
+      onStage?.("shots", "Capturing per-symptom screenshots");
+      try {
+        const captured = await captureSymptomShots({
+          verifyDir,
+          baseUrl: base.url,
+          outDir,
+          symptomCount: symptomTexts.length,
+        });
+        for (const n of captured.notes) console.log(`[verify] ${n}`);
+        if (captured.srcByIndex.size > 0) symptomSrcs = captured.srcByIndex;
+      } catch (err) {
+        console.warn(
+          "[verify] per-symptom shots failed:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+
+    return {
+      status: "ok",
+      shots,
+      costUsd,
+      reproPath: path.join(persistDir, "repro.cjs"),
+      ...(symptomSrcs ? { symptomSrcs } : {}),
+    };
   } finally {
     await Promise.all(servers.map((s) => s.stop()));
     if (previousMode !== undefined) await writeFile(modePath, previousMode).catch(() => {});

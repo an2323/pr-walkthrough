@@ -3,11 +3,76 @@
  * Supports: flow, symptoms, map, layers, try.
  */
 
-import { Fragment } from 'react';
-import type { Walkthrough, Step, GraphEdge } from '@pr-walkthrough/shared';
+import { Fragment, useState } from 'react';
+import type { Walkthrough, Step, GraphEdge, SymptomItem } from '@pr-walkthrough/shared';
 import type { PlainVisual } from './v2types';
 import { MapSvg, MapLegend } from './MapSvg';
 import { ShotsVisual, SingleShotVisual } from './ShotsVisual';
+import { shotUrl } from './staticMode';
+
+function symptomText(item: SymptomItem): string {
+  return typeof item === 'string' ? item : item.text;
+}
+
+function symptomSrc(item: SymptomItem): string | undefined {
+  return typeof item === 'string' ? undefined : item.src;
+}
+
+function SymptomsVisual({
+  items,
+  owner,
+  repo,
+  number,
+}: {
+  items: SymptomItem[];
+  owner: string;
+  repo: string;
+  number: number;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const withShots = items.some((i) => symptomSrc(i));
+
+  return (
+    <div className={`visual${withShots ? ' symptoms-shots' : ''}`}>
+      <ul className={`symptoms${withShots ? ' symptoms-with-shots' : ''}`}>
+        {items.map((item, i) => {
+          const text = symptomText(item);
+          const src = symptomSrc(item);
+          return (
+            <li key={i} className={src ? 'symptom-card' : undefined}>
+              {src && (
+                <button
+                  type="button"
+                  className="symptom-shot"
+                  onClick={() => setOpen(src)}
+                  aria-label={`${text} — open full size`}
+                >
+                  <img src={shotUrl(owner, repo, number, src)} alt="" className="symptom-shot-img" />
+                </button>
+              )}
+              <div className="symptom-copy">
+                <span className="ic" aria-hidden="true">!</span>
+                <span>{text}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {open && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label="Symptom screenshot">
+          <button type="button" className="lightbox-scrim" aria-label="Close" onClick={() => setOpen(null)} />
+          <div className="lightbox-body">
+            <div className="lightbox-h">
+              <span className="shot-cap shot-cap--bad" style={{ margin: 0 }}>Before</span>
+              <button type="button" className="x-btn" onClick={() => setOpen(null)} aria-label="Close">×</button>
+            </div>
+            <img className="lightbox-img" src={shotUrl(owner, repo, number, open)} alt="" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Props {
   visual: PlainVisual;
@@ -45,17 +110,14 @@ export function VisualBlock({
   onVerify,
 }: Props) {
   if (visual.type === 'symptoms') {
+    const [owner, repo] = (walkthrough.pr.repo ?? '/').split('/');
     return (
-      <div className="visual">
-        <ul className="symptoms">
-          {visual.items.map((t, i) => (
-            <li key={i}>
-              <span className="ic">!</span>
-              {t}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <SymptomsVisual
+        items={visual.items}
+        owner={owner}
+        repo={repo}
+        number={walkthrough.pr.number}
+      />
     );
   }
 
