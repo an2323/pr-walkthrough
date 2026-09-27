@@ -1,130 +1,126 @@
 # Handoff — continue "PR Walkthrough" (IBM Bob 2.0 Hackathon)
 
-Paste this whole file as your first message to Cursor. It has run out of budget in
-Claude Code and the user is switching tools mid-task; nothing is broken or half-done —
-the working tree is clean, last commit `c8e5f9e`.
-
-## Read first, in this order
-
-1. `AGENTS.md` — project overview, repo layout, secrets handling. **Note:** its
-   "Bob Shell analyzer — read-only access rules" section is stale (describes an older
-   `groups: [read]` / `--format json` design) — the real, current design is in
-   `pr-walkthrough-plan.md` under "## Bob Shell Analyzer Design" and in the actual code
-   (`packages/server/src/analyzer/bob-shell.ts`). Trust the plan + code over that one
-   AGENTS.md section.
-2. `pr-walkthrough-plan.md` — the full plan with a status on every sub-task (ST1…ST10).
-   Skim for `[x] done`, `[ ]  pending`, `[-]` in progress, `✂ cut`. Read ST6c, ST6d, ST6e
-   (cut), ST6f, ST7, ST10 in full — they're the current front line.
-3. `docs/cost-log-stage2.md` — every paid Bob Shell run so far, with cost.
+Paste this whole file as your first message to Cursor. Claude Code is hitting its limit again;
+the user is switching tools mid-task. Working tree is clean as of commit `baf35e5`, deadline
+**Sep 27, 15:00 UTC** — check the actual time, this handoff was written at ~09:10 UTC (~5h50m left).
 
 ## Hard constraints — do not violate these
 
-- **Deadline: Sep 27, 15:00 UTC.**
-- **Never run real Bob Shell (`bob run` / `ANALYZER=bob`) or call ElevenLabs without the
-  user's explicit go-ahead in chat, given right before that specific run.** A cap
-  approved earlier does not carry over to a new run. Use `ANALYZER=cached` for all
-  development and verification.
-- **Stage-2 Bobcoin budget cap is $20 total, ~$10.20 already spent** (see
-  `docs/cost-log-stage2.md`; guard code in `packages/server/src/analyzer/budget.ts`,
-  `BOB_BUDGET_USD`). Any new paid run needs the user's yes AND must fit under the
-  remaining ~$9.80, checked before starting.
+- **Never run real Bob Shell (`bob run` / `ANALYZER=bob`) or call ElevenLabs without the user's
+  explicit go-ahead in chat, given right before that specific run.** Approval for one run doesn't
+  carry to the next.
+- **Stage-2 Bobcoin budget cap is $28, ~$25.01 already spent — only ~$2.99 left.** Check
+  `docs/cost-log-stage2.md` and `packages/server/src/analyzer/budget.ts`'s `assertBudget` before
+  proposing ANY paid run; a single further mistake could exceed the cap. Prefer $0 fixes.
 - **Secrets only in `.env`** (gitignored). Never print, log, or paste key/token values.
-  `.env.example` documents every var and what scope/permission it needs.
-- Commit after each coherent change; don't batch unrelated things into one commit.
-  The project's own convention has been small, descriptive commits (see `git log`).
+- Small, descriptive commits (see `git log`), attribution line per this repo's convention (check
+  the last few commits for the exact `Co-Authored-By` wording your tool should use).
+- `pnpm --filter @pr-walkthrough/server test`, `lint` (server+web), `pnpm --filter
+  @pr-walkthrough/web build` before considering anything done.
 
-## Where things stand right now
+## Read first
 
-**Done and committed (do not redo):**
-- ST1–ST6b: monorepo, viewer, git workspace, validation, `CachedAnalyzer` +
-  `BobShellAnalyzer`, GitHub adapter, viewer v2 UX, ElevenLabs narration pipeline.
-- ST10 (quality iteration): 2 prompt-edit iterations on #10295 converged (8→1 quality
-  warnings). `data/walkthroughs/excalidraw/excalidraw/{10295,8340}.json` are valid and
-  promoted. #9403 is deferred — a bug in *our own* stream-json JSON reconstruction on
-  its repaired (~40KB) response, not a Bob output-quality problem; not blocking.
-- ST6c (live analysis + progress screen): `POST /api/analyze` returns `{jobId}` at once;
-  SSE streams normalized `ProgressEvent`s (`packages/shared/src/progress.ts`) built from
-  Bob's raw `stream-json` events (`packages/server/src/analyzer/progress-normalizer.ts`).
-  `GET /api/runs/:owner/:repo/:number/events?speed=N` replays a committed recording
-  (`data/events/excalidraw/excalidraw/{10295,8340}.ndjson`) at $0 — this is what the
-  viewer's "Watch the analysis →" link uses. Viewer: `ProgressScreen.tsx`. Cost guards
-  are in `packages/server/src/api/jobs.ts` / `routes.ts` (one paid job at a time, a
-  cached PR is served without a new run unless `force: true`).
-- ST6e (agent-verifier / "Try it in the app"): **cut deliberately.** Replaced by two
-  manual before/after screenshots (still need to be taken — see ST9 below). The
-  "Try it" chapter is hidden via `SHOW_TRY_IT = false` in `packages/web/src/features.ts`
-  — do not remove the code, just flip the flag back if this decision ever reverses.
-- ST6d groundwork: forked `excalidraw/excalidraw` to `an2323/excalidraw` and opened
-  **[an2323/excalidraw#1](https://github.com/an2323/excalidraw/pull/1)**, which
-  re-creates #10295 exactly (`demo-10295-base`/`demo-10295-head` branches point at the
-  *same* base/head SHAs the cached walkthrough already uses — no drift). This fork
-  exists so the demo can post review comments without touching the real, already-merged
-  PR by a stranger, and so the write token is scoped to a repo we control. It is NOT for
-  judges to "test the PR" on — it's the target of the comment/question round-trip
-  feature. `.env.example` has `GITHUB_DEMO_REPO=an2323/excalidraw`,
-  `GITHUB_DEMO_PR=1`, `GITHUB_TOKEN_WRITE=` (empty, user is creating this token now).
+1. `pr-walkthrough-plan.md` — Sub-Task 12 (the "evidence loop": repro script + ablation +
+   evidence-based revision) and the redesign steps folded into
+   `~/.claude/plans/bob-transient-pine.md` (P1 viewer redesign, now done).
+2. `docs/cost-log-stage2.md` — every paid run this stage, with cost.
+3. `AGENTS.md` — still describes an OLDER analyzer design (`groups:[read]`, `--format json`);
+   trust the plan + code instead (`packages/server/src/analyzer/bob-shell.ts`,
+   `packages/server/src/verify/*.ts`).
 
-**In progress / next up, in this order:**
+## What's done
 
-1. **ST6d implementation** (the fork/PR is ready, just needs the token wired in):
-   - Check whether the user has put a value into `GITHUB_TOKEN_WRITE` in `.env` yet. If
-     not, ask them — this feature is unusable without it (falls back to the existing
-     copy-to-clipboard button, which must keep working).
-   - Token scope needed (already documented in `.env.example`): fine-grained PAT limited
-     to `an2323/excalidraw`, **Pull requests: Read and write** (line comments,
-     `POST /repos/{o}/{r}/pulls/{n}/comments`, `commit_id` = head SHA) + **Issues: Read
-     and write** (general/out-of-diff comments go through
-     `POST /repos/{o}/{r}/issues/{n}/comments` — a PR is an "issue" for that endpoint).
-   - Wire "Your review" screen (`packages/web/src/SummaryScreen.tsx`): a comment/question
-     button that posts through a new backend endpoint (backend-only token, never sent to
-     the browser) instead of only copy-to-clipboard. Should-haves (do if time allows,
-     skip otherwise): draft review with Submit (Comment/Approve/Request changes) via
-     `POST /pulls/{n}/reviews`; a bot comment linking back to the walkthrough.
-   - Full design is written out under "Sub-Task 6d" in `pr-walkthrough-plan.md` — follow
-     it, update its `**Status:**` line and add an "As built" note when done, the way
-     ST6c's entry does.
-   - Verify: post a line comment and a question from the viewer, confirm they land on
-     an2323/excalidraw#1 at the right line; with the token unset, confirm the UI falls
-     back to copy and nothing throws.
+- **ST1–ST12 (evidence loop)**: full pipeline — analysis → validation (incl. new
+  backend-computed line numbers/`+`/`-` change markers/stitched-quote detection,
+  `validation/line-numbers.ts`) → a screenshot verifier (Bob writes a `repro.cjs` that the
+  backend independently confirms true@BASE/false@HEAD before trusting it) → a $0 ablation
+  (`verify/ablation.ts`: apply the PR's hunks to BASE one-at-a-time / all-but-one, rerun the
+  confirmed script) → an evidence-based revision pass (`bob-revise.ts`) that resumes the
+  original Bob session with the ablation table and fixes only the steps it contradicts.
+  Demonstrated end-to-end on **#10943** (see `pr-walkthrough-plan.md` ST12 and the commit log).
+- **Viewer redesign (P1, all done)**: dark theme is now the default (not OS-dependent); two-column
+  step layout (story left, code right ≥1024px) with real line numbers and diff-fact-based
+  `+`/`-` colors instead of the analyzer's own (unreliable) `kind`; screenshots never upscale past
+  their natural size, and now **auto-crop** to the highlighted region when it's a small fraction
+  of a large screenshot (`verify/highlights.ts`'s `maybeCropRegion`, wired into
+  `shots/annotate.ts` and `scripts/annotate-shots.ts --no-crop` to disable); landing page rewritten
+  with real per-PR numbers fetched live, not hand-written blurbs; flow diagrams no longer clip in
+  the narrow story column.
+- **#10295 regenerated** with the current prompt (was on an older, pre-ST12 prompt) — took 3
+  attempts (2 failed: one hit the still-open #9403-style JSON-extraction bug on a large response,
+  one had a stitched-code quote a targeted `--resume` then fixed). Its original manual before/after
+  shots were restored (the fresh analysis run doesn't call the verifier by itself). Old version
+  backed up at `data/walkthroughs/archive/10295.pre-st12-zindex.json`.
+- **Narration rule**: narration must never mention how a claim was checked ("ablation",
+  "confirms", etc.) — that belongs in `say`/`notes`. Added to the analyzer prompt, `bob-revise.ts`'s
+  own prompt, and a new `checkQuality` warning (`narration-mentions-process`). Hand-fixed the two
+  PRs already affected (#10943's evidence mentions, #8340's raw backticked identifiers — #8340
+  predates the no-identifiers rule entirely).
+- **README** rewritten with current env vars, the evidence-loop explanation, updated
+  `bob_sessions/` checklist.
+- **Deployed** to https://pr-walkthrough-bob.vercel.app (static build, `pnpm build:static` then
+  `vercel deploy --prod` from `packages/web/dist` — **always run `npx vercel link --yes --project
+  pr-walkthrough` again first**, since `vite build` wipes `dist/.vercel` on every build and a bare
+  `vercel deploy` will silently create/deploy to a NEW project instead of aliasing the right one —
+  this happened once already tonight, caught and fixed).
 
-2. **ST6f — public demo on Vercel** (not started): static build of the viewer (JSON +
-   narration mp3 + screenshots as static files, no backend), Excalidraw PRs only
-   (Outline's licence is unverified — never put it in the public demo). Live analysis
-   and GitHub posting are hidden in this build; the video covers them instead. Design is
-   under "Sub-Task 6f" in the plan.
+## In progress — pick this up first
 
-3. **ElevenLabs narration regeneration — deliberately deferred to the very end** (a
-   Sep 26 decision, see ST7 in the plan): #10295's narration text changed during ST10 and
-   is now stale; #8340 has no narration yet. Do this only once ST6c/6d/6f/ST7 wording is
-   final, and only with the user's explicit go-ahead (it spends ElevenLabs credits).
-   `pnpm --filter @pr-walkthrough/server tts:pregen <owner/repo#number>`.
+**#10943's before/after screenshots don't show the bug.** The PR's real title is "arrowhead
+picker overflowing viewport", but at every viewport size tested (1280×800 down to mobile widths,
+and down to absurdly short heights) the picker does **not** visibly overflow in the scenario Bob's
+verifier script uses (draw an arrow in the canvas center, open the arrowhead style picker) —
+confirmed by direct measurement (`overflowsRight`/`overflowsBottom` both false almost everywhere).
+The underlying bug is real and measured (BASE: `.picker` is `position: absolute` with no Radix
+`data-side` attribute; HEAD: `static` + `data-side` present — this is what the ablation/evidence
+loop actually verified), but it's a **structural** DOM fact, not something guaranteed to produce a
+dramatic visible edge-of-screen moment in this interaction path.
 
-4. **Paid runs waiting on the user's yes** (ask before running, check budget first):
-   - ST10 confirmation run on #8340 (~$1–2) — does the prompt-quality fix generalize.
-   - #9403 retry — only after root-causing the stream-json reconstruction bug in
-     `findWalkthroughInEvents` (`packages/server/src/analyzer/bob-shell.ts`); otherwise
-     it'll just fail the same way again for another $1–2.
+Already tried and ruled out (all $0, no Bob spend): plain viewport resizing in every direction;
+auto-cropping the screenshot to the highlighted area (implemented, committed, helps legibility but
+doesn't create an edge that isn't there). **Next idea, not yet tried**: the component's SCSS has an
+explicit `[dir="rtl"]` rule — Excalidraw's properties panel docks on the opposite side in an RTL
+language (e.g. Arabic, `ar-SA`, switchable via the in-app language dropdown or by setting
+`document.documentElement.dir`/the app's language atom before interacting), which could plausibly
+put the picker's trigger near a real edge. A `$0` Playwright experiment (start BASE+HEAD via
+`packages/server/src/verify/app-servers.ts` + `recipeFor("excalidraw","excalidraw")`, switch to
+Arabic, repeat the draw-arrow-then-open-picker scenario, check `getBoundingClientRect()` against
+`innerWidth`) was queued when this session got interrupted — pick it up from there.
 
-5. **ST8 — `bob_sessions/` screenshots.** ⚠️ Currently **empty**. This is a submission
-   eligibility requirement (PNG per significant task, named
-   `{teamname}_task{nn}_{short_description}.png`). Flag this to the user early if it's
-   still empty — don't let it become a last-minute blocker.
+**User's explicit decision point (ask them, don't just proceed):** if RTL (or another $0 idea) still
+doesn't produce a visible difference, the options are — (a) drop the before/after screenshots for
+#10943 and rely on the text + evidence badges only (cheapest, most honest), (b) spend ~$0.3–0.6 of
+the ~$2.99 left asking Bob itself to find a genuinely visible repro (risk: it already tried once and
+produced the same non-visible scenario), or (c) accept the current cropped screenshot as-is with
+honest framing that it demonstrates the structural fix, not a dramatic visual one. The user was
+mid-decision on this when this session ran low — resume by asking them directly rather than picking
+for them.
 
-6. **ST9 — README, demo video, final polish** (not started): two manual before/after
-   screenshots of #10295 (excalidraw at BASE vs HEAD, sidebar open — replaces the cut
-   ST6e), then a demo video: before/after → walkthrough with narration → live-analysis
-   progress screen → comment landing in GitHub. README needs a "How we used Bob 2.0"
-   section (table already drafted in ST8's plan section) with real numbers from the cost
-   logs (subagents, `--resume`, cost/duration).
+## Remaining after that
 
-## Verification habits already in place — keep following them
+1. **`bob_sessions/` — still empty except a placeholder README.** This is a hard submission
+   requirement (PNG per significant Bob session, `{teamname}_task{nn}_{short_description}.png`) and
+   can only be done by the user (screenshots of their own Bob IDE/Shell usage) — flag it to them
+   early and often, it's the single biggest risk to a rejected submission right now.
+2. **ElevenLabs narration audio** — deliberately deferred to the very end so text isn't re-recorded
+   twice; text is now final for #10943/#10295, #8340 still has pre-ST12 `say`/`headline` identifier
+   warnings (not narration — those are fixed) that weren't in scope of tonight's narration cleanup.
+   3 sample sentences were already generated and sent to the user for a voice check earlier — ask
+   before generating the rest (spends ElevenLabs credits), and regenerate the static Vercel build +
+   redeploy afterward (`pnpm build:static && cd packages/web/dist && npx vercel link --yes --project
+   pr-walkthrough && npx vercel deploy --prod --yes && npx vercel alias set <new-url>
+   pr-walkthrough-bob.vercel.app`).
+3. **Demo video**: before/after (or the honest structural framing decided above for #10943) →
+   walkthrough with narration → live-analysis progress screen → comment landing in GitHub (ST6d,
+   already built — demo PR is `an2323/excalidraw#1`).
+4. **Submission** before 15:00 UTC.
 
-- `pnpm --filter @pr-walkthrough/shared build` after touching `packages/shared`.
-- `pnpm --filter @pr-walkthrough/server test`, and `lint`/`tsc --noEmit` for both
-  `server` and `web`, `pnpm --filter @pr-walkthrough/web build` — run all of these before
-  considering a change done.
-- Start the stack with `ANALYZER=cached pnpm dev` and check in a browser at both desktop
-  and ~375px width; no console errors.
-- Every paid Bob Shell run gets a row in `docs/cost-log-stage2.md` (date, PR, mode,
-  max-cost, actual cost, duration, tool calls, subagents, repairs, valid, notes) —
-  match the existing table's columns exactly.
+## Verification habits already in place
+
+- `ANALYZER=cached pnpm dev`, check in a browser at desktop width and ~375px; no new console
+  errors (the dev server has been running a long time this session — some console entries are
+  stale from hours ago, timestamped; only treat NEW ones after your own changes as real).
+- Every paid Bob Shell run gets a row in `docs/cost-log-stage2.md` — match the existing columns.
+- `packages/server/scripts/annotate-shots.ts <owner/repo#n> [--no-crop]` re-renders shots at $0
+  from already-captured raw PNGs + stored highlight coordinates — no need to re-run the verifier
+  just to tweak crop/label rendering.
