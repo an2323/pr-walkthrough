@@ -29,7 +29,7 @@ import { promisify } from "node:util";
 
 import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
 import { prepareWorkspace } from "../src/git/workspace.js";
-import { runBob, findWalkthroughInEvents, normalizeDraft } from "../src/analyzer/bob-shell.js";
+import { runBob, repairBob, findWalkthroughInEvents, normalizeDraft } from "../src/analyzer/bob-shell.js";
 import { validate } from "../src/validation/index.js";
 import { assertBudget, recordSpend } from "../src/analyzer/budget.js";
 import { verdictForStep, runRepro } from "../src/verify/ablation.js";
@@ -153,6 +153,7 @@ if (!draftRaw) {
   throw new Error("no walkthrough JSON found in Bob's response — not saved");
 }
 normalizeDraft(draftRaw);
+let currentDraft = draftRaw;
 const full = { ...draftRaw, pr: wt.pr } as unknown as Walkthrough;
 
 const ws: RepoWorkspace = {
@@ -163,12 +164,71 @@ const ws: RepoWorkspace = {
   diff: async () => diff,
 };
 const input: AnalyzerInput = { repoPath: workspace.repoPath, baseSha: wt.pr.baseSha, headSha: wt.pr.headSha, pr: wt.pr, hunks: wt.hunks, diff };
-const result = await validate(full, input, ws);
+let result = await validate(full, input, ws);
+let totalCost = run.sessionCost;
+let repairs = 0;
+let mechanicalFix = false;
+
+/**
+ * $0, no Bob: a stitched-code gap ("quoted lines are not adjacent") is a
+ * purely mechanical fix — insert one "elided" line at the exact reported
+ * spot, the same fix a human curator would apply (done by hand once already
+ * for the outline golden example's own pre-existing instance of this bug).
+ * Tried before spending on a paid repair, since a resume/repair round asked
+ * to fix this exact error text twice on #10943 still didn't. Only for this
+ * one error class — anything else is left for the paid repair below.
+ */
+const STITCH = /^step (\S+) beat (\d+) block (\d+) line (\d+):/;
+function tryMechanicalStitchFix(draft: Record<string, unknown>, errors: string[]): boolean {
+  if (errors.length === 0 || !errors.every((e) => STITCH.test(e))) return false;
+  const stepsById = new Map((draft.steps as { id: string }[]).map((s) => [s.id, s]));
+  // Descending by line index: an earlier insertion in the SAME block would
+  // otherwise shift the still-to-process indices reported for later errors.
+  const sorted = [...errors].sort((a, b) => Number(STITCH.exec(b)![4]) - Number(STITCH.exec(a)![4]));
+  for (const e of sorted) {
+    const [, stepId, bi, ci, li] = STITCH.exec(e)!;
+    console.log(`  - mechanical fix: ${e}`);
+    const step = stepsById.get(stepId) as { beats: { code?: { lines: { kind: string; text: string }[] }[] }[] } | undefined;
+    const lines = step?.beats?.[Number(bi)]?.code?.[Number(ci)]?.lines;
+    if (!lines) { console.warn(`    could not locate ${stepId}/beat${bi}/block${ci} — skipped`); return false; }
+    lines.splice(Number(li), 0, { kind: "elided", text: "…" });
+  }
+  return true;
+}
+
+if (!result.valid && tryMechanicalStitchFix(currentDraft, result.errors)) {
+  mechanicalFix = true;
+  result = await validate({ ...currentDraft, pr: wt.pr } as unknown as Walkthrough, input, ws);
+}
+
+// One repair attempt, same as the main pipeline's own analyzer, for anything
+// the mechanical fix above didn't cover.
+if (!result.valid) {
+  const repairCap = (totalCost + REVISE_MAX_COST).toFixed(2);
+  await assertBudget(REVISE_MAX_COST);
+  console.log(`revision failed validation (${result.errors.length} issue(s)) — one repair attempt (cumulative cap $${repairCap})`);
+  const repairRun = await repairBob(taskId, result.errors.slice(0, 20), workspace.repoPath, repairCap);
+  repairs = 1;
+  totalCost = repairRun.sessionCost;
+  const repairedRaw = findWalkthroughInEvents(repairRun.events);
+  if (repairedRaw) {
+    normalizeDraft(repairedRaw);
+    currentDraft = repairedRaw;
+    result = await validate({ ...repairedRaw, pr: wt.pr } as unknown as Walkthrough, input, ws);
+    if (!result.valid && tryMechanicalStitchFix(currentDraft, result.errors)) {
+      mechanicalFix = true;
+      result = await validate({ ...currentDraft, pr: wt.pr } as unknown as Walkthrough, input, ws);
+    }
+  }
+}
 
 await recordSpend({
-  pr: spec, mode: "revise", maxCost: REVISE_MAX_COST, actualCost: increment,
-  durationSec: Math.round(run.ms / 1000), toolCalls: run.toolCalls, subagents: run.subagents, repairs: 0,
-  valid: result.valid, notes: result.valid ? "revised from ablation evidence" : result.errors.slice(0, 3).join("; "),
+  pr: spec, mode: "revise", maxCost: REVISE_MAX_COST * (1 + repairs), actualCost: totalCost - previousCost,
+  durationSec: Math.round(run.ms / 1000), toolCalls: run.toolCalls, subagents: run.subagents, repairs,
+  valid: result.valid,
+  notes: result.valid
+    ? `revised from ablation evidence${mechanicalFix ? " (+ a mechanical elided-line fix, not from Bob)" : ""}`
+    : result.errors.slice(0, 3).join("; "),
 });
 
 if (!result.valid || !result.walkthrough) {
@@ -186,12 +246,12 @@ for (const step of result.walkthrough.steps) {
   if (verdict) step.evidence = { source: "ablation", verdict };
 }
 result.walkthrough.meta.run = {
-  costUsd: run.sessionCost,
-  maxCostUsd: Number(cumulativeCap),
+  costUsd: totalCost,
+  maxCostUsd: Number(cumulativeCap) + (repairs ? REVISE_MAX_COST : 0),
   durationMs: (wt.meta.run?.durationMs ?? 0) + run.ms,
   toolCalls: (wt.meta.run?.toolCalls ?? 0) + run.toolCalls,
   subagents: (wt.meta.run?.subagents ?? 0) + run.subagents,
-  repairs: (wt.meta.run?.repairs ?? 0) + 1,
+  repairs: (wt.meta.run?.repairs ?? 0) + 1 + repairs,
   taskId,
 };
 
