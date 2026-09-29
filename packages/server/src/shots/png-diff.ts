@@ -13,7 +13,7 @@
 
 import { inflateSync } from "node:zlib";
 
-interface Decoded {
+export interface Decoded {
   width: number;
   height: number;
   channels: number;

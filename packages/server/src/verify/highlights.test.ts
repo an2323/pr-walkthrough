@@ -31,6 +31,27 @@ describe("normalizeHighlights", () => {
     expect(after[0].w).toBeCloseTo(0.25, 5);
   });
 
+  it("two different boxes sharing one pair id are matched in order, not all to the first (#10295)", () => {
+    const sidebar = { x: 0.246, y: 0, w: 0.754, h: 0.355, pair: "sidebar-menu" };
+    const button = { x: 0.03, y: 0.014, w: 0.082, h: 0.038, pair: "sidebar-menu" };
+    const { before, after } = normalizeHighlights(
+      [{ ...sidebar, label: "Sidebar stays open" }, { ...button, label: "Menu opened under sidebar" }],
+      [{ ...sidebar, label: "Sidebar closed" }, { ...button, label: "Menu opened sidebar closed" }]
+    );
+    expect(before[1]).toMatchObject({ x: button.x, w: button.w, label: "Menu opened under sidebar" });
+    expect(after[1]).toMatchObject({ x: button.x, w: button.w });
+    expect(before[0]).toMatchObject({ x: sidebar.x, w: sidebar.w });
+  });
+
+  it("does not union paired boxes that mark two separate places", () => {
+    const { before, after } = normalizeHighlights(
+      [{ x: 0.1, y: 0.1, w: 0.1, h: 0.1, pair: "p" }],
+      [{ x: 0.7, y: 0.7, w: 0.1, h: 0.1, pair: "p" }]
+    );
+    expect(before[0]).toMatchObject({ x: 0.1, w: 0.1 });
+    expect(after[0]).toMatchObject({ x: 0.7, w: 0.1 });
+  });
+
   it("leaves unpaired boxes alone and caps the count per side", () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ x: i * 0.1, y: 0, w: 0.05, h: 0.05 }));
     const { before, after } = normalizeHighlights(many, [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, pair: "x" }]);
@@ -86,6 +107,16 @@ describe("tidyLabel — Bob writes sentences; a label is a short caption", () =>
 
   it("cleanHighlight uses it", () => {
     expect(cleanHighlight({ x: 0.1, y: 0.1, w: 0.3, h: 0.3, label: "Menu is open here (dropdown)" })?.label).toBe("Menu is open here");
+  });
+});
+
+describe("focusOnChange — two labels never end up on one box", () => {
+  it("keeps the model's boxes when re-aiming would make two labeled boxes identical", () => {
+    const hl = [
+      { x: 0.25, y: 0, w: 0.75, h: 0.9, label: "Sidebar stays open" },
+      { x: 0.03, y: 0, w: 0.95, h: 0.9, label: "Menu opened under sidebar" },
+    ];
+    expect(focusOnChange(hl, { x: 0.1, y: 0, w: 0.8, h: 0.3 })).toEqual(hl);
   });
 });
 

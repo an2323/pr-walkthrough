@@ -69,6 +69,10 @@ function union(a: ShotHighlight, b: ShotHighlight): Pick<ShotHighlight, "x" | "y
   };
 }
 
+function intersects(a: ShotHighlight, b: ShotHighlight): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
 /**
  * Clean both sides and apply pairing. A `pair` id present on only one side is
  * kept as an ordinary box.
@@ -79,10 +83,18 @@ export function normalizeHighlights(
 ): { before: ShotHighlight[]; after: ShotHighlight[] } {
   const before = beforeRaw.map(cleanHighlight).filter((h): h is ShotHighlight => !!h).slice(0, MAX_PER_SIDE);
   const after = afterRaw.map(cleanHighlight).filter((h): h is ShotHighlight => !!h).slice(0, MAX_PER_SIDE);
+  // Match the k-th box with a given pair id on one side to the k-th on the other: a script that gave
+  // two different boxes the same id (#10295: the sidebar AND the menu button, both "sidebar-menu") used
+  // to union both with the first match — one huge box under two different labels.
+  const taken = new Set<ShotHighlight>();
   for (const b of before) {
     if (!b.pair) continue;
-    const a = after.find((h) => h.pair === b.pair);
+    const a = after.find((h) => h.pair === b.pair && !taken.has(h));
     if (!a) continue;
+    taken.add(a);
+    // Only boxes that mark the same spot share one rectangle; a union of two separate places is a box
+    // around neither.
+    if (!intersects(a, b)) continue;
     const rect = union(b, a);
     Object.assign(b, rect);
     Object.assign(a, rect);
@@ -136,6 +148,9 @@ export function maybeCropRegion(before: ShotHighlight[], after: ShotHighlight[])
   return { x, y, w: Math.min(1, x1 + padX) - x, h: Math.min(1, y1 + padY + LABEL_ROOM) - y };
 }
 
+const sameRect = (a: CropRegion, b: CropRegion) =>
+  Math.abs(a.x - b.x) < 0.02 && Math.abs(a.y - b.y) < 0.02 && Math.abs(a.w - b.w) < 0.02 && Math.abs(a.h - b.h) < 0.02;
+
 /** Area of a box as a fraction of the image. */
 const area = (h: { w: number; h: number }) => h.w * h.h;
 
@@ -161,5 +176,11 @@ export function focusOnChange(
   const big = opts.bigArea ?? 0.5;
   if (hl.length === 0) return [{ ...box }];
   const out = hl.map((h) => (area(h) > big ? { ...h, ...box } : h));
+  // Two boxes with different labels must still point at different places — if re-aiming made them the
+  // same rectangle, the labels would describe one box twice. Keep the model's boxes then.
+  const labeled = out.filter((h) => h.label);
+  for (let i = 0; i < labeled.length; i++)
+    for (let j = i + 1; j < labeled.length; j++)
+      if (labeled[i].label !== labeled[j].label && sameRect(labeled[i], labeled[j])) return hl;
   return out;
 }

@@ -199,7 +199,9 @@ backend measure each fix separately.
      show the difference), as fractions of the viewport: \`{x,y,w,h,label,pair?}\`. A label is a caption of
      at most 5 plain words that a non-engineer understands ("Sidebar still open", "Menu opened") — no property
      names, numbers, comparisons or sentences. It says what is wrong when \`bugPresent\` and what is fixed when
-     not. Boxes marking the SAME spot get the same "pair" id;
+     not. Box the thing the label talks about (the open menu itself, not the button that opened it). A box
+     and its counterpart in the other build share one "pair" id, and each pair has its OWN id — two different
+     boxes on one screenshot never share a "pair";
    - print EXACTLY ONE line of JSON as your last line of output:
      \`{"bugPresent": true, "measure": {...the numbers you used...}, "highlights": [...]}\`
    - only say \`bugPresent: false\` after the scenario actually ran and the signal was measured. If a step it
