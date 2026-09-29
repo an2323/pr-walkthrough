@@ -6,12 +6,14 @@
 #
 # Needs deploy/.env.production (gitignored) and deploy/vendor/bobshell-*.tgz.
 set -euo pipefail
+cd "$(dirname "$0")/../.."
 
 ZONE="${GCP_ZONE:-europe-west1-b}"
 NAME="${VM_NAME:-pr-walkthrough}"
 
 # shellcheck source=../common/busy.sh
 source "$(cd "$(dirname "$0")/.." && pwd)/common/busy.sh"
+source "$(cd "$(dirname "$0")/.." && pwd)/common/gates.sh"
 
 [ -f deploy/.env.production ] || { echo "missing deploy/.env.production (see docs/deploy.md)"; exit 1; }
 ls deploy/vendor/bobshell-*.tgz >/dev/null 2>&1 || {
@@ -19,6 +21,7 @@ ls deploy/vendor/bobshell-*.tgz >/dev/null 2>&1 || {
   exit 1
 }
 
+refuse_without_preflight || exit 1
 refuse_if_busy || exit 1
 
 echo "→ uploading working tree to $NAME"

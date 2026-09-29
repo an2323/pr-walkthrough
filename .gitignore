@@ -20,3 +20,4 @@ deploy/vendor/
 deploy/.env
 deploy/.env.production
 data/vm-runs/
+.preflight-ok

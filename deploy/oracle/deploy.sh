@@ -15,6 +15,7 @@ SSH_PRIV="${OCI_SSH_KEY_FILE:-${SSH_KEY%.pub}}"
 
 # shellcheck source=../common/busy.sh
 source "$ROOT/deploy/common/busy.sh"
+source "$ROOT/deploy/common/gates.sh"
 
 [ -f deploy/.env.production ] || { echo "missing deploy/.env.production (see docs/deploy.md)"; exit 1; }
 ls deploy/vendor/bobshell-*.tgz >/dev/null 2>&1 || {
@@ -23,6 +24,7 @@ ls deploy/vendor/bobshell-*.tgz >/dev/null 2>&1 || {
 }
 [ -f "$SSH_PRIV" ] || { echo "missing SSH private key: $SSH_PRIV"; exit 1; }
 
+refuse_without_preflight || exit 1
 refuse_if_busy || exit 1
 
 INSTANCE_ID="$(oci compute instance list --compartment-id "$COMPARTMENT" --display-name "$NAME" --lifecycle-state RUNNING \
@@ -53,4 +55,5 @@ echo "→ building and starting containers (first build takes ~10–20 min)"
 
 SITE="$(grep -E '^SITE_ADDRESS=' deploy/.env.production | cut -d= -f2-)"
 echo
-echo "→ https://$SITE/health"
+wait_healthy "$SITE"
+echo "→ next, prove it for \$0: pnpm --filter @pr-walkthrough/server rehearse --pr excalidraw/excalidraw#10295"

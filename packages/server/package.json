@@ -18,7 +18,9 @@
     "annotate-shots": "tsx scripts/annotate-shots.ts",
     "annotate-lines": "tsx scripts/annotate-lines.ts",
     "bob:revise": "tsx scripts/bob-revise.ts",
-    "migrate:supabase": "tsx scripts/migrate-to-supabase.ts"
+    "migrate:supabase": "tsx scripts/migrate-to-supabase.ts",
+    "rehearse": "tsx scripts/rehearse.ts",
+    "check-run": "tsx scripts/check-run.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",
