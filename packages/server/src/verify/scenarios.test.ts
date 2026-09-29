@@ -146,20 +146,33 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
     expect(r.results[0].outcome.ok).toBe(true);
   });
 
-  it("gives ONE repair covering all problems at once, then re-confirms", async () => {
+  it("does not pay to fix identical frames when another scenario already shows the difference", async () => {
     const o = await setup(
       { "a.cjs": script(DARK), "b.cjs": script(WHITE) },
       [{ id: "a", file: "a.cjs", title: "A" }, { id: "b", file: "b.cjs", title: "B (invisible)" }]
     );
+    let calls = 0;
+    const r = await confirmScenariosWithRepair(o, async () => void calls++);
+    expect(calls).toBe(0);
+    expect(r.results.map((x) => x.outcome.ok)).toEqual([true, true]);
+  });
+
+  it("gives ONE repair covering all problems at once, then re-confirms", async () => {
+    const broken = `console.log(JSON.stringify({ bugPresent: true, measure: {}, highlights: [] }));`;
+    const o = await setup(
+      { "a.cjs": broken, "b.cjs": script(WHITE) },
+      [{ id: "a", file: "a.cjs", title: "A (wrong)" }, { id: "b", file: "b.cjs", title: "B (invisible)" }]
+    );
     const prompts: string[] = [];
     const r = await confirmScenariosWithRepair(o, async (prompt) => {
       prompts.push(prompt);
-      await writeFile(path.join(o.verifyDir, "b.cjs"), script(DARK)); // Bob makes B visible
+      await writeFile(path.join(o.verifyDir, "a.cjs"), script(DARK)); // Bob fixes A's contract
+      await writeFile(path.join(o.verifyDir, "b.cjs"), script(DARK)); // …and makes B visible
     });
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain(BASE);
-    expect(prompts[0]).toMatch(/"b" \(b\.cjs\) — B \(invisible\)/);
-    expect(prompts[0]).not.toMatch(/"a" \(a\.cjs\)/); // only what needs fixing
+    expect(prompts[0]).toMatch(/"a" \(a\.cjs\) — A \(wrong\)/);
+    expect(prompts[0]).toMatch(/"b" \(b\.cjs\) — B \(invisible\)/); // nothing visible yet → worth fixing
     expect(r.repaired).toBe(true);
     expect(r.results.every((x) => x.visible)).toBe(true);
   });

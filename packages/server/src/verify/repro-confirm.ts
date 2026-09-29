@@ -175,13 +175,17 @@ export async function confirmScenarios(o: ScenariosOptions): Promise<ScenarioRes
 export function scenarioProblems(results: ScenarioResult[]): string[] {
   if (results.length === 0) return ["No scenario script was written (no scenarios.json and no repro.cjs)."];
   const lines: string[] = [];
+  // Identical frames only matter when NOTHING shows a difference: with one visible pair the reader
+  // already sees the change, and the identical scenario still gives its BASE frame as a symptom card.
+  // (On #10295 this alone paid ~$1 per run for a rewrite that added nothing visible.)
+  const anyVisible = results.some((r) => r.visible);
   for (const r of results) {
     const head = `- "${r.scenario.id}" (${r.scenario.file}) — ${r.scenario.title}:`;
     if (!r.outcome.ok) {
       lines.push(
         `${head} ${r.outcome.problem ?? "rejected"}.\n    on BASE: ${describeRun(r.outcome.before)}\n    on HEAD: ${describeRun(r.outcome.after)}`
       );
-    } else if (r.identical) {
+    } else if (r.identical && !anyVisible) {
       lines.push(
         `${head} passes the contract, but its BASE and HEAD screenshots are pixel-identical, so a reader sees no difference. ` +
           `Make the scenario END in the state where the problem is visible on screen (open the panel/menu that overlaps, use the ` +
