@@ -96,7 +96,7 @@ if (apply) {
   markVerified(wt);
   if (result.shots) wt.shots = result.shots;
   if (result.shotsNote) recordShotsNote(wt, result.shotsNote);
-  if (result.symptomSrcs?.size) attachSymptomShots(wt, result.symptomSrcs);
+  attachSymptomShots(wt, result.symptomSrcs ?? new Map()); // the complete set — clears cards a newer render no longer makes
   await saveWalkthrough(wt);
   console.log("walkthrough updated (verification passed, shots / note, symptom frames)");
 }
@@ -150,7 +150,7 @@ if (flag("ablate")) {
         console.log(`revise: ${revised.status}${"reason" in revised ? ` — ${revised.reason}` : ""} (cost $${revised.costUsd.toFixed(3)})`);
         if (revised.status === "ok") {
           wt = revised.walkthrough;
-          if (result.symptomSrcs?.size) attachSymptomShots(wt, result.symptomSrcs);
+          attachSymptomShots(wt, result.symptomSrcs ?? new Map()); // the complete set — clears cards a newer render no longer makes
           await saveWalkthrough(wt);
           console.log(`saved; quality warnings now: ${checkQuality(wt).map((w) => w.code).join(", ") || "none"}`);
         }

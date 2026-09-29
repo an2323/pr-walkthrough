@@ -78,7 +78,8 @@ export function parseSymptomsManifest(raw: unknown): SymptomsManifest | null {
 
 /**
  * Attach screenshot paths onto symptom items by index. Mutates `wt` in place
- * and returns it. Missing indices are left unchanged; strings become `{ text, src }`.
+ * and returns it. The map is the complete set: indices missing from it lose any old `src`;
+ * strings become `{ text, src }`.
  */
 export function attachSymptomShots(
   wt: Walkthrough,
@@ -94,10 +95,16 @@ export function attachSymptomShots(
 
   step.visual = {
     type: "symptoms",
+    // The map is the whole current set: a frame a newer render no longer makes is dropped, not kept
+    // from an older run (#21's re-render stopped making its duplicate card, the old one stayed).
     items: step.visual.items.map((item, i) => {
       const src = lookup.get(i);
-      if (!src) return item;
       const text = symptomItemText(item);
+      if (!src) {
+        if (typeof item === "string" || !item.src) return item;
+        const { src: _stale, ...rest } = item;
+        return rest;
+      }
       if (typeof item === "string") return { text, src };
       return { ...item, src };
     }),

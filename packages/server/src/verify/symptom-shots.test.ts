@@ -258,3 +258,15 @@ describe("captureSymptomShots — frames that add nothing are dropped", () => {
     }
   });
 });
+
+describe("attachSymptomShots — the map is the complete set", () => {
+  it("drops a card frame that a newer render no longer makes", async () => {
+    const { attachSymptomShots } = await import("./symptom-shots.js");
+    const wt = {
+      steps: [{ id: "s1", visual: { type: "symptoms", items: [{ text: "a", src: "old-0.png" }, { text: "b", src: "old-1.png" }] } }],
+    } as unknown as Parameters<typeof attachSymptomShots>[0];
+    attachSymptomShots(wt, new Map([[1, "new-1.png"]]));
+    const items = (wt.steps[0].visual as { items: { text: string; src?: string }[] }).items;
+    expect(items).toEqual([{ text: "a" }, { text: "b", src: "new-1.png" }]);
+  });
+});
