@@ -6,7 +6,7 @@
  * "is it valid".
  */
 
-import type { Walkthrough } from "@pr-walkthrough/shared";
+import type { Step, Walkthrough } from "@pr-walkthrough/shared";
 
 export interface QualityWarning {
   code: string;
@@ -15,8 +15,12 @@ export interface QualityWarning {
 }
 
 /**
- * Codes worth one automatic `--resume` repair (Q2). Soft style warnings
- * (length, step count, …) stay warnings only — they must not churn the draft.
+ * Codes worth one automatic `--resume` repair (Q2): output-contract breaks a
+ * reviewer or the TTS voice notices directly. Field-length limits are in here
+ * because the only fix is rewriting the prose — there is no deterministic
+ * shortener, and left as warnings they used to be trimmed by hand. Structural
+ * soft warnings (step count, map share, …) stay warnings only — repairing
+ * those would churn the whole draft.
  */
 export const CRITICAL_QUALITY_CODES = new Set([
   "identifier-in-say",
@@ -24,6 +28,19 @@ export const CRITICAL_QUALITY_CODES = new Set([
   "identifier-in-narration",
   "identifier-in-plain",
   "narration-mentions-process",
+  "headline-too-long",
+  "say-too-long",
+  "narration-too-long",
+  "refers-to-screenshot",
+  // Diagram rules (see analyzer-prompt.md → Visuals): a diagram that breaks them is worse than none.
+  "visual-label-identifier",
+  "flow-too-many-marks",
+  "flow-too-big",
+  "layers-no-changed-item",
+  "layers-unchanged-item",
+  "layers-too-many",
+  "layers-not-sorted",
+  "symptom-step-visual",
 ]);
 
 export function criticalQualityWarnings(warnings: QualityWarning[]): QualityWarning[] {
@@ -41,6 +58,13 @@ const SNAKE_CASE = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/;
 /** Narration must state a conclusion, never how it was checked (ST12's evidence loop). */
 const PROCESS_WORDS = /\b(ablation|the measurement|measurement confirms|the backend (verified|confirmed)|verification confirms)\b/i;
 const PATH_SEGMENT = /\b[\w.-]+\/[\w.-]+\b/;
+/**
+ * Prose must read true with or without screenshots — the backend adds them only
+ * for some PRs, and only sometimes succeeds. Narrow on purpose ("image" alone is
+ * a code word); only phrases that point at a picture the reader is looking at.
+ */
+const SCREENSHOT_REF =
+  /\b(screen[- ]?shots?|as (?:you can |we can )?see (?:in|on|below|above|here)|(?:shown|pictured|visible) (?:above|below|here|in the (?:image|picture|shot|screenshot))|(?:in|on) the (?:picture|screenshot|screen shot|shot)|(?:see|look at) the (?:picture|screenshot|shot|image))\b/i;
 
 /** Best-effort, deliberately over-eager — false positives are cheap for a warning a human reads. */
 function looksLikeIdentifier(text: string): boolean {
@@ -82,6 +106,118 @@ function stepBudget(explainedHunks: number): [min: number, max: number] {
 const TEST_FILE = /\.(test|spec)\.|__tests__|__snapshots__|\.snap$/i;
 
 // ---------------------------------------------------------------------------
+// Diagram (visual) checks
+// ---------------------------------------------------------------------------
+
+/** kebab-case with 3+ parts (`data-prevent-outside-click`): code, not words, in a diagram label. */
+const KEBAB_CASE = /\b[a-z][a-z0-9]*(?:-[a-z0-9]+){2,}\b/;
+const CSS_VAR = /(?:^|\s|\()--[a-z]/i;
+/** `data-prevent…`, `aria-…`: an HTML attribute name, even when the label cuts it short. */
+const HTML_ATTRIBUTE = /\b(?:data|aria)-[a-z]/i;
+
+/** Diagram labels are read by people at a glance: plain words only. */
+function looksLikeCodeLabel(text: string): boolean {
+  return looksLikeIdentifier(text) || KEBAB_CASE.test(text) || CSS_VAR.test(text) || HTML_ATTRIBUTE.test(text);
+}
+
+const MAX_FLOW_NODES = 6;
+const MAX_FLOW_ROW = 4;
+const MAX_LABEL_WORDS = 6;
+const MAX_LAYERS_PER_SIDE = 4;
+
+type LayerItem = [string, number] | [string, number, string];
+
+/**
+ * A layers diagram exists to show ONE thing: where the changed item now sits relative to the others.
+ * Only items whose order relative to it CHANGED explain that. An item that stays on the same side
+ * adds nothing — except one on the side the value moves toward (the ceiling a raised value must
+ * stay under, the floor a lowered one must stay over), which shows how far is too far.
+ * Returns the labels that are just noise: unchanged items behind the move, and any beyond the first
+ * "limit" item. Empty when the changed item can't be identified (nothing to judge).
+ */
+export function unchangedLayerItems(before: LayerItem[], after: LayerItem[]): string[] {
+  const changed = after.find((i) => i[2] === "hl");
+  if (!changed) return [];
+  const was = before.find((i) => i[0] === changed[0]);
+  if (!was || was[1] === changed[1]) return [];
+  const [b, a] = [was[1], changed[1]];
+  const dir = a > b ? 1 : -1;
+  const noise: string[] = [];
+  let limits = 0;
+  for (const [label, valueBefore] of before) {
+    if (label === changed[0]) continue;
+    const inAfter = after.find((i) => i[0] === label);
+    if (!inAfter) continue;
+    const valueAfter = inAfter[1];
+    const sideBefore = Math.sign(valueBefore - b);
+    const sideAfter = Math.sign(valueAfter - a);
+    if (sideBefore !== sideAfter) continue; // order changed: this is what the diagram is for
+    const beyond = dir > 0 ? valueAfter > a : valueAfter < a;
+    if (beyond && ++limits === 1) continue; // one limit item is useful
+    noise.push(label);
+  }
+  return noise;
+}
+
+function checkVisual(step: Step, warn: (code: string, message: string, stepId?: string) => void): void {
+  const v = step.visual;
+  if (!v) return;
+
+  if (v.type === "flow") {
+    const nodes = v.rows.flat();
+    for (const [label] of nodes) {
+      if (looksLikeCodeLabel(label)) {
+        warn("visual-label-identifier", `Step ${step.id}'s diagram label looks like code, not plain words: "${label}"`, step.id);
+      }
+      const words = wordCount(label);
+      if (words > MAX_LABEL_WORDS) {
+        warn("flow-too-big", `Step ${step.id}'s diagram label is ${words} words (limit ${MAX_LABEL_WORDS}): "${label}"`, step.id);
+      }
+    }
+    if (nodes.length > MAX_FLOW_NODES || v.rows.some((r) => r.length > MAX_FLOW_ROW)) {
+      warn("flow-too-big", `Step ${step.id}'s diagram has ${nodes.length} nodes in ${v.rows.length} row(s) (limit ${MAX_FLOW_NODES} in total, ${MAX_FLOW_ROW} per row) — keep only the chain the reader needs.`, step.id);
+    }
+    // A mark says "this is where the chain ends up" — so only a row's LAST node carries one, and
+    // only one. Marking every step of a chain red or green (the habit a sloppy few-shot example
+    // teaches) makes the colour meaningless.
+    for (const row of v.rows) {
+      const marked = row.map(([, cls], i) => ({ cls, i })).filter((n) => n.cls === "bad" || n.cls === "good");
+      if (marked.length > 1 || (marked.length === 1 && marked[0].i !== row.length - 1)) {
+        warn("flow-too-many-marks", `Step ${step.id}'s diagram marks ${marked.length} node(s) "bad"/"good" in one row — only the final node of a row may carry a mark (the outcome), and only one.`, step.id);
+        break;
+      }
+    }
+  }
+
+  if (v.type === "layers") {
+    for (const [label] of [...v.before, ...v.after]) {
+      if (looksLikeCodeLabel(label)) {
+        warn("visual-label-identifier", `Step ${step.id}'s diagram label looks like code, not plain words: "${label}"`, step.id);
+      }
+    }
+    if (!v.after.some((i) => i[2] === "hl")) {
+      warn("layers-no-changed-item", `Step ${step.id}'s layers diagram doesn't mark the changed item ("hl") in the After column.`, step.id);
+    }
+    if (v.before.length > MAX_LAYERS_PER_SIDE || v.after.length > MAX_LAYERS_PER_SIDE) {
+      warn("layers-too-many", `Step ${step.id}'s layers diagram has ${Math.max(v.before.length, v.after.length)} rows (limit ${MAX_LAYERS_PER_SIDE}) — show only items whose order relative to the changed one changes.`, step.id);
+    }
+    // The viewer draws the list top to bottom as "top = drawn last / wins". A column written
+    // lowest-first shows the wrong picture: the item that loses appears to win.
+    for (const [title, column] of [["Before", v.before], ["After", v.after]] as const) {
+      const values = column.map((i) => i[1]);
+      if (values.some((val, i) => i > 0 && val > values[i - 1])) {
+        warn("layers-not-sorted", `Step ${step.id}'s layers diagram lists the ${title} column lowest-first — the top row must be the highest value (drawn last / wins), or the picture shows the wrong winner.`, step.id);
+        break;
+      }
+    }
+    const noise = unchangedLayerItems(v.before as LayerItem[], v.after as LayerItem[]);
+    if (noise.length > 0) {
+      warn("layers-unchanged-item", `Step ${step.id}'s layers diagram shows item(s) whose order relative to the changed one doesn't change: ${noise.join(", ")} — they explain nothing; drop them.`, step.id);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // checkQuality
 // ---------------------------------------------------------------------------
 
@@ -101,6 +237,9 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
     for (const [field, text] of fields) {
       if (looksLikeIdentifier(text)) {
         warn("identifier-in-plain", `${field} looks like it contains an identifier or file name: "${text}"`);
+      }
+      if (SCREENSHOT_REF.test(text)) {
+        warn("refers-to-screenshot", `${field} refers to a screenshot ("${text}") — screenshots are optional, the text must stand without them.`);
       }
     }
   }
@@ -141,6 +280,41 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       // step's — the listener isn't told how a claim was checked.
       if (PROCESS_WORDS.test(step.narration)) {
         warn("narration-mentions-process", `Step ${step.id}'s narration mentions how a claim was checked (e.g. "ablation", "confirms") instead of just stating it: "${step.narration}"`, step.id);
+      }
+    }
+
+    const spoken: [string, string | undefined][] = [
+      ["headline", step.headline],
+      ["say", step.say],
+      ["narration", step.narration],
+    ];
+    if (step.visual?.type === "symptoms") {
+      step.visual.items.forEach((item, i) =>
+        spoken.push([`symptom ${i + 1}`, typeof item === "string" ? item : item.text])
+      );
+    }
+    for (const [field, text] of spoken) {
+      if (text && SCREENSHOT_REF.test(text)) {
+        warn("refers-to-screenshot", `Step ${step.id}'s ${field} refers to a screenshot ("${text}") — screenshots are optional, the text must stand without them.`, step.id);
+      }
+    }
+
+    checkVisual(step, warn);
+
+    // The symptom step is where the reader learns WHAT goes wrong, and its `symptoms` list is what the
+    // screenshot verifier builds a scenario (and a card with a picture) for. A diagram there instead
+    // leaves the verifier nothing to show and the reader no list of problems.
+    if (step.kind === "symptom" && !step.minor && step.visual?.type !== "symptoms") {
+      warn("symptom-step-visual", `Step ${step.id} is the symptom step but its visual is ${step.visual ? `"${step.visual.type}"` : "missing"} — use a \`symptoms\` list (one item per thing the user sees go wrong).`, step.id);
+    }
+
+    // One step = one decision: a change that removes a guard AND adds its replacement AND touches many
+    // files is two steps. Soft — splitting is a restructure, not a wording repair; up to three files
+    // is a cohesive implementation (it usually follows its own decision step), so only more warns.
+    if (step.kind === "change" && !step.minor) {
+      const files = new Set(step.hunkIds.map((id) => id.replace(/#\d+$/, "")));
+      if (files.size > 3) {
+        warn("step-many-hunks", `Step ${step.id} spans ${files.size} files (${step.hunkIds.length} hunks) — a change step that does more than one thing should be split (one decision per step).`, step.id);
       }
     }
 

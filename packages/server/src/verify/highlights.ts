@@ -9,6 +9,30 @@ import type { ShotHighlight } from "@pr-walkthrough/shared";
 
 const MAX_PER_SIDE = 3;
 const MAX_LABEL = 40;
+const TRAILING_WORDS = /\s+(?:to|the|a|an|of|in|on|at|and|or|is|are|as|but|with|for|by|that|than)$/i;
+
+/**
+ * Bob's labels are often sentences with property names and numbers ("Sidebar z-index (80) <
+ * toolbar (100): toolbar buttons appear on top"), and cutting those at N characters left
+ * fragments like "…(100): to". A label is a two-to-five word caption: drop parentheticals, cut at
+ * a word boundary, and never end on a dangling connective or punctuation.
+ */
+export function tidyLabel(raw: string, max = MAX_LABEL): string {
+  let t = raw.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  // "Caption: explanation" — the caption is what fits on a picture.
+  const head = t.split(/\s*[:—–]\s+|\s+-\s+/)[0];
+  if (head.length >= 8) t = head;
+  if (t.length > max) {
+    const cut = t.slice(0, max);
+    const at = cut.lastIndexOf(" ");
+    t = at > 12 ? cut.slice(0, at) : cut;
+  }
+  for (let prev = ""; prev !== t; ) {
+    prev = t;
+    t = t.replace(/[\s:;,.\-–—<>=/]+$/, "").replace(TRAILING_WORDS, "");
+  }
+  return t;
+}
 
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
@@ -26,7 +50,10 @@ export function cleanHighlight(raw: unknown): ShotHighlight | undefined {
   const h = clamp01(Math.min(nums[3], 1 - y));
   if (w < 0.005 || h < 0.005) return undefined;
   const hl: ShotHighlight = { x, y, w, h };
-  if (typeof o.label === "string" && o.label.trim()) hl.label = o.label.trim().slice(0, MAX_LABEL);
+  if (typeof o.label === "string" && o.label.trim()) {
+    const label = tidyLabel(o.label);
+    if (label) hl.label = label;
+  }
   if (typeof o.pair === "string" && o.pair.trim()) hl.pair = o.pair.trim();
   return hl;
 }
@@ -107,4 +134,32 @@ export function maybeCropRegion(before: ShotHighlight[], after: ShotHighlight[])
   const x = Math.max(0, x0 - padX);
   const y = Math.max(0, y0 - padY);
   return { x, y, w: Math.min(1, x1 + padX) - x, h: Math.min(1, y1 + padY + LABEL_ROOM) - y };
+}
+
+/** Area of a box as a fraction of the image. */
+const area = (h: { w: number; h: number }) => h.w * h.h;
+
+/**
+ * Re-aim highlights at what actually changed. A model tends to box the whole component ("the sidebar")
+ * while the visible difference is a few controls inside it; a box around everything shows the reader
+ * nothing. Any highlight covering more than half the image is replaced by the changed region (padded
+ * so the surroundings stay readable), keeping its label and pair; a side left with no highlight gets
+ * an unlabeled box on the region. Small, specific boxes from the model are left alone.
+ */
+export function focusOnChange(
+  hl: ShotHighlight[],
+  region: { x: number; y: number; w: number; h: number } | null,
+  opts: { pad?: number; bigArea?: number } = {}
+): ShotHighlight[] {
+  if (!region) return hl;
+  const pad = opts.pad ?? 0.03;
+  const x = clamp01(region.x - pad);
+  const y = clamp01(region.y - pad);
+  const box = { x, y, w: clamp01(Math.min(region.w + 2 * pad, 1 - x)), h: clamp01(Math.min(region.h + 2 * pad, 1 - y)) };
+  // The changed region is itself most of the image (a whole-page change): nothing sharper to point at.
+  if (area(box) > 0.5) return hl;
+  const big = opts.bigArea ?? 0.5;
+  if (hl.length === 0) return [{ ...box }];
+  const out = hl.map((h) => (area(h) > big ? { ...h, ...box } : h));
+  return out;
 }

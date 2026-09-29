@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProgressEvent, ProgressEventOf, ProgressStage } from '@pr-walkthrough/shared';
-import { STATIC, recordingUrl } from './staticMode';
+import { STATIC, recordingUrl, apiUrl } from './staticMode';
 import './ProgressScreen.css';
 
 /** Static build only — mirrors REPLAY_TARGET_MS in the server's replay route. */
@@ -108,9 +108,9 @@ export function ProgressScreen({ owner, repo, number }: Props) {
   useEffect(() => {
     if (STATIC) return;
     const url = isReplay
-      ? `/api/runs/${owner}/${repo}/${number}/events${speed ? `?speed=${encodeURIComponent(speed)}` : ''}`
+      ? apiUrl(`/api/runs/${owner}/${repo}/${number}/events${speed ? `?speed=${encodeURIComponent(speed)}` : ''}`)
       : jobId
-      ? `/api/jobs/${jobId}/events`
+      ? apiUrl(`/api/jobs/${jobId}/events`)
       : null;
     if (!url) {
       setConnectionLost(true);
@@ -211,7 +211,7 @@ export function ProgressScreen({ owner, repo, number }: Props) {
         )}
 
         {toolLog.length > 0 && !doneEvent && (
-          <div className="progress-log" aria-label="Recent Bob actions">
+          <div className="progress-log" aria-label="Recent analysis actions">
             {toolLog.map((e, i) => (
               <div key={i} className="progress-log-line">{e.target}</div>
             ))}

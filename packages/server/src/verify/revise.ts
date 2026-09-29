@@ -31,12 +31,22 @@ const execFileAsync = promisify(execFile);
 const REVISE_MAX_COST = Number(process.env.REVISE_MAX_COST ?? 1);
 
 export function formatAblation(a: Ablation): string {
-  const lines = a.runs.map(
-    (r) =>
-      `- ${r.mode === "alone" ? "ONLY" : "EVERYTHING EXCEPT"} [${r.unitIds.join(", ")}] → ${r.verdict}` +
-      (r.detail ? ` (${r.detail.slice(0, 120)})` : "")
-  );
-  return `Hunks tested: ${a.units.join(", ")}\n${lines.join("\n")}`;
+  const titles = new Map((a.scenarios ?? []).map((s) => [s.id, s.title]));
+  const lines = a.runs.flatMap((r) => {
+    const head = `${r.mode === "alone" ? "ONLY" : "EVERYTHING EXCEPT"} [${r.unitIds.join(", ")}]`;
+    if (r.results?.length) {
+      // One line per scenario: each is a separate user-visible behaviour, measured on the same build.
+      return r.results.map(
+        (x) => `- ${head} → ${x.verdict} for "${titles.get(x.scenarioId) ?? x.scenarioId}"` + (x.detail ? ` (${x.detail.slice(0, 120)})` : "")
+      );
+    }
+    const only = a.scenarios?.[0];
+    return [`- ${head} → ${r.verdict}${only ? ` for "${only.title}"` : ""}` + (r.detail ? ` (${r.detail.slice(0, 120)})` : "")];
+  });
+  const scen = a.scenarios?.length
+    ? `\nScenarios measured (each a separate behaviour a user sees):\n${a.scenarios.map((s) => `- "${s.title}"`).join("\n")}\nA hunk that matters for only ONE of them is still required for the PR — "no effect" is only true if it changed NOTHING in any scenario.`
+    : "";
+  return `Hunks tested: ${a.units.join(", ")}${scen}\n${lines.join("\n")}`;
 }
 
 /**
@@ -118,6 +128,11 @@ Rewrite ONLY the steps whose claims the table above contradicts:
   table, or the viewport/scenario tested doesn't cover what the step claims — e.g. a mobile-only claim
   tested only at desktop width), leave the step tagged "inferred" and say in \`notes\` that it is
   untested by this measurement — do not guess a verdict for it.
+- The measurement covers ONE scenario (the behaviour the repro script checks) — usually just one of
+  the PR's effects. Whenever you state what a change fixes or is sufficient for, name THAT behaviour in
+  plain words ("fixes the toolbar covering the panel on its own"). Never write "the bug" or "the
+  problem" as if the PR had a single one when other effects of the PR were not measured, and never let
+  a headline claim more than the measured scenario shows.
 - \`say\` and \`notes\` may cite the evidence ("confirmed by testing this change on its own", a value
   from the measurement, etc.) — that is what they are for. \`narration\` must NEVER mention the
   ablation, the measurement, or how any claim was checked — no "ablation", "confirms", "the

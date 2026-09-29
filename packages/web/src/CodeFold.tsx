@@ -4,9 +4,9 @@
  * Ported from the prototype codeBlock() function.
  */
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { CodeBlock, CodeLine } from '@pr-walkthrough/shared';
-import { LineComposer, type PostedComment } from './review';
+import { LineComposer, type AskResult, type PostedComment } from './review';
 
 const CTX = 3;
 
@@ -28,16 +28,81 @@ interface Props {
   baseSha?: string;
   headSha?: string;
   prUrl: string;
+  /** Open the line composer on this line, prefilled (Ask flow). */
+  askSeed?: { lineIndex: number; text: string } | null;
+  onAskSettled?: (result: AskResult) => void;
+  onAskCancel?: () => void;
 }
 
-export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
+export function CodeFold({
+  block,
+  prRepo,
+  baseSha,
+  headSha,
+  prUrl,
+  askSeed = null,
+  onAskSettled,
+  onAskCancel,
+}: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [composing, setComposing] = useState<number | null>(null);
+  const [composeInitial, setComposeInitial] = useState<string>('');
+  const [askCompose, setAskCompose] = useState(false);
   const [posted, setPosted] = useState<Record<number, PostedComment[]>>({});
 
   const L = block.lines;
   // Reconstructed lines exist in no revision, so there is nothing on GitHub to comment on.
   const commentable = !block.reconstructed;
+
+  const keep = L.map((_, i) => {
+    for (let d = -CTX; d <= CTX; d++) {
+      const neighbor = L[i + d];
+      if (neighbor && isKey(neighbor)) return true;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (!askSeed) return;
+    const idx = askSeed.lineIndex;
+    if (idx < 0 || idx >= L.length) return;
+
+    let i = 0;
+    while (i < L.length) {
+      if (keep[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < L.length && !keep[j]) j++;
+      if (idx >= i && idx < j) {
+        const gapKey = `gap-${i}-${j}`;
+        setExpanded((prev) => (prev[gapKey] ? prev : { ...prev, [gapKey]: true }));
+        break;
+      }
+      i = j;
+    }
+
+    setComposing(idx);
+    setComposeInitial(askSeed.text);
+    setAskCompose(true);
+
+    const t = window.setTimeout(() => {
+      document.querySelector('.v2code .ln.on')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+    return () => window.clearTimeout(t);
+    // Only re-run when the seeded line/text changes — not when parent rebuilds the object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askSeed?.lineIndex, askSeed?.text]);
+
+  const closeComposer = () => {
+    setComposing(null);
+    setComposeInitial('');
+    if (askCompose) {
+      setAskCompose(false);
+      onAskCancel?.();
+    }
+  };
 
   const lineRow = (l: CodeLine, k: number) => {
     const canComment = commentable && l.kind !== 'elided';
@@ -58,7 +123,18 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
             className="g cm"
             title="Comment on this line"
             aria-label="Comment on this line"
-            onClick={() => setComposing(composing === k ? null : k)}
+            onClick={() => {
+              if (composing === k) {
+                closeComposer();
+                return;
+              }
+              if (askCompose) {
+                setAskCompose(false);
+                onAskCancel?.();
+              }
+              setComposeInitial('');
+              setComposing(k);
+            }}
           >
             <span className={`gl ${glyphClassFor(l)}`}>{glyphFor(l)}</span>
             <span className="plus">+</span>
@@ -82,27 +158,41 @@ export function CodeFold({ block, prRepo, baseSha, headSha, prUrl }: Props) {
       );
     }
     if (composing === k) {
+      const fromAsk = askCompose;
       out.push(
         <LineComposer
           key={`composer-${k}`}
+          initialText={composeInitial}
           anchor={{ file: block.file, revision: block.revision, lines: L.map(({ kind, text }) => ({ kind, text })), index: k }}
-          onCancel={() => setComposing(null)}
-          onPosted={(c) => {
+          onCancel={closeComposer}
+          onCopied={fromAsk
+            ? (body) => {
+                setComposing(null);
+                setComposeInitial('');
+                setAskCompose(false);
+                onAskSettled?.({ kind: 'copied', text: body, file: block.file });
+              }
+            : undefined}
+          onPosted={(c, body) => {
             setPosted((prev) => ({ ...prev, [k]: [...(prev[k] ?? []), c] }));
             setComposing(null);
+            setComposeInitial('');
+            if (fromAsk) {
+              setAskCompose(false);
+              onAskSettled?.({
+                kind: 'posted',
+                url: c.url,
+                text: body,
+                file: block.file,
+                lineKind: c.kind,
+              });
+            }
           }}
         />
       );
     }
     return out;
   };
-  const keep = L.map((_, i) => {
-    for (let d = -CTX; d <= CTX; d++) {
-      const neighbor = L[i + d];
-      if (neighbor && isKey(neighbor)) return true;
-    }
-    return false;
-  });
 
   // Backend-computed from the diff (validation/line-numbers.ts) — independent of
   // the analyzer's own `kind`, which is a "look here" judgement, not a reliable

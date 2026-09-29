@@ -5,6 +5,8 @@
  * one repair attempt via `--resume` before giving up.
  */
 
+import { parseRepairedJsonObject } from "./json-repair.js";
+import { scrubbedEnv } from "../util/scrubbed-env.js";
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -225,7 +227,16 @@ export function runBob(
   prompt: string,
   repoPath: string,
   maxCost: string,
-  opts: { resumeTaskId?: string; onEvent?: (e: unknown) => void } = {}
+  opts: {
+    resumeTaskId?: string;
+    onEvent?: (e: unknown) => void;
+    /**
+     * Persist the raw output under data/runs/<stamp>-<saveAs>/ before anything tries to
+     * parse it. A paid run whose answer can't be extracted must never also be a run
+     * whose answer is gone (that happened once: $3, output lost, cause unknowable).
+     */
+    saveAs?: string;
+  } = {}
 ): Promise<BobRun> {
   const subagentsEnabled = process.env.BOB_SUBAGENTS !== "0";
   // Confirmed empirically (a $0.02 direct CLI test): `--resume` does NOT read
@@ -247,7 +258,10 @@ export function runBob(
   console.log(`[bob-shell] $ bob ${args.slice(0, -1).join(" ")}${opts.resumeTaskId ? " <prompt as arg>" : ""}`);
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const child = spawn("bob", args, { cwd: repoPath, env: process.env, timeout: 600_000 });
+    // Bob works in someone else's checkout with a read-only mode, but it still shouldn't be handed
+    // our database password or service keys: only its own API key and what a process needs to run.
+    const env = scrubbedEnv(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {});
+    const child = spawn("bob", args, { cwd: repoPath, env, timeout: 600_000 });
     let stdout = "";
     let stderr = "";
     // Only used to drive `opts.onEvent` live — the final `events` array below
@@ -264,9 +278,19 @@ export function runBob(
       process.stderr.write(d);
     });
     child.on("error", reject);
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       if (liveBuffer) {
         for (const e of liveBuffer.flush()) opts.onEvent!(e);
+      }
+      if (opts.saveAs) {
+        try {
+          const dir = path.join(ROOT, "data/runs", `${new Date(started).toISOString().replace(/[:.]/g, "-")}-${opts.saveAs}`);
+          await mkdir(dir, { recursive: true });
+          await writeFile(path.join(dir, "events.ndjson"), stdout);
+          await writeFile(path.join(dir, "bob.stderr.txt"), stderr);
+        } catch (err) {
+          console.warn("[bob-shell] could not persist raw run output (best effort):", err);
+        }
       }
       const events = stdout
         .split("\n")
@@ -322,6 +346,18 @@ export function qualityRepairBob(
     "  file names, or backticked names — plain language only.",
     "- `narration` must NEVER mention how a claim was checked (no \"ablation\", \"measurement",
     "  confirms\", \"the backend verified\", etc.) — state the conclusion directly.",
+    "- Length limits: `headline` at most 9 words; `say` at most 2 short sentences;",
+    "  `narration` at most 4 sentences. When shortening, keep the point and drop the least",
+    "  essential detail — do not just truncate.",
+    "- No field may point at a screenshot or picture (\"as shown\", \"in the screenshot\"):",
+    "  screenshots are optional and the text must read true without them.",
+    "- Diagram (`visual`) rules, when an issue names a diagram: labels are plain words (at most 6),",
+    "  never identifiers, attribute/variable names or CSS variables. `flow`: at most 4 nodes per",
+    "  row and 6 in total; `bad`/`good` only on a row's LAST node (the outcome), never on a middle",
+    "  step; `old` only for a guard or path the PR removes. `layers`: at most 4 rows per column, mark",
+    "  the changed item `hl` in After, and show only items whose order relative to it changes (plus",
+    "  at most one limit on the side the value moves toward). If a diagram can't be fixed within",
+    "  these rules, remove the `visual` from that step instead.",
     "",
     "Quality issues:",
     ...issues.map((e) => `- ${e}`),
@@ -356,6 +392,12 @@ export function extractJsonObject(text: string, predicate?: (v: unknown) => bool
         break;
       }
     }
+  }
+  // Nothing parsed strictly. A long answer is prose-heavy JSON and usually breaks on
+  // an unescaped quote inside a string — recover it locally instead of losing the run.
+  for (let start = cleaned.indexOf("{"); start !== -1; start = cleaned.indexOf("{", start + 1)) {
+    const parsed = parseRepairedJsonObject(cleaned, start);
+    if (parsed !== undefined && (!predicate || predicate(parsed))) return parsed;
   }
   return undefined;
 }
@@ -496,7 +538,10 @@ export class BobShellAnalyzer implements Analyzer {
     await writeSidecar(repoPath, pr, diff, promptHunks);
     const prompt = await fillPrompt(pr, promptHunks);
     await assertBudget(Number(this.maxCost));
-    const run = await runBob(prompt, repoPath, this.maxCost, { onEvent });
+    const run = await runBob(prompt, repoPath, this.maxCost, {
+      onEvent,
+      saveAs: `${pr.repo.replace("/", "__")}-${pr.number}-analysis`,
+    });
     console.log(
       `[bob-shell] run finished in ${Math.round(run.ms / 1000)}s, exit=${run.code}, ` +
         `cost=$${run.sessionCost.toFixed(3)}, tools=${run.toolCalls}, subagents=${run.subagents}`
@@ -512,7 +557,7 @@ export class BobShellAnalyzer implements Analyzer {
       });
       throw new Error(
         `BobShellAnalyzer: no walkthrough found in bob output. ` +
-          `exit=${run.code}  stderr=${run.stderr.slice(0, 500)}`
+          `exit=${run.code}  task=${run.taskId ?? "unknown"}  stderr=${run.stderr.slice(0, 500)}`
       );
     }
 

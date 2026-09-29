@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { Ablation, Walkthrough, Step } from "@pr-walkthrough/shared";
-import { ablationContradictsWalkthrough, tryMechanicalStitchFix } from "./revise.js";
+import { ablationContradictsWalkthrough, buildRevisePrompt, tryMechanicalStitchFix } from "./revise.js";
 
 const ABLATION: Ablation = {
   units: ["scss#1", "tsx#2", "tsx#3"],
@@ -141,5 +141,15 @@ describe("tryMechanicalStitchFix", () => {
       { kind: "elided", text: "…" },
       { kind: "context", text: "b" },
     ]);
+  });
+});
+
+describe("buildRevisePrompt — claims stay as wide as the measurement", () => {
+  it("makes Bob name the measured behaviour instead of 'the bug'", () => {
+    const wt = { steps: [], meta: {} } as never;
+    const prompt = buildRevisePrompt(wt, { units: ["a#1"], runs: [] } as never);
+    expect(prompt).toMatch(/covers ONE scenario/);
+    expect(prompt).toMatch(/name THAT behaviour in\s+plain words/);
+    expect(prompt).toMatch(/Never write "the bug"/);
   });
 });

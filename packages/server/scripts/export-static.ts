@@ -17,7 +17,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadWalkthrough } from "../src/storage.js";
-import { splitSentences, sentenceHash } from "../src/tts/elevenlabs.js";
+import { splitSentences, sentenceHash, OUTRO_STEP_ID, OUTRO_NARRATION } from "../src/tts/elevenlabs.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const ALLOWED_OWNERS = new Set(["excalidraw"]);
@@ -64,6 +64,16 @@ for (const spec of prs) {
       const dest = path.join(outDir, "data/audio", owner, repo, String(number), step.id);
       await mkdir(dest, { recursive: true });
       await copyFile(path.join(audioSrc, name), path.join(dest, `${i}.mp3`));
+      found++;
+    }
+  }
+  if ((wt.graph?.nodes?.length ?? 0) > 0) {
+    total++;
+    const name = `${OUTRO_STEP_ID}-0-${sentenceHash(OUTRO_NARRATION, voiceId)}.mp3`;
+    if (available.has(name)) {
+      const dest = path.join(outDir, "data/audio", owner, repo, String(number), OUTRO_STEP_ID);
+      await mkdir(dest, { recursive: true });
+      await copyFile(path.join(audioSrc, name), path.join(dest, "0.mp3"));
       found++;
     }
   }

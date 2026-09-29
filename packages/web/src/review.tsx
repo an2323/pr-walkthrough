@@ -7,7 +7,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { CodeBlock } from '@pr-walkthrough/shared';
-import { STATIC } from './staticMode';
+import { STATIC, apiUrl } from './staticMode';
 
 export type ReviewStatus =
   | { enabled: false; reason?: string }
@@ -38,7 +38,7 @@ const ReviewContext = createContext<ReviewApi>({
 
 export function ReviewProvider({ repo, number, children }: { repo: string; number: number; children: ReactNode }) {
   const [status, setStatus] = useState<ReviewStatus>({ enabled: false });
-  const base = `/api/review/${repo}/${number}`;
+  const base = apiUrl(`/api/review/${repo}/${number}`);
 
   useEffect(() => {
     if (STATIC) return;
@@ -81,33 +81,48 @@ export function targetLabel(status: ReviewStatus): string {
   return status.enabled ? `${status.target.repo}#${status.target.number}` : '';
 }
 
+/** Result of confirming an open-question ask (posted to GitHub or copied). */
+export type AskResult =
+  | { kind: 'posted'; url: string; text: string; file?: string; lineKind?: 'line' | 'general' }
+  | { kind: 'copied'; text: string; file?: string };
+
 /** Inline composer shown under a code line. */
 export function LineComposer({
   anchor,
+  initialText = '',
   onPosted,
+  onCopied,
   onCancel,
 }: {
   anchor: CommentAnchor;
-  onPosted: (c: PostedComment) => void;
+  /** Prefill (e.g. an analyzer open question). */
+  initialText?: string;
+  onPosted: (c: PostedComment, body: string) => void;
+  /** When posting is off and copy succeeds. Omit to keep the old "Copied" button state. */
+  onCopied?: (body: string) => void;
   onCancel: () => void;
 }) {
   const { status, post } = useReview();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [state, setState] = useState<'idle' | 'posting' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const quoted = `\`${anchor.file}\`\n> ${anchor.lines[anchor.index].text.trim()}\n\n${text.trim()}`;
 
   async function submit() {
-    if (!text.trim()) return;
+    const body = text.trim();
+    if (!body) return;
     setError(null);
     if (!status.enabled) {
-      setState((await copyText(quoted)) ? 'copied' : 'idle');
+      const ok = await copyText(quoted);
+      if (!ok) return;
+      if (onCopied) onCopied(body);
+      else setState('copied');
       return;
     }
     setState('posting');
     try {
-      onPosted(await post(text.trim(), anchor));
+      onPosted(await post(body, anchor), body);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
       setState('idle');
@@ -118,7 +133,7 @@ export function LineComposer({
     <div className="composer">
       <textarea
         autoFocus
-        rows={3}
+        rows={initialText ? 4 : 3}
         placeholder="Comment on this line…"
         value={text}
         onChange={(e) => { setText(e.target.value); if (state === 'copied') setState('idle'); }}
@@ -133,6 +148,69 @@ export function LineComposer({
           {status.enabled
             ? state === 'posting' ? 'Posting…' : `Post to ${targetLabel(status)}`
             : state === 'copied' ? 'Copied' : 'Copy comment'}
+        </button>
+        <button className="v2btn sm" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** Fallback composer when the step has no commentable code line. */
+export function QuestionComposer({
+  initialText,
+  onDone,
+  onCancel,
+}: {
+  initialText: string;
+  onDone: (result: AskResult) => void;
+  onCancel: () => void;
+}) {
+  const { status, post } = useReview();
+  const [text, setText] = useState(initialText);
+  const [state, setState] = useState<'idle' | 'posting'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    const body = text.trim();
+    if (!body) return;
+    setError(null);
+    if (!status.enabled) {
+      if (await copyText(body)) onDone({ kind: 'copied', text: body });
+      return;
+    }
+    setState('posting');
+    try {
+      const c = await post(body);
+      onDone({ kind: 'posted', url: c.url, text: body, lineKind: c.kind });
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+      setState('idle');
+    }
+  }
+
+  return (
+    <div className="composer ask-composer">
+      <textarea
+        autoFocus
+        rows={4}
+        placeholder="Question for the author…"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
+          if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
+        }}
+      />
+      {error && <div className="composer-err">{error}</div>}
+      <div className="composer-row">
+        <button
+          className="v2btn primary sm"
+          disabled={!text.trim() || state === 'posting'}
+          onClick={() => void submit()}
+        >
+          {status.enabled
+            ? state === 'posting' ? 'Posting…' : `Post to ${targetLabel(status)}`
+            : 'Copy comment'}
         </button>
         <button className="v2btn sm" onClick={onCancel}>Cancel</button>
       </div>

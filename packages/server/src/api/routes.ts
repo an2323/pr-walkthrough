@@ -6,6 +6,7 @@
  *   POST /api/analyze  { prUrl, force? }                      — queue an analysis job, returns { jobId }
  *   GET  /api/jobs/:jobId                                     — current job status/result
  *   GET  /api/jobs/:jobId/events                              — SSE stream of ProgressEvents (live)
+ *   GET|HEAD /api/runs/:owner/:repo/:number                   — does a recorded run exist? ($0 demo probe)
  *   GET  /api/runs/:owner/:repo/:number/events?speed=N         — SSE replay of a recorded run ($0 demo)
  *   GET  /api/context/:owner/:repo/:number                    — read file lines from checkout
  *   GET  /api/audio/:owner/:repo/:number/:stepId/:n.mp3       — serve/generate TTS sentence
@@ -20,12 +21,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ProgressEvent } from "@pr-walkthrough/shared";
-import { splitSentences, sentenceHash, generateSentenceAudio } from "../tts/elevenlabs.js";
+import { splitSentences, sentenceHash, generateSentenceAudio, OUTRO_STEP_ID, OUTRO_NARRATION } from "../tts/elevenlabs.js";
 import { loadWalkthrough } from "../storage.js";
 import { parsePRUrl } from "../github/client.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
-import { createJob, getJob, subscribeJob, findActiveJob } from "./jobs.js";
+import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
 import { runAnalyzeJob } from "./analyze-pipeline.js";
+import { GuardError, assertAccessCode, assertAnalyzablePr, assertDailyLimit, accessCodeRequired, dailyLimit } from "./guards.js";
+import { blobExists, blobsEnabled, fetchBlobText, publicUrl, uploadBlob } from "../blobs.js";
+
+function accessCodeOk(req: Request): boolean {
+  try {
+    assertAccessCode(req);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Origin the browser used (behind Caddy: X-Forwarded-*). */
+function publicBaseUrl(req: Request): string {
+  const proto = (req.get("x-forwarded-proto") ?? req.protocol).split(",")[0].trim();
+  const host = req.get("x-forwarded-host") ?? req.get("host");
+  return `${proto}://${host}`;
+}
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos"; // used by /api/context to locate a PR's worktree
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."); // repo root (src/api → 4 up)
@@ -71,8 +90,21 @@ router.get(
 // GET /api/jobs/:jobId or stream GET /api/jobs/:jobId/events for the result.
 // ---------------------------------------------------------------------------
 
-router.post("/analyze", (req: Request, res: Response): void => {
-  const { prUrl } = req.body as { prUrl?: string };
+router.get("/config", async (_req: Request, res: Response): Promise<void> => {
+  const analyzer = process.env.ANALYZER ?? "cached";
+  res.json({
+    liveAnalysis: analyzer === "bob",
+    accessCodeRequired: accessCodeRequired(),
+    dailyLimit: dailyLimit(),
+    usedToday: analyzer === "bob" ? await countJobsSince(24 * 60 * 60 * 1000) : 0,
+  });
+});
+
+/** True from the moment a paid run passes the "is anything running" check until its job exists. */
+let startingPaidJob = false;
+
+router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
+  const { prUrl } = (req.body ?? {}) as { prUrl?: string };
   if (!prUrl || typeof prUrl !== "string") {
     res.status(400).json({ error: "body.prUrl is required" });
     return;
@@ -93,18 +125,49 @@ router.post("/analyze", (req: Request, res: Response): void => {
     res.status(202).json({ jobId: samePr.id });
     return;
   }
-  const busy = (process.env.ANALYZER ?? "cached") === "bob" ? findActiveJob() : undefined;
-  if (busy) {
-    res.status(409).json({ error: `Another analysis is running (${busy.owner}/${busy.repo}#${busy.number}) — try again when it finishes`, jobId: busy.id });
-    return;
+
+  const analyzer = process.env.ANALYZER ?? "cached";
+  const force = (req.body as { force?: unknown }).force === true && accessCodeOk(req);
+  const alreadyDone = !force && (await loadWalkthrough(owner, repo, number)) !== null;
+
+  // Everything below spends Bobcoins, so it is gated; an existing walkthrough is free to open.
+  let reserved = false;
+  if (analyzer === "bob" && !alreadyDone) {
+    const busy = findActiveJob();
+    // `startingPaidJob` closes the window between this check and createJob() below: the guards in
+    // between await (daily count, GitHub), so two simultaneous POSTs used to both pass the
+    // "nothing is running" check and start two paid runs.
+    if (busy || startingPaidJob) {
+      res.status(409).json({
+        error: busy
+          ? `Another analysis is running (${busy.owner}/${busy.repo}#${busy.number}) — try again when it finishes`
+          : "Another analysis is starting — try again in a moment",
+        ...(busy ? { jobId: busy.id } : {}),
+      });
+      return;
+    }
+    startingPaidJob = true;
+    reserved = true;
+    try {
+      assertAccessCode(req);
+      await assertDailyLimit(await countJobsSince(24 * 60 * 60 * 1000));
+      await assertAnalyzablePr(owner, repo, number);
+    } catch (err) {
+      startingPaidJob = false;
+      if (err instanceof GuardError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
   }
 
-  const force = (req.body as { force?: unknown }).force === true;
-  const job = createJob(owner, repo, number);
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const job = createJob(owner, repo, number, { paid: analyzer === "bob" && !alreadyDone });
+  if (reserved) startingPaidJob = false; // the job itself now counts as "running"
   // Fire-and-forget: runAnalyzeJob catches all of its own errors and reports
   // them through the job store, so there is nothing left to await here.
-  void runAnalyzeJob(job.id, owner, repo, number, baseUrl, { force });
+  void runAnalyzeJob(job.id, owner, repo, number, publicBaseUrl(req), { force });
 
   res.status(202).json({ jobId: job.id });
 });
@@ -186,6 +249,53 @@ router.get("/jobs/:jobId/events", (req: Request, res: Response): void => {
 });
 
 // ---------------------------------------------------------------------------
+// GET|HEAD /api/runs/:owner/:repo/:number
+// Cheap existence probe for a committed recording (used by the landing
+// "Analyse →" button to prefer progress?replay=1 over skipping straight to
+// the viewer when a finished walkthrough already exists).
+// ---------------------------------------------------------------------------
+
+function replayRecordingPath(owner: string, repo: string, number: string): string {
+  return path.join(ROOT, "data/events", owner, repo, `${number}.ndjson`);
+}
+
+function replayRecordingKey(owner: string, repo: string, number: string): string {
+  return `events/${owner}/${repo}/${number}.ndjson`;
+}
+
+/** Recording text from the local disk, else Supabase Storage; null when neither has it. */
+async function readReplayRecording(owner: string, repo: string, number: string): Promise<string | null> {
+  const local = replayRecordingPath(owner, repo, number);
+  if (existsSync(local)) return readFile(local, "utf-8");
+  return fetchBlobText(replayRecordingKey(owner, repo, number));
+}
+
+async function sendReplayProbe(req: Request, res: Response): Promise<void> {
+  const owner = req.params["owner"] as string;
+  const repo = req.params["repo"] as string;
+  const number = req.params["number"] as string;
+  if (!isSafePathSegment(owner) || !isSafePathSegment(repo) || !/^\d+$/.test(number)) {
+    res.status(400).json({ error: "Invalid owner/repo/number" });
+    return;
+  }
+  const exists =
+    existsSync(replayRecordingPath(owner, repo, number)) ||
+    (await blobExists(replayRecordingKey(owner, repo, number)));
+  if (!exists) {
+    res.status(404).json({ error: `No recorded run for ${owner}/${repo}#${number}` });
+    return;
+  }
+  if (req.method === "HEAD") {
+    res.status(200).end();
+    return;
+  }
+  res.json({ owner, repo, number: parseInt(number, 10), hasReplay: true });
+}
+
+router.get("/runs/:owner/:repo/:number", sendReplayProbe);
+router.head("/runs/:owner/:repo/:number", sendReplayProbe);
+
+// ---------------------------------------------------------------------------
 // GET /api/runs/:owner/:repo/:number/events?speed=N
 //
 // SSE replay of a committed recording (data/events/{owner}/{repo}/{number}.ndjson,
@@ -208,15 +318,20 @@ router.get(
     }
     const num = parseInt(number, 10);
 
-    const filePath = path.join(ROOT, "data/events", owner, repo, `${num}.ndjson`);
-    if (!existsSync(filePath)) {
+    let raw: string | null;
+    try {
+      raw = await readReplayRecording(owner, repo, number);
+    } catch (err) {
+      res.status(500).json({ error: `Could not read recording: ${String(err)}` });
+      return;
+    }
+    if (raw === null) {
       res.status(404).json({ error: `No recorded run for ${owner}/${repo}#${num}` });
       return;
     }
 
     let events: ProgressEvent[];
     try {
-      const raw = await readFile(filePath, "utf-8");
       events = raw
         .split("\n")
         .map((l) => l.trim())
@@ -240,7 +355,7 @@ router.get(
 
     // Rewrite the recorded "done" event's URL to THIS server's own walkthrough
     // endpoint — the recording may have been made against a different host.
-    const walkthroughUrl = `${req.protocol}://${req.get("host")}/api/walkthroughs/${owner}/${repo}/${num}`;
+    const walkthroughUrl = `${publicBaseUrl(req)}/api/walkthroughs/${owner}/${repo}/${num}`;
 
     let ended = false;
     let i = 0;
@@ -379,27 +494,49 @@ router.get(
     const apiKey = process.env.ELEVENLABS_API_KEY ?? "";
     const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "";
 
-    // Load walkthrough to get the step narration.
+    // Load walkthrough to get the step narration (or the Done-screen outro cue).
     const wt = await loadWalkthrough(owner, repo, num);
     if (!wt) {
       res.status(404).json({ error: `No walkthrough for ${owner}/${repo}#${num}` });
       return;
     }
-    const step = wt.steps.find(s => s.id === stepId);
-    if (!step) {
-      res.status(404).json({ error: `Step not found: ${stepId}` });
-      return;
-    }
-    const sentences = splitSentences(step.narration ?? "");
-    if (sentenceIndex < 0 || sentenceIndex >= sentences.length) {
-      res.status(404).json({ error: `Sentence index out of range (0–${sentences.length - 1})` });
-      return;
+
+    let sentence: string;
+    if (stepId === OUTRO_STEP_ID) {
+      if ((wt.graph?.nodes?.length ?? 0) === 0) {
+        res.status(404).json({ error: "No diagram outro for this walkthrough" });
+        return;
+      }
+      const sentences = splitSentences(OUTRO_NARRATION);
+      if (sentenceIndex < 0 || sentenceIndex >= sentences.length) {
+        res.status(404).json({ error: `Sentence index out of range (0–${sentences.length - 1})` });
+        return;
+      }
+      sentence = sentences[sentenceIndex];
+    } else {
+      const step = wt.steps.find(s => s.id === stepId);
+      if (!step) {
+        res.status(404).json({ error: `Step not found: ${stepId}` });
+        return;
+      }
+      const sentences = splitSentences(step.narration ?? "");
+      if (sentenceIndex < 0 || sentenceIndex >= sentences.length) {
+        res.status(404).json({ error: `Sentence index out of range (0–${sentences.length - 1})` });
+        return;
+      }
+      sentence = sentences[sentenceIndex];
     }
 
-    const sentence = sentences[sentenceIndex];
     const hash = sentenceHash(sentence, voiceId);
+    const fileName = `${stepId}-${sentenceIndex}-${hash}.mp3`;
     const audioDir = path.join(ROOT, "data/audio", owner, repo, number);
-    const outPath = path.join(audioDir, `${stepId}-${sentenceIndex}-${hash}.mp3`);
+    const outPath = path.join(audioDir, fileName);
+    const blobKey = `audio/${owner}/${repo}/${number}/${fileName}`;
+
+    if (!existsSync(outPath) && (await blobExists(blobKey))) {
+      res.redirect(302, publicUrl(blobKey));
+      return;
+    }
 
     // Pre-generated files are served even without a key. New audio costs
     // ElevenLabs credits, so it is only generated on demand with TTS_GENERATE=1
@@ -410,7 +547,13 @@ router.get(
     }
 
     try {
+      const fresh = !existsSync(outPath);
       await generateSentenceAudio(sentence, voiceId, apiKey, outPath);
+      if (fresh && blobsEnabled()) {
+        uploadBlob(blobKey, await readFile(outPath)).catch((err) =>
+          console.warn("[audio] could not upload to Supabase Storage:", err instanceof Error ? err.message : err)
+        );
+      }
     } catch (err) {
       console.error("[audio] TTS generation failed:", err);
       res.status(502).json({ error: String(err) });
@@ -467,7 +610,7 @@ function isAnchor(a: unknown): a is CommentAnchor {
 
 router.post("/review/:owner/:repo/:number/comments", async (req: Request, res: Response): Promise<void> => {
   const { owner, repo, number } = req.params as Record<string, string>;
-  const { body, anchor } = req.body as { body?: unknown; anchor?: unknown };
+  const { body, anchor } = (req.body ?? {}) as { body?: unknown; anchor?: unknown };
   if (typeof body !== "string" || !body.trim() || body.length > MAX_COMMENT_CHARS) {
     res.status(400).json({ error: `body must be a non-empty string up to ${MAX_COMMENT_CHARS} chars` });
     return;

@@ -43,7 +43,7 @@ function stepVisual(step: Step): PlainVisual | undefined {
   if (!step.visual) return tracesVisual(step);
   const v = step.visual;
   if (v.type === 'flow') {
-    return { type: 'flow', rows: v.rows as [string, string][][] };
+    return { type: 'flow', rows: v.rows as [string, string][][], ...(v.rowTitles ? { rowTitles: v.rowTitles } : {}) };
   }
   if (v.type === 'symptoms') return { type: 'symptoms', items: v.items };
   if (v.type === 'map') return { type: 'map', caption: v.caption };

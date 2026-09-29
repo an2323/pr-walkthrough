@@ -5,15 +5,15 @@
  * the full history to a client that connects late or reconnects after a
  * page reload), and the eventual result or error.
  *
- * Single process, no persistence — matches the rest of the backend (the git
- * workspace cache and the budget log are also process-local). Jobs are
- * never garbage-collected; fine for a hackathon demo process that restarts
- * between runs.
+ * Single process. Progress SSE backlog is in-memory (reconnect after restart
+ * loses mid-flight events). Job rows and finished walkthroughs persist when
+ * DATABASE_URL is set (see storage.ts / docs/deploy.md).
  */
 
 import { randomUUID } from "node:crypto";
 
 import type { ProgressEvent } from "@pr-walkthrough/shared";
+import { countJobRowsSince, upsertJobRow } from "../storage.js";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
@@ -37,11 +37,27 @@ export interface Job {
 
 interface JobInternal extends Job {
   subscribers: Set<(e: ProgressEvent) => void>;
+  /** A real Bob run (counts toward the daily limit and is recorded in Postgres). */
+  paid: boolean;
 }
 
 const jobs = new Map<string, JobInternal>();
 
-export function createJob(owner: string, repo: string, number: number): Job {
+/** Mirror a status change into Postgres. Best effort: a DB outage must not fail the run. */
+function persist(job: JobInternal, finished = false): void {
+  if (!job.paid) return;
+  upsertJobRow({
+    id: job.id,
+    owner: job.owner,
+    repo: job.repo,
+    number: job.number,
+    status: job.status,
+    error: job.error ?? null,
+    finished,
+  }).catch((err) => console.warn("[jobs] could not persist job row:", err instanceof Error ? err.message : err));
+}
+
+export function createJob(owner: string, repo: string, number: number, opts: { paid?: boolean } = {}): Job {
   const job: JobInternal = {
     id: randomUUID(),
     owner,
@@ -51,8 +67,10 @@ export function createJob(owner: string, repo: string, number: number): Job {
     events: [],
     createdAt: Date.now(),
     subscribers: new Set(),
+    paid: opts.paid ?? false,
   };
   jobs.set(job.id, job);
+  persist(job);
   return job;
 }
 
@@ -73,6 +91,16 @@ export function findActiveJob(pr?: { owner: string; repo: string; number: number
   return undefined;
 }
 
+/** Paid runs started in the last `windowMs` — from Postgres when available (survives restarts). */
+export async function countJobsSince(windowMs: number): Promise<number> {
+  const since = Date.now() - windowMs;
+  const fromDb = await countJobRowsSince(new Date(since));
+  if (fromDb !== null) return fromDb;
+  let n = 0;
+  for (const job of jobs.values()) if (job.paid && job.createdAt >= since) n++;
+  return n;
+}
+
 /**
  * Append a progress event to the job's backlog and fan it out to every live
  * SSE subscriber. The first event flips `queued` → `running`.
@@ -80,7 +108,10 @@ export function findActiveJob(pr?: { owner: string; repo: string; number: number
 export function emitProgress(id: string, event: ProgressEvent): void {
   const job = jobs.get(id);
   if (!job) return;
-  if (job.status === "queued") job.status = "running";
+  if (job.status === "queued") {
+    job.status = "running";
+    persist(job);
+  }
   job.events.push(event);
   for (const sub of job.subscribers) sub(event);
 }
@@ -91,6 +122,7 @@ export function completeJob(id: string, result: JobResult): void {
   if (!job) return;
   job.status = "done";
   job.result = result;
+  persist(job, true);
 }
 
 /** Mark the job failed with an error message. */
@@ -99,6 +131,7 @@ export function failJob(id: string, error: string): void {
   if (!job) return;
   job.status = "failed";
   job.error = error;
+  persist(job, true);
 }
 
 /**

@@ -1,12 +1,13 @@
 /**
- * SummaryScreen — "Done" outro: problem/fix recap, inline Before/After diagram (no screenshot).
+ * SummaryScreen — "Done" outro: diagram, also-in-this-PR, finish links.
+ * Problem/Fix live on the start screen — not repeated here.
  */
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
 import { useState } from 'react';
 import { SHOW_TRY_IT, SHOW_CHECKS } from './features';
-import { useReview, targetLabel } from './review';
+import type { AskResult } from './review';
 import { MapSvg, MapLegend } from './MapSvg';
 import { edgesFor } from './MapModal';
 
@@ -16,7 +17,7 @@ interface Props {
   flow: Step[];
   minors: Step[];
   checks: Record<string, boolean>;
-  asks: Record<string, boolean>;
+  askResults: Record<string, AskResult>;
   verifiedItems: Record<number, boolean>;
   onGoToStep: (i: number) => void;
   onOpenDrawer: (stepId: string) => void;
@@ -30,7 +31,7 @@ export function SummaryScreen({
   flow,
   minors,
   checks,
-  asks,
+  askResults,
   verifiedItems,
   onGoToStep,
   onOpenDrawer,
@@ -39,67 +40,31 @@ export function SummaryScreen({
 }: Props) {
   const withCheck = flow.filter((s) => plain.steps[s.id]?.check);
   const doneChecks = withCheck.filter((s) => checks[s.id]);
-  const asked = Object.entries(asks)
-    .filter(([, v]) => v)
-    .map(([id]) => id);
 
-  const comment = asked.length
-    ? asked.map((id) => `- ${plain.questions?.[id] ?? (walkthrough.openQuestions.find(q => q.stepId === id)?.question ?? '')}`).join('\n')
-    : '';
+  const askedEntries = flow
+    .map((s) => {
+      const result = askResults[s.id];
+      if (!result) return null;
+      return { stepId: s.id, result };
+    })
+    .filter((x): x is { stepId: string; result: AskResult } => x !== null);
 
   const scenarios = walkthrough.verification?.scenario ?? [];
   const tried = Object.values(verifiedItems).filter(Boolean).length;
 
-  const { status, post } = useReview();
-  const [posting, setPosting] = useState(false);
-  const [postedUrl, setPostedUrl] = useState<{ url: string; text: string } | null>(null);
-  const [postError, setPostError] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<'before' | 'after'>('after');
-
-  async function postQuestions() {
-    if (!comment) return;
-    setPosting(true);
-    setPostError(null);
-    try {
-      const c = await post(`Questions from the walkthrough:\n\n${comment}`);
-      setPostedUrl({ url: c.url, text: comment });
-    } catch (e) {
-      setPostError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setPosting(false);
-    }
-  }
-
-  function copyComment() {
-    if (!comment) return;
-    if (navigator.clipboard) {
-      void navigator.clipboard.writeText(comment);
-    } else {
-      const pre = document.getElementById('v2-comment');
-      if (pre) {
-        const range = document.createRange();
-        range.selectNodeContents(pre);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      }
-    }
-  }
 
   const prUrl = walkthrough.pr.url;
   const coverage = walkthrough.coverage;
   const hasGraph = (walkthrough.graph?.nodes?.length ?? 0) > 0;
   const mapEdges = hasGraph ? edgesFor(walkthrough, mapMode) : [];
+  const hasAlso =
+    minors.length > 0 || (walkthrough.skippedHunks ?? []).length > 0;
 
   return (
     <div className="v2card">
       <div className="v2eyebrow"><b>Done</b></div>
       <h1 className="v2h1">{plain.title}</h1>
-
-      <div className="outro-recap">
-        <p className="v2say"><span className="outro-label">Problem</span> {plain.problem}</p>
-        <p className="v2say"><span className="outro-label">Fix</span> {plain.fix}</p>
-      </div>
 
       {hasGraph && (
         <div className="outro-map">
@@ -172,35 +137,37 @@ export function SummaryScreen({
         </div>
       )}
 
-      {comment && (
+      {askedEntries.length > 0 && (
         <>
-          <h2 className="v2h2">Questions for the author</h2>
-          <pre className="comment" id="v2-comment">{comment}</pre>
-          <div className="cta">
-            {status.enabled && (
-              <button
-                className="v2btn primary"
-                disabled={posting || postedUrl?.text === comment}
-                onClick={() => void postQuestions()}
-              >
-                {posting ? 'Posting…' : postedUrl?.text === comment ? 'Posted' : `Post to ${targetLabel(status)}`}
-              </button>
-            )}
-            <button className={`v2btn${status.enabled ? '' : ' primary'}`} onClick={copyComment}>
-              Copy as review comment
-            </button>
+          <h2 className="v2h2">Questions you asked</h2>
+          <div className="sum-list">
+            {askedEntries.map(({ stepId, result }) => (
+              <div className="sum-item" key={stepId}>
+                <span className="m ok">✓</span>
+                <span>
+                  {result.text}{' '}
+                  {result.file && (
+                    <span className="note" style={{ display: 'inline' }}>
+                      ({result.file.split('/').pop()}
+                      {result.kind === 'posted' && result.lineKind === 'general' ? ', general' : ''}
+                      ){' '}
+                    </span>
+                  )}
+                  {result.kind === 'posted' ? (
+                    <a href={result.url} target="_blank" rel="noopener noreferrer">
+                      view on GitHub ↗
+                    </a>
+                  ) : (
+                    <span className="note" style={{ display: 'inline' }}>copied</span>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
-          {postedUrl && (
-            <p className="note">
-              Posted on GitHub —{' '}
-              <a href={postedUrl.url} target="_blank" rel="noopener noreferrer">view the comment ↗</a>
-            </p>
-          )}
-          {postError && <p className="note" style={{ color: 'var(--bad)' }}>{postError}</p>}
         </>
       )}
 
-      {(minors.length > 0 || (walkthrough.skippedHunks ?? []).length > 0) && (
+      {hasAlso && (
         <>
           <h2 className="v2h2">Also in this PR</h2>
           <div className="sum-list">
@@ -253,22 +220,29 @@ export function SummaryScreen({
         </>
       )}
 
-      <div className="outro-links">
-        {prUrl && (
-          <a className="v2btn primary" href={prUrl} target="_blank" rel="noopener noreferrer">
-            Open PR ↗
-          </a>
-        )}
-        {onOpenMap && (
-          <button type="button" className="v2btn" onClick={onOpenMap}>
-            Diagram
-          </button>
-        )}
-        {onBackToStart && (
-          <button type="button" className="v2btn" onClick={onBackToStart}>
-            ← Back to start
-          </button>
-        )}
+      <div className="outro-finish">
+        <p className="note">
+          You've seen the core path
+          {hasAlso ? ' — remaining items are listed above' : ''}.
+          Finish the review on GitHub (approve or leave comments).
+        </p>
+        <div className="outro-links">
+          {prUrl && (
+            <a className="v2btn primary" href={prUrl} target="_blank" rel="noopener noreferrer">
+              Continue on GitHub →
+            </a>
+          )}
+          {onOpenMap && (
+            <button type="button" className="v2btn" onClick={onOpenMap}>
+              Diagram
+            </button>
+          )}
+          {onBackToStart && (
+            <button type="button" className="v2btn" onClick={onBackToStart}>
+              ← Back to start
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

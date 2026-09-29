@@ -1,8 +1,11 @@
 /**
- * storage.ts — read/write walkthrough JSON files under data/walkthroughs/.
+ * storage.ts — load/save walkthroughs.
  *
- * Path pattern: data/walkthroughs/{owner}/{repo}/{number}.json
- * relative to the workspace root (3 levels up from packages/server/src/).
+ * - With DATABASE_URL: Postgres is the source of truth for live results.
+ *   File store under data/walkthroughs/ is only a read fallback (golden fixtures).
+ * - Without DATABASE_URL: file store only (local demo / cached analyzer).
+ *
+ * Production never writes new analyses into the git tree.
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -11,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Walkthrough } from "@pr-walkthrough/shared";
+import { ensureSchema, getPool } from "./db.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -18,22 +22,7 @@ function walkthroughPath(owner: string, repo: string, number: number): string {
   return path.join(ROOT, "data/walkthroughs", owner, repo, `${number}.json`);
 }
 
-/**
- * Persist a completed walkthrough to disk.
- * @returns The absolute file path where it was written.
- */
-export async function saveWalkthrough(wt: Walkthrough): Promise<string> {
-  const [owner, repo] = wt.pr.repo.split("/");
-  const filePath = walkthroughPath(owner, repo, wt.pr.number);
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(wt, null, 2), "utf-8");
-  return filePath;
-}
-
-/**
- * Load a walkthrough from disk. Returns null if the file does not exist.
- */
-export async function loadWalkthrough(
+async function loadFromFile(
   owner: string,
   repo: string,
   number: number
@@ -42,4 +31,124 @@ export async function loadWalkthrough(
   if (!existsSync(filePath)) return null;
   const raw = await readFile(filePath, "utf-8");
   return JSON.parse(raw) as Walkthrough;
+}
+
+async function saveToFile(wt: Walkthrough): Promise<string> {
+  const [owner, repo] = wt.pr.repo.split("/");
+  const filePath = walkthroughPath(owner, repo, wt.pr.number);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(wt, null, 2), "utf-8");
+  return filePath;
+}
+
+async function loadFromDb(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<Walkthrough | null> {
+  const pool = getPool();
+  if (!pool) return null;
+  await ensureSchema();
+  const { rows } = await pool.query<{ payload: Walkthrough }>(
+    `SELECT payload FROM walkthroughs WHERE owner = $1 AND repo = $2 AND number = $3`,
+    [owner, repo, number]
+  );
+  return rows[0]?.payload ?? null;
+}
+
+async function saveToDb(wt: Walkthrough): Promise<string> {
+  const pool = getPool();
+  if (!pool) throw new Error("DATABASE_URL is not set");
+  await ensureSchema();
+  const [owner, repo] = wt.pr.repo.split("/");
+  const headSha = wt.pr.headSha ?? null;
+  await pool.query(
+    `INSERT INTO walkthroughs (owner, repo, number, head_sha, payload, updated_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+     ON CONFLICT (owner, repo, number) DO UPDATE SET
+       head_sha = EXCLUDED.head_sha,
+       payload = EXCLUDED.payload,
+       updated_at = NOW()`,
+    [owner, repo, wt.pr.number, headSha, JSON.stringify(wt)]
+  );
+  return `db:walkthroughs/${owner}/${repo}/${wt.pr.number}`;
+}
+
+/** Persist a completed walkthrough. Returns a locator string (db:… or file path). */
+export async function saveWalkthrough(wt: Walkthrough): Promise<string> {
+  if (getPool()) return saveToDb(wt);
+  return saveToFile(wt);
+}
+
+/** Load a walkthrough. DB first (when configured), then local fixtures. */
+export async function loadWalkthrough(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<Walkthrough | null> {
+  if (getPool()) {
+    const fromDb = await loadFromDb(owner, repo, number);
+    if (fromDb) return fromDb;
+  }
+  return loadFromFile(owner, repo, number);
+}
+
+/** Job rows created since `since`, or null without a database. */
+export async function countJobRowsSince(since: Date): Promise<number | null> {
+  const pool = getPool();
+  if (!pool) return null;
+  await ensureSchema();
+  const { rows } = await pool.query<{ n: string }>(
+    "SELECT COUNT(*) AS n FROM jobs WHERE created_at >= $1",
+    [since]
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Record job lifecycle in Postgres when available (SSE backlog stays in-memory). */
+export async function upsertJobRow(row: {
+  id: string;
+  owner: string;
+  repo: string;
+  number: number;
+  status: string;
+  error?: string | null;
+  finished?: boolean;
+}): Promise<void> {
+  const pool = getPool();
+  if (!pool) return;
+  await ensureSchema();
+  await pool.query(
+    `INSERT INTO jobs (id, owner, repo, number, status, error, finished_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO UPDATE SET
+       status = EXCLUDED.status,
+       error = EXCLUDED.error,
+       finished_at = COALESCE(EXCLUDED.finished_at, jobs.finished_at)`,
+    [
+      row.id,
+      row.owner,
+      row.repo,
+      row.number,
+      row.status,
+      row.error ?? null,
+      row.finished ? new Date() : null,
+    ]
+  );
+}
+
+/**
+ * A job row still `queued`/`running` when the process starts belongs to a process that no longer
+ * exists (restart, deploy, crash) — nothing in memory is running it. Mark them failed so the
+ * ledger and any reader see the truth. Returns how many rows were fixed (0 without a database).
+ */
+export async function failStaleJobRows(): Promise<number> {
+  const pool = getPool();
+  if (!pool) return 0;
+  await ensureSchema();
+  const res = await pool.query(
+    `UPDATE jobs SET status = 'failed', error = 'server restarted', finished_at = NOW()
+     WHERE status IN ('queued', 'running')`
+  );
+  return res.rowCount ?? 0;
 }

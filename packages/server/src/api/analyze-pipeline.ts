@@ -14,7 +14,7 @@ import { parseHunks, type ProgressEvent, type Walkthrough } from "@pr-walkthroug
 
 import { emitProgress, completeJob, failJob } from "./jobs.js";
 import { fetchPRMeta } from "../github/client.js";
-import { prepareWorkspace } from "../git/workspace.js";
+import { prepareWorkspace, pruneWorktrees } from "../git/workspace.js";
 import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
 import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
@@ -25,15 +25,15 @@ import {
 } from "../analyzer/bob-shell.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
-import { runAblation, verdictForStep, runRepro } from "../verify/ablation.js";
+import { ablationHasSignal, runAblation, verdictForStep } from "../verify/ablation.js";
 import { recipeFor } from "../verify/recipes.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
-import { reviseFromAblation } from "../verify/revise.js";
+import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
-import { startApp } from "../verify/app-servers.js";
-import { ensureWorktree } from "../git/workspace.js";
+import { markVerified, recordNoShots, recordShotsNote } from "../verify/shots-status.js";
 import { validate, checkQuality, criticalQualityWarnings } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
+import { blobsEnabled, uploadBlob, uploadDir } from "../blobs.js";
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -63,6 +63,9 @@ export async function runAnalyzeJob(
   };
   const walkthroughUrl = `${baseUrl}/api/walkthroughs/${owner}/${repo}/${number}`;
   const analyzerType = process.env.ANALYZER ?? "cached";
+  // False for the "already analysed" fast path: that job only re-emits `done`, and must not
+  // overwrite the real run's replay in Storage with a one-event stub.
+  let ranPipeline = false;
 
   try {
     // ------------------------------------------------------------------
@@ -104,6 +107,7 @@ export async function runAnalyzeJob(
       return;
     }
 
+    ranPipeline = true;
     emit({ kind: "stage", t: elapsed(), stage: "clone", label: "Preparing the git workspace" });
     const pr = await fetchPRMeta(owner, repo, number);
     const repoUrl = `https://github.com/${owner}/${repo}`;
@@ -147,109 +151,102 @@ export async function runAnalyzeJob(
     }
 
     let walkthrough: Walkthrough = result.walkthrough;
-    let qualityCost = 0;
-    let qualityFoldedIntoMeta = false;
+    // Quality-repair spend that is NOT already inside `meta.run.costUsd` (a failed resume still costs).
+    let qualityOrphanCost = 0;
 
-    // Q2 — one quality repair via --resume for critical output-contract issues.
-    if (process.env.VERIFY_QUALITY_REPAIR !== "0") {
+    /**
+     * Q2 — one quality repair via --resume for critical output-contract issues. Runs after the analysis
+     * AND again after a revise: revise rewrites steps, and its rewrites broke the same rules (an
+     * identifier in `say`, a 10-word headline) that the first pass had just fixed.
+     */
+    const repairQuality = async (): Promise<void> => {
+      if (process.env.VERIFY_QUALITY_REPAIR === "0") return;
       const critical = criticalQualityWarnings(checkQuality(walkthrough));
       const taskId = walkthrough.meta.run?.taskId;
-      if (critical.length > 0 && taskId) {
-        emit({
-          kind: "stage",
-          t: elapsed(),
-          stage: "repairing",
-          label: `Fixing ${critical.length} quality issue(s)`,
-        });
-        try {
-          const previousCost = walkthrough.meta.run?.costUsd ?? 0;
-          const cap = (previousCost + QUALITY_REPAIR_MAX_COST).toFixed(2);
-          await assertBudget(QUALITY_REPAIR_MAX_COST);
-          const repairEvents = createProgressNormalizer(started, emit);
-          const repairRun = await qualityRepairBob(
-            taskId,
-            critical.map((w) => w.message),
-            workspace.repoPath,
-            cap,
-            (raw) => repairEvents.handle(raw, Date.now())
+      if (critical.length === 0 || !taskId) return;
+      emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Fixing ${critical.length} quality issue(s)` });
+      try {
+        const previousCost = walkthrough.meta.run?.costUsd ?? 0;
+        const cap = (previousCost + QUALITY_REPAIR_MAX_COST).toFixed(2);
+        await assertBudget(QUALITY_REPAIR_MAX_COST);
+        const repairEvents = createProgressNormalizer(started, emit);
+        const repairRun = await qualityRepairBob(
+          taskId,
+          critical.map((w) => w.message),
+          workspace.repoPath,
+          cap,
+          (raw) => repairEvents.handle(raw, Date.now())
+        );
+        const cost = Math.max(0, repairRun.sessionCost - previousCost);
+        const repaired = findWalkthroughInEvents(repairRun.events);
+        const base = {
+          pr: `${owner}/${repo}#${number}`,
+          mode: "quality-repair",
+          maxCost: QUALITY_REPAIR_MAX_COST,
+          actualCost: cost,
+          durationSec: Math.round(repairRun.ms / 1000),
+          toolCalls: repairRun.toolCalls,
+          subagents: repairRun.subagents,
+          repairs: 1,
+        };
+        if (repaired) {
+          normalizeDraft(repaired);
+          const repairedResult = await validate(
+            { ...repaired, pr: walkthrough.pr } as unknown as Walkthrough,
+            input,
+            workspace
           );
-          qualityCost = Math.max(0, repairRun.sessionCost - previousCost);
-          const repaired = findWalkthroughInEvents(repairRun.events);
-          if (repaired) {
-            normalizeDraft(repaired);
-            const repairedResult = await validate(
-              { ...repaired, pr: walkthrough.pr } as unknown as Walkthrough,
-              input,
-              workspace
-            );
-            await recordSpend({
-              pr: `${owner}/${repo}#${number}`,
-              mode: "quality-repair",
-              maxCost: QUALITY_REPAIR_MAX_COST,
-              actualCost: qualityCost,
-              durationSec: Math.round(repairRun.ms / 1000),
+          await recordSpend({
+            ...base,
+            valid: repairedResult.valid,
+            notes: repairedResult.valid
+              ? `fixed ${critical.length} critical quality warning(s)`
+              : repairedResult.errors.slice(0, 3).join("; "),
+          });
+          // Always fold Bob's cumulative task spend into meta — even when we reject the repaired
+          // draft — so a later resume doesn't double-count this increment in the done event.
+          if (walkthrough.meta.run) {
+            walkthrough.meta.run = {
+              ...walkthrough.meta.run,
+              costUsd: repairRun.sessionCost,
+              maxCostUsd: Number(cap),
+              durationMs: (walkthrough.meta.run.durationMs ?? 0) + repairRun.ms,
               toolCalls: repairRun.toolCalls,
-              subagents: repairRun.subagents,
-              repairs: 1,
-              valid: repairedResult.valid,
-              notes: repairedResult.valid
-                ? `fixed ${critical.length} critical quality warning(s)`
-                : repairedResult.errors.slice(0, 3).join("; "),
-            });
-            // Always fold Bob's cumulative task spend into meta — even when we
-            // reject the repaired draft — so a later revise resume doesn't
-            // double-count this increment in the done event.
-            if (walkthrough.meta.run) {
-              walkthrough.meta.run = {
-                ...walkthrough.meta.run,
-                costUsd: repairRun.sessionCost,
-                maxCostUsd: Number(cap),
-                durationMs: (walkthrough.meta.run.durationMs ?? 0) + repairRun.ms,
-                toolCalls: repairRun.toolCalls,
-                subagents: Math.max(walkthrough.meta.run.subagents ?? 0, repairRun.subagents),
-                repairs: (walkthrough.meta.run.repairs ?? 0) + 1,
-              };
-              qualityFoldedIntoMeta = true;
-            }
-            if (repairedResult.valid && repairedResult.walkthrough) {
-              const prevRun = walkthrough.meta.run;
-              walkthrough = repairedResult.walkthrough;
-              if (prevRun) walkthrough.meta.run = prevRun;
-            } else {
-              console.warn(
-                "[analyze-pipeline] quality repair failed validation — keeping pre-repair draft"
-              );
-            }
+              subagents: Math.max(walkthrough.meta.run.subagents ?? 0, repairRun.subagents),
+              repairs: (walkthrough.meta.run.repairs ?? 0) + 1,
+            };
           } else {
-            await recordSpend({
-              pr: `${owner}/${repo}#${number}`,
-              mode: "quality-repair",
-              maxCost: QUALITY_REPAIR_MAX_COST,
-              actualCost: qualityCost,
-              durationSec: Math.round(repairRun.ms / 1000),
-              toolCalls: repairRun.toolCalls,
-              subagents: repairRun.subagents,
-              repairs: 1,
-              valid: false,
-              notes: repairRun.errorMessage ?? "no walkthrough in quality-repair output",
-            });
-            if (walkthrough.meta.run && qualityCost > 0) {
-              walkthrough.meta.run = {
-                ...walkthrough.meta.run,
-                costUsd: repairRun.sessionCost,
-                repairs: (walkthrough.meta.run.repairs ?? 0) + 1,
-              };
-              qualityFoldedIntoMeta = true;
-            }
+            qualityOrphanCost += cost;
           }
-        } catch (err) {
-          console.warn(
-            "[analyze-pipeline] quality repair failed:",
-            err instanceof Error ? err.message : err
-          );
+          if (repairedResult.valid && repairedResult.walkthrough) {
+            const prevRun = walkthrough.meta.run;
+            const evidenceKeep = { shots: walkthrough.shots, verification: walkthrough.verification };
+            walkthrough = repairedResult.walkthrough;
+            if (prevRun) walkthrough.meta.run = prevRun;
+            // A repair that follows the screenshot/revise stages must not lose what they attached.
+            if (evidenceKeep.shots) walkthrough.shots = evidenceKeep.shots;
+            if (evidenceKeep.verification) walkthrough.verification = evidenceKeep.verification;
+          } else {
+            console.warn("[analyze-pipeline] quality repair failed validation — keeping pre-repair draft");
+          }
+        } else {
+          await recordSpend({ ...base, valid: false, notes: repairRun.errorMessage ?? "no walkthrough in quality-repair output" });
+          if (walkthrough.meta.run && cost > 0) {
+            walkthrough.meta.run = {
+              ...walkthrough.meta.run,
+              costUsd: repairRun.sessionCost,
+              repairs: (walkthrough.meta.run.repairs ?? 0) + 1,
+            };
+          } else {
+            qualityOrphanCost += cost;
+          }
         }
+      } catch (err) {
+        console.warn("[analyze-pipeline] quality repair failed:", err instanceof Error ? err.message : err);
       }
-    }
+    };
+
+    await repairQuality();
 
     emit({ kind: "stage", t: elapsed(), stage: "saving", label: "Saving the walkthrough" });
     await saveWalkthrough(walkthrough);
@@ -262,11 +259,7 @@ export async function runAnalyzeJob(
     if (process.env.VERIFY_SHOTS !== "0" && canVerify(walkthrough.pr.repo)) {
       const shotGate = shouldAttemptShots(walkthrough);
       if (!shotGate.attempt) {
-        walkthrough.verification = {
-          status: "skipped",
-          scenario: walkthrough.verification?.scenario ?? [],
-          skipReason: shotGate.reason,
-        };
+        recordNoShots(walkthrough, shotGate.reason);
         await saveWalkthrough(walkthrough);
         emit({
           kind: "stage",
@@ -275,17 +268,36 @@ export async function runAnalyzeJob(
           label: `Screenshots skipped: ${shotGate.reason.slice(0, 120)}`,
         });
       } else {
+        // If the process dies mid-stage (restart, OOM) the saved walkthrough must already say
+        // why it has no screenshots — the placeholder is replaced by the real outcome below.
+        recordNoShots(walkthrough, "the screenshot step didn't finish.", { alreadyPlain: true });
+        await saveWalkthrough(walkthrough);
+
+        // Free disk first: every earlier PR left two installed worktrees behind.
+        try {
+          const mainPath = path.join(GIT_CACHE_DIR, `${owner}__${repo}`);
+          const keep = [walkthrough.pr.headSha, walkthrough.pr.baseSha].filter((x): x is string => !!x);
+          const removed = await pruneWorktrees(mainPath, keep);
+          if (removed.length > 0) console.log(`[analyze-pipeline] pruned ${removed.length} old worktree(s)`);
+        } catch (err) {
+          console.warn("[analyze-pipeline] worktree pruning failed (continuing):", err instanceof Error ? err.message : err);
+        }
+
         const verifierEvents = createProgressNormalizer(started, emit);
         try {
           const vr = await verifyShots({
             walkthrough,
+            diff,
             outDir: path.join(ROOT, "data/shots", owner, repo, String(number)),
             onStage: (stage, label) => emit({ kind: "stage", t: elapsed(), stage, label }),
             onEvent: (raw) => verifierEvents.handle(raw, Date.now()),
           });
           verifierCost = vr.costUsd;
           if (vr.status === "ok") {
-            walkthrough.shots = vr.shots;
+            // The repro is confirmed: replace the placeholder with the real status.
+            markVerified(walkthrough);
+            if (vr.shots) walkthrough.shots = vr.shots;
+            if (vr.shotsNote) recordShotsNote(walkthrough, vr.shotsNote);
             if (vr.symptomSrcs && vr.symptomSrcs.size > 0) {
               attachSymptomShots(walkthrough, vr.symptomSrcs);
               emit({
@@ -296,29 +308,32 @@ export async function runAnalyzeJob(
               });
             }
             await saveWalkthrough(walkthrough);
-            emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Screenshots taken by Bob" });
+            emit({
+              kind: "stage",
+              t: elapsed(),
+              stage: "shots",
+              label: vr.shots
+                ? "Screenshots taken by Bob"
+                : "Bug reproduced — no side-by-side shots for this one",
+            });
 
-            if (process.env.VERIFY_ABLATION !== "0") {
-              const recipe = recipeFor(owner, repo);
-              if (recipe && walkthrough.pr.baseSha) {
-                emit({
-                  kind: "stage",
-                  t: elapsed(),
-                  stage: "shots",
-                  label: "Testing which changes fix the bug",
+            const recipe = recipeFor(owner, repo);
+            if (process.env.VERIFY_ABLATION !== "0" && recipe && walkthrough.pr.baseSha) {
+              emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Testing which changes fix the bug" });
+              try {
+                const ablation = await runAblation({
+                  mainPath: path.join(GIT_CACHE_DIR, `${owner}__${repo}`),
+                  baseSha: walkthrough.pr.baseSha,
+                  diff,
+                  hunks: walkthrough.hunks,
+                  skippedHunks: walkthrough.skippedHunks,
+                  recipe,
+                  reproPath: vr.reproPath,
+                  ...(vr.scenarios ? { scenarios: vr.scenarios } : {}),
+                  onProgress: (msg) => emit({ kind: "stage", t: elapsed(), stage: "shots", label: msg }),
                 });
-                try {
-                  const ablation = await runAblation({
-                    mainPath: path.join(GIT_CACHE_DIR, `${owner}__${repo}`),
-                    baseSha: walkthrough.pr.baseSha,
-                    diff,
-                    hunks: walkthrough.hunks,
-                    skippedHunks: walkthrough.skippedHunks,
-                    recipe,
-                    reproPath: vr.reproPath,
-                    onProgress: (msg) =>
-                      emit({ kind: "stage", t: elapsed(), stage: "shots", label: msg }),
-                  });
+                // A table of only "broken" runs says nothing — don't present it as a measurement.
+                if (ablation && ablationHasSignal(ablation)) {
                   walkthrough.verification = {
                     ...walkthrough.verification,
                     status: "passed",
@@ -337,37 +352,9 @@ export async function runAnalyzeJob(
                     label: `Measured ${ablation.units.length} change(s) against the running app`,
                   });
 
-                  // Q1 — evidence-based revise when ablation contradicts claims.
-                  if (process.env.VERIFY_REVISE !== "0") {
-                    let measures: { base: unknown; head: unknown } | undefined;
-                    try {
-                      if (walkthrough.pr.headSha) {
-                        const mainPath = path.join(GIT_CACHE_DIR, `${owner}__${repo}`);
-                        const baseWt = await ensureWorktree(mainPath, walkthrough.pr.baseSha);
-                        const headWt = await ensureWorktree(mainPath, walkthrough.pr.headSha);
-                        const base = await startApp(recipe, baseWt);
-                        const head = await startApp(recipe, headWt);
-                        try {
-                          const [b, h] = await Promise.all([
-                            runRepro(vr.reproPath, base.url, ROOT),
-                            runRepro(vr.reproPath, head.url, ROOT),
-                          ]);
-                          measures = {
-                            base: "error" in b ? { error: b.error } : b.measure,
-                            head: "error" in h ? { error: h.error } : h.measure,
-                          };
-                        } finally {
-                          await base.stop();
-                          await head.stop();
-                        }
-                      }
-                    } catch (err) {
-                      console.warn(
-                        "[analyze-pipeline] could not re-measure BASE/HEAD for revise:",
-                        err instanceof Error ? err.message : err
-                      );
-                    }
-
+                  // Q1 — evidence-based revise, only when the measurements contradict the prose.
+                  // (The repro's own BASE/HEAD measurements come from the verifier — no re-run.)
+                  if (process.env.VERIFY_REVISE !== "0" && ablationContradictsWalkthrough(walkthrough, ablation)) {
                     emit({
                       kind: "stage",
                       t: elapsed(),
@@ -381,7 +368,7 @@ export async function runAnalyzeJob(
                         ablation,
                         repoPath: workspace.repoPath,
                         diff,
-                        measures,
+                        measures: vr.measures,
                         prLabel: `${owner}/${repo}#${number}`,
                         onEvent: (raw) => reviseEvents.handle(raw, Date.now()),
                       });
@@ -389,14 +376,20 @@ export async function runAnalyzeJob(
                         reviseCost = revised.costUsd;
                         reviseFoldedIntoMeta = true;
                         walkthrough = revised.walkthrough;
+                        // Bob returns the steps without the screenshot paths the backend attached
+                        // to the symptoms — put them back, or the frames we paid for vanish.
+                        if (vr.symptomSrcs && vr.symptomSrcs.size > 0) attachSymptomShots(walkthrough, vr.symptomSrcs);
                         await saveWalkthrough(walkthrough);
-                        qualityWarnings = checkQuality(walkthrough);
                         emit({
                           kind: "stage",
                           t: elapsed(),
                           stage: "repairing",
                           label: "Explanation revised to match measured evidence",
                         });
+                        // The rewritten steps go through the same output-contract repair as the first draft.
+                        await repairQuality();
+                        await saveWalkthrough(walkthrough);
+                        qualityWarnings = checkQuality(walkthrough);
                       } else if (revised.status === "skipped") {
                         emit({
                           kind: "stage",
@@ -428,25 +421,31 @@ export async function runAnalyzeJob(
                       );
                     }
                   }
-                } catch (err) {
-                  console.warn(
-                    "[analyze-pipeline] ablation failed:",
-                    err instanceof Error ? err.message : err
-                  );
+                } else if (ablation) {
+                  console.warn("[analyze-pipeline] ablation gave no usable runs — not recorded");
                 }
+              } catch (err) {
+                console.warn(
+                  "[analyze-pipeline] ablation failed:",
+                  err instanceof Error ? err.message : err
+                );
               }
             }
           } else {
+            recordNoShots(walkthrough, vr.reason, vr.kind === "declined" ? { alreadyPlain: true } : {});
+            await saveWalkthrough(walkthrough);
             emit({
               kind: "stage",
               t: elapsed(),
               stage: "shots",
-              label: `Screenshots skipped: ${vr.reason}`,
+              label: `Screenshots skipped: ${vr.reason.slice(0, 160)}`,
             });
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           console.warn("[analyze-pipeline] screenshot verifier failed:", message);
+          recordNoShots(walkthrough, "screenshots couldn't be captured this time.", { alreadyPlain: true });
+          await saveWalkthrough(walkthrough);
           emit({
             kind: "stage",
             t: elapsed(),
@@ -455,14 +454,20 @@ export async function runAnalyzeJob(
           });
         }
       }
+    } else {
+      // The common case for most repositories (no app recipe) — say so instead of leaving a silent gap.
+      recordNoShots(
+        walkthrough,
+        process.env.VERIFY_SHOTS === "0" ? "screenshots turned off (VERIFY_SHOTS=0)" : `no app recipe for ${walkthrough.pr.repo}`
+      );
+      await saveWalkthrough(walkthrough);
     }
 
     // Successful quality/revise resumes fold their spend into meta.run.costUsd
     // (Bob's cumulative task total). Failed ones still spent — add the increment.
     // Verifier is a separate Bob task, always additive.
     const run = walkthrough.meta.run;
-    const orphanResumeCost =
-      (qualityFoldedIntoMeta ? 0 : qualityCost) + (reviseFoldedIntoMeta ? 0 : reviseCost);
+    const orphanResumeCost = qualityOrphanCost + (reviseFoldedIntoMeta ? 0 : reviseCost);
     emit({
       kind: "done",
       t: elapsed(),
@@ -481,7 +486,7 @@ export async function runAnalyzeJob(
     emit({ kind: "error", t: elapsed(), message });
     failJob(jobId, message);
   } finally {
-    if (analyzerType === "bob" && progressLog.length > 0) {
+    if (analyzerType === "bob" && ranPipeline && progressLog.length > 0) {
       try {
         const stamp = new Date(started).toISOString().replace(/[:.]/g, "-");
         const runDir = path.join(ROOT, "data/runs", `${stamp}-${repo}-${number}-live`);
@@ -492,6 +497,21 @@ export async function runAnalyzeJob(
         );
       } catch (err) {
         console.warn("[analyze-pipeline] could not persist progress.ndjson (best effort):", err);
+      }
+    }
+    if (analyzerType === "bob" && ranPipeline && blobsEnabled() && progressLog.at(-1)?.kind === "done") {
+      try {
+        const shots = await uploadDir(
+          path.join(ROOT, "data/shots", owner, repo, String(number)),
+          `shots/${owner}/${repo}/${number}`
+        );
+        await uploadBlob(
+          `events/${owner}/${repo}/${number}.ndjson`,
+          progressLog.map((e) => JSON.stringify(e)).join("\n") + "\n"
+        );
+        console.log(`[analyze-pipeline] uploaded ${shots} shot file(s) + recording for ${owner}/${repo}#${number}`);
+      } catch (err) {
+        console.warn("[analyze-pipeline] could not upload assets to Supabase Storage:", err);
       }
     }
   }

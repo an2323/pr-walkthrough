@@ -17,16 +17,19 @@
     "bob:verify-shots": "tsx scripts/bob-verify-shots.ts",
     "annotate-shots": "tsx scripts/annotate-shots.ts",
     "annotate-lines": "tsx scripts/annotate-lines.ts",
-    "bob:revise": "tsx scripts/bob-revise.ts"
+    "bob:revise": "tsx scripts/bob-revise.ts",
+    "migrate:supabase": "tsx scripts/migrate-to-supabase.ts"
   },
   "dependencies": {
     "@pr-walkthrough/shared": "workspace:*",
-    "express": "^4.21.0",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "playwright": "^1.48.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

@@ -479,7 +479,7 @@
             ],
             [
               "Counter: “no value, so off”",
-              "bad"
+              ""
             ],
             [
               "Hidden",
@@ -493,7 +493,7 @@
             ],
             [
               "Viewer: “flag is there, so on”",
-              "good"
+              ""
             ],
             [
               "Highlights shown",
@@ -705,7 +705,7 @@
             ],
             [
               "No editor yet",
-              "bad"
+              ""
             ],
             [
               "Counter hidden",
@@ -719,7 +719,7 @@
             ],
             [
               "Header sees the old one",
-              "bad"
+              ""
             ],
             [
               "Stuck on “N changes”",
@@ -1087,7 +1087,7 @@
             ],
             [
               "Shared state",
-              "good"
+              ""
             ],
             [
               "Header updates",

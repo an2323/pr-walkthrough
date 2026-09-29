@@ -225,6 +225,248 @@ describe("checkQuality", () => {
     const codes = criticalQualityWarnings(checkQuality(w)).map((x) => x.code);
     expect(codes).toContain("identifier-in-say");
     expect(codes).toContain("narration-mentions-process");
-    expect(codes).not.toContain("say-too-long");
+  });
+
+  it("treats field-length limits as critical (they were hand-trimmed before)", () => {
+    const w = makeWalkthrough({
+      steps: [
+        makeStep({
+          headline: "one two three four five six seven eight nine ten",
+          say: "First. Second. Third.",
+          narration: "A. B. C. D. E.",
+        }),
+      ],
+      coverage: undefined,
+    });
+    const codes = criticalQualityWarnings(checkQuality(w)).map((x) => x.code);
+    expect(codes).toEqual(expect.arrayContaining(["headline-too-long", "say-too-long", "narration-too-long"]));
+  });
+
+  it("keeps structural warnings out of the critical set", () => {
+    const w = makeWalkthrough({
+      steps: [makeStep(), makeStep({ id: "s2" }), makeStep({ id: "s3" }), makeStep({ id: "s4" }), makeStep({ id: "s5" }),
+        makeStep({ id: "s6" }), makeStep({ id: "s7" }), makeStep({ id: "s8" }), makeStep({ id: "s9" })],
+    });
+    const all = checkQuality(w);
+    expect(all.map((x) => x.code)).toContain("step-count-out-of-budget");
+    expect(criticalQualityWarnings(all).map((x) => x.code)).not.toContain("step-count-out-of-budget");
+  });
+});
+
+describe("refers-to-screenshot", () => {
+  const codes = (w: Walkthrough) => checkQuality(w).map((x) => x.code);
+
+  it("flags prose that points at a picture the reader may not have", () => {
+    for (const say of [
+      "As you can see in the screenshot, the panel overlaps.",
+      "The overlap is shown below.",
+      "Look at the picture to compare both states.",
+    ]) {
+      expect(codes(makeWalkthrough({ steps: [makeStep({ say })], coverage: undefined }))).toContain("refers-to-screenshot");
+    }
+  });
+
+  it("flags it in narration, headline, plain.* and symptom items", () => {
+    const narration = makeWalkthrough({ steps: [makeStep({ narration: "The screenshot makes this obvious." })], coverage: undefined });
+    expect(codes(narration)).toContain("refers-to-screenshot");
+    const headline = makeWalkthrough({ steps: [makeStep({ headline: "See the screenshot" })], coverage: undefined });
+    expect(codes(headline)).toContain("refers-to-screenshot");
+    const plain = makeWalkthrough({ plain: { title: "T", problem: "Shown in the screenshot.", fix: "F" }, coverage: undefined });
+    expect(codes(plain)).toContain("refers-to-screenshot");
+    const symptom = makeWalkthrough({
+      steps: [makeStep({ kind: "symptom", visual: { type: "symptoms", items: [{ text: "Overlap, see the screenshot" }] } })],
+      coverage: undefined,
+    });
+    expect(codes(symptom)).toContain("refers-to-screenshot");
+  });
+
+  it("does not flag ordinary uses of words like image or shot", () => {
+    for (const say of [
+      "The Docker image is rebuilt on every push.",
+      "The retry is a long shot, so it stays off by default.",
+      "Both panels now stay visible on a small screen.",
+    ]) {
+      expect(codes(makeWalkthrough({ steps: [makeStep({ say })], coverage: undefined }))).not.toContain("refers-to-screenshot");
+    }
+  });
+
+  it("is a critical code so the one repair pass fixes it", () => {
+    const w = makeWalkthrough({ steps: [makeStep({ say: "See the screenshot." })], coverage: undefined });
+    expect(criticalQualityWarnings(checkQuality(w)).map((x) => x.code)).toContain("refers-to-screenshot");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Diagram checks — fixtures are the real diagrams from the first live run of a small PR.
+// ---------------------------------------------------------------------------
+
+import { unchangedLayerItems } from "./quality.js";
+
+const LIVE_FLOW: NonNullable<Step["visual"]> = {
+  type: "flow",
+  rows: [
+    [["Click on menu trigger (before)", "old"], ["data-prevent-outside-click", "old"], ["All outside-click listeners skip", "bad"], ["Sidebar stays open", "bad"]],
+    [["Click on menu trigger (after)", ""], ["Sidebar outside-click fires", "good"], ["Sidebar closes", "good"], ["Menu opens on top", "good"]],
+  ],
+};
+
+const LIVE_LAYERS: NonNullable<Step["visual"]> = {
+  type: "layers",
+  before: [["top bar (mobile / desktop)", 100], ["styles popup", 100], ["context menu", 90], ["sidebar (floating)", 80, "bad"], ["bottom bar", 60]],
+  after: [["sidebar (floating)", 120, "hl"], ["top bar (mobile / desktop)", 100], ["styles popup", 100], ["context menu", 90], ["bottom bar", 60]],
+};
+
+const codesFor = (visual: Step["visual"]) =>
+  checkQuality(makeWalkthrough({ steps: [makeStep({ visual })], coverage: undefined })).map((w) => w.code);
+
+describe("flow diagram checks", () => {
+  it("flags the real live diagram: code in a label, marks on more than the last node of a row, too many nodes", () => {
+    const codes = codesFor(LIVE_FLOW);
+    expect(codes).toContain("visual-label-identifier");
+    expect(codes).toContain("flow-too-many-marks");
+    expect(codes).toContain("flow-too-big");
+  });
+
+  it("passes a small, plain chain with one outcome per side", () => {
+    const codes = codesFor({
+      type: "flow",
+      rows: [[["Tap the menu button", ""], ["The sidebar ignores the tap", "old"], ["Sidebar stays open", "bad"]],
+             [["Tap the menu button", ""], ["The sidebar hears the tap", ""], ["Sidebar closes", "good"]]],
+    });
+    expect(codes.filter((c) => c.startsWith("flow-") || c === "visual-label-identifier")).toEqual([]);
+  });
+
+  it("allows a mark only on the last node of a row, and only one", () => {
+    const marks = (rows: [string, string][][]) => codesFor({ type: "flow", rows }).includes("flow-too-many-marks");
+    expect(marks([[["a", ""], ["b", ""], ["c", "bad"]]])).toBe(false);
+    expect(marks([[["a", ""], ["b", "bad"], ["c", ""]]])).toBe(true); // mark in the middle
+    expect(marks([[["a", ""], ["b", "bad"], ["c", "bad"]]])).toBe(true); // two marks
+    expect(marks([[["a", "old"], ["b", ""], ["c", "bad"]], [["a", ""], ["b", ""], ["c", "good"]]])).toBe(false); // one per row is fine
+    expect(marks([[["a", ""], ["b", "old"], ["c", "good"]]])).toBe(false); // "old" is not an outcome mark
+  });
+
+  it("flags a label over six words and a row over four nodes separately", () => {
+    const longLabel = codesFor({ type: "flow", rows: [[["one two three four five six seven", ""], ["b", "good"]]] });
+    expect(longLabel).toContain("flow-too-big");
+    const wideRow = codesFor({ type: "flow", rows: [[["a", ""], ["b", ""], ["c", ""], ["d", ""], ["e", "good"]]] });
+    expect(wideRow).toContain("flow-too-big");
+  });
+
+  it("catches an HTML attribute even when the label cuts it short (seen in a real run: 'data-prevent stops sidebar check')", () => {
+    for (const label of ["data-prevent stops sidebar check", "aria-hidden blocks it", "data-testid"]) {
+      expect(codesFor({ type: "flow", rows: [[[label, "old"], ["Sidebar stays open", "bad"]]] }), label).toContain("visual-label-identifier");
+    }
+    expect(codesFor({ type: "flow", rows: [[["The marker stops the sidebar check", "old"], ["Sidebar stays open", "bad"]]] })).not.toContain("visual-label-identifier");
+  });
+
+  it("treats kebab-case and CSS variables as code, ordinary hyphens as fine", () => {
+    expect(codesFor({ type: "flow", rows: [[["--zIndex-ui-top", ""], ["x", "good"]]] })).toContain("visual-label-identifier");
+    expect(codesFor({ type: "flow", rows: [[["A well-known fix", ""], ["Done", "good"]]] })).not.toContain("visual-label-identifier");
+  });
+});
+
+describe("layers diagram checks", () => {
+  it("flags the real live diagram: 5 rows, and the bottom bar that never changes side", () => {
+    const codes = codesFor(LIVE_LAYERS);
+    expect(codes).toContain("layers-too-many");
+    expect(codes).toContain("layers-unchanged-item");
+    expect(unchangedLayerItems(LIVE_LAYERS.type === "layers" ? (LIVE_LAYERS.before as never) : [], LIVE_LAYERS.type === "layers" ? (LIVE_LAYERS.after as never) : [])).toEqual(["bottom bar"]);
+  });
+
+  it("keeps every item whose order flips, and drops nothing when all of them do", () => {
+    const noise = unchangedLayerItems(
+      [["top bar", 100], ["context menu", 90], ["sidebar", 80, "bad"]],
+      [["sidebar", 120, "hl"], ["top bar", 100], ["context menu", 90]]
+    );
+    expect(noise).toEqual([]);
+  });
+
+  it("allows ONE limit item on the side the value moves toward (the ceiling), not two", () => {
+    const one = unchangedLayerItems(
+      [["top bar", 100], ["sidebar", 80, "bad"], ["modal", 1000]],
+      [["modal", 1000], ["sidebar", 120, "hl"], ["top bar", 100]]
+    );
+    expect(one).toEqual([]);
+    const two = unchangedLayerItems(
+      [["top bar", 100], ["sidebar", 80, "bad"], ["modal", 1000], ["toast", 2000]],
+      [["toast", 2000], ["modal", 1000], ["sidebar", 120, "hl"], ["top bar", 100]]
+    );
+    expect(two).toEqual(["toast"]);
+  });
+
+  it("mirrors the rule when the value is lowered: the floor is the useful limit, the ceiling is noise", () => {
+    const noise = unchangedLayerItems(
+      [["header", 500], ["panel", 300, "bad"], ["footer", 10]],
+      [["header", 500], ["panel", 50, "hl"], ["footer", 10]]
+    );
+    expect(noise).toEqual(["header"]);
+  });
+
+  it("says nothing when the changed item can't be identified", () => {
+    expect(unchangedLayerItems([["a", 1]], [["a", 2]])).toEqual([]);
+    expect(codesFor({ type: "layers", before: [["a", 1]], after: [["a", 2]] })).toContain("layers-no-changed-item");
+  });
+
+  it("flags a column written lowest-first — the picture would show the loser on top (seen in a real run)", () => {
+    const lowestFirst = codesFor({
+      type: "layers",
+      before: [["sidebar", 80, "bad"], ["top bar", 100]],
+      after: [["top bar", 100], ["sidebar", 120, "hl"]],
+    });
+    expect(lowestFirst).toContain("layers-not-sorted");
+    const ok = codesFor({
+      type: "layers",
+      before: [["top bar", 100], ["sidebar", 80, "bad"]],
+      after: [["sidebar", 120, "hl"], ["top bar", 100]],
+    });
+    expect(ok).not.toContain("layers-not-sorted");
+    // equal values keep any order
+    expect(codesFor({ type: "layers", before: [["a", 100], ["b", 100], ["c", 50, "bad"]], after: [["c", 150, "hl"], ["a", 100], ["b", 100]] })).not.toContain("layers-not-sorted");
+  });
+
+  it("is critical, so the single repair pass fixes diagram problems too", () => {
+    const crit = criticalQualityWarnings(checkQuality(makeWalkthrough({ steps: [makeStep({ visual: LIVE_LAYERS })], coverage: undefined }))).map((w) => w.code);
+    expect(crit).toEqual(expect.arrayContaining(["layers-too-many", "layers-unchanged-item"]));
+  });
+});
+
+describe("step-many-hunks", () => {
+  const fourFiles = ["a.ts#1", "b.ts#1", "c.ts#1", "d.ts#1"];
+  it("warns (softly) when one change step spans four files", () => {
+    const found = checkQuality(makeWalkthrough({ steps: [makeStep({ hunkIds: fourFiles })], coverage: undefined }));
+    expect(found.map((x) => x.code)).toContain("step-many-hunks");
+    expect(criticalQualityWarnings(found).map((x) => x.code)).not.toContain("step-many-hunks");
+  });
+
+  it("does not warn for a cohesive implementation: up to three files, or many hunks in one file", () => {
+    for (const hunkIds of [["a.ts#1", "b.ts#1", "c.ts#1"], ["a.ts#1", "b.ts#1", "b.ts#2"], ["a.ts#1", "a.ts#2", "a.ts#3", "a.ts#4"]]) {
+      expect(checkQuality(makeWalkthrough({ steps: [makeStep({ hunkIds })], coverage: undefined })).map((x) => x.code)).not.toContain("step-many-hunks");
+    }
+  });
+
+  it("does not warn for minor steps or non-change steps", () => {
+    for (const step of [makeStep({ hunkIds: fourFiles, minor: true }), makeStep({ hunkIds: fourFiles, kind: "cause" })]) {
+      expect(checkQuality(makeWalkthrough({ steps: [step], coverage: undefined })).map((x) => x.code)).not.toContain("step-many-hunks");
+    }
+  });
+});
+
+describe("symptom-step-visual", () => {
+  const codes = (step: Step) => checkQuality(makeWalkthrough({ steps: [step], coverage: undefined })).map((w) => w.code);
+
+  it("flags a symptom step whose visual is a diagram or missing (seen in a real run: layers on the symptom step, no symptoms list)", () => {
+    expect(codes(makeStep({ kind: "symptom", visual: { type: "layers", before: [["a", 2, "bad"], ["b", 1]], after: [["a", 3, "hl"], ["b", 1]] } }))).toContain("symptom-step-visual");
+    expect(codes(makeStep({ kind: "symptom" }))).toContain("symptom-step-visual");
+  });
+
+  it("accepts a symptoms list, and ignores other step kinds and minor symptom steps", () => {
+    expect(codes(makeStep({ kind: "symptom", visual: { type: "symptoms", items: [{ text: "Panel hides the menu" }] } }))).not.toContain("symptom-step-visual");
+    expect(codes(makeStep({ kind: "cause" }))).not.toContain("symptom-step-visual");
+    expect(codes(makeStep({ kind: "symptom", minor: true }))).not.toContain("symptom-step-visual");
+  });
+
+  it("is critical so the single repair pass fixes it", () => {
+    const found = checkQuality(makeWalkthrough({ steps: [makeStep({ kind: "symptom" })], coverage: undefined }));
+    expect(criticalQualityWarnings(found).map((w) => w.code)).toContain("symptom-step-visual");
   });
 });

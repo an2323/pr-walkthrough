@@ -15,6 +15,8 @@ import { promisify } from "node:util";
 import type { ShotHighlight, SymptomItem, Walkthrough } from "@pr-walkthrough/shared";
 
 import { annotateShot } from "../shots/annotate.js";
+import { scrubbedEnv } from "./app-servers.js";
+import { comparePngs } from "../shots/png-diff.js";
 import { cleanHighlight, maybeCropRegion } from "./highlights.js";
 
 const execFileAsync = promisify(execFile);
@@ -123,6 +125,7 @@ export async function runSymptomCapture(
       cwd,
       timeout: 60_000,
       maxBuffer: 8 * 1024 * 1024,
+      env: scrubbedEnv(), // Bob-written script: no DB password, no service key
     });
     const lastLine = stdout.trim().split("\n").pop() ?? "";
     const parsed = JSON.parse(lastLine) as { ok?: unknown; highlights?: unknown };
@@ -145,8 +148,13 @@ export async function captureSymptomShots(opts: {
   baseUrl: string;
   outDir: string;
   symptomCount: number;
+  /**
+   * The main BASE screenshot. A symptom frame that looks the same as it adds
+   * nothing on its own card, so it is dropped (checked here, not left to the model).
+   */
+  beforePath?: string;
 }): Promise<{ srcByIndex: Map<number, string>; notes: string[] }> {
-  const { verifyDir, baseUrl, outDir, symptomCount } = opts;
+  const { verifyDir, baseUrl, outDir, symptomCount, beforePath } = opts;
   const srcByIndex = new Map<number, string>();
   const notes: string[] = [];
 
@@ -194,6 +202,14 @@ export async function captureSymptomShots(opts: {
     if (!existsSync(rawPath)) {
       notes.push(`symptom ${entry.index}: script ok but no PNG written`);
       continue;
+    }
+
+    if (beforePath && existsSync(beforePath)) {
+      const same = comparePngs(await readFile(rawPath), await readFile(beforePath));
+      if (same?.identical) {
+        notes.push(`symptom ${entry.index}: looks the same as the main before screenshot — dropped`);
+        continue;
+      }
     }
 
     let src = rawName;

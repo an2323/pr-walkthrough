@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanHighlight, normalizeHighlights, maybeCropRegion } from "./highlights.js";
+import { cleanHighlight, normalizeHighlights, maybeCropRegion, tidyLabel, focusOnChange } from "./highlights.js";
 
 describe("cleanHighlight", () => {
   it("clamps a box that runs off the image", () => {
@@ -65,5 +65,57 @@ describe("maybeCropRegion", () => {
     expect(crop!.x).toBe(0);
     expect(crop!.y).toBe(0);
     expect(crop!.x + crop!.w).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("tidyLabel — Bob writes sentences; a label is a short caption", () => {
+  it("drops parentheticals and cuts at a word boundary, not mid-word (real labels from a live run)", () => {
+    expect(tidyLabel("Sidebar z-index (80) < toolbar (100): toolbar buttons appear ON TOP of sidebar")).toBe("Sidebar z-index < toolbar");
+    expect(tidyLabel("Sidebar still visible under main menu (should be closed)")).toBe("Sidebar still visible under main menu");
+  });
+
+  it("never ends on a dangling connective or punctuation", () => {
+    expect(tidyLabel("Menu opened, and the")).toBe("Menu opened");
+    expect(tidyLabel("Sidebar closed by itself:")).toBe("Sidebar closed by itself");
+  });
+
+  it("leaves a good short label alone and keeps hard-cut words whole", () => {
+    expect(tidyLabel("Sidebar is still open")).toBe("Sidebar is still open");
+    expect(tidyLabel("Supercalifragilisticexpialidocious-and-more-and-more-and-more")).toHaveLength(40);
+  });
+
+  it("cleanHighlight uses it", () => {
+    expect(cleanHighlight({ x: 0.1, y: 0.1, w: 0.3, h: 0.3, label: "Menu is open here (dropdown)" })?.label).toBe("Menu is open here");
+  });
+});
+
+describe("focusOnChange — point at what changed, not at the whole component", () => {
+  const region = { x: 0.7, y: 0.02, w: 0.2, h: 0.06 };
+
+  it("replaces a box covering most of the picture with the changed region, keeping label and pair", () => {
+    const out = focusOnChange([{ x: 0.25, y: 0, w: 0.75, h: 0.98, label: "Sidebar behind toolbar", pair: "s" }], region);
+    expect(out).toHaveLength(1);
+    expect(out[0].label).toBe("Sidebar behind toolbar");
+    expect(out[0].pair).toBe("s");
+    expect(out[0].w).toBeLessThan(0.35);
+    expect(out[0].h).toBeLessThan(0.15);
+    expect(out[0].x).toBeLessThan(0.7); // padded
+  });
+
+  it("leaves small, specific boxes from the model alone", () => {
+    const hl = [{ x: 0.7, y: 0.02, w: 0.1, h: 0.05, label: "Close button" }];
+    expect(focusOnChange(hl, region)).toEqual(hl);
+  });
+
+  it("gives an unlabeled box when the model marked nothing", () => {
+    const out = focusOnChange([], region);
+    expect(out).toHaveLength(1);
+    expect(out[0].label).toBeUndefined();
+  });
+
+  it("does nothing without a region, or when the change is most of the page anyway", () => {
+    const hl = [{ x: 0, y: 0, w: 1, h: 1, label: "Everything" }];
+    expect(focusOnChange(hl, null)).toEqual(hl);
+    expect(focusOnChange(hl, { x: 0.05, y: 0.05, w: 0.9, h: 0.9 })).toEqual(hl);
   });
 });

@@ -79,7 +79,16 @@ Use it for the *searches* in the list above, not for deciding what they mean:
   symptom → cause → constraint (why the obvious local fix is not enough) →
   where the data lives → key decision → changes → dead ends / rejected
   alternatives → verification. Revisiting a file in a later step is expected.
-- One step = one decision or one question. 5–12 steps total.
+- One step = one decision or one question. Size the walkthrough by the PR, not by habit —
+  counting hunks that need explaining (everything not in `skippedHunks`): up to 5 hunks →
+  3–8 steps; up to 50 → 5–15; more → 8–18, focused on the mechanism. Narrative steps with no
+  hunk (symptom, cause, constraint, decision) are part of that count.
+- A change that both REMOVES a guard, flag or exception AND adds what replaces it is two
+  steps: first the cause and the decision (why the guard has to go, what now takes its place),
+  then the implementation. Never pack them into one step that touches several files.
+- A `decision` step names, in one sentence, the obvious alternative that was NOT taken and
+  why ("instead of calling X from every caller"), whenever there is one. A reviewer judges a
+  choice by what it was chosen over.
 - Explain the core logic only. A step must earn its place: it shows a decision, a
   cause, or a mechanism a reviewer needs to judge the PR. Do NOT give a step to
   mechanical or supporting edits — imports and exports (incl. re-exports and index/
@@ -132,9 +141,9 @@ Do not annotate imports, renames, types or boilerplate.
   looks at the code. Plain language. No identifiers, no file names, no symbols. Explain
   intent ("we need to keep the count somewhere the header can read it"), never read
   the code aloud. **Hard rule: no backticks and no code names in `narration`** — a
-  voice reads it, and `useOutsideClick` comes out as noise. Bad: "Without the
-  attribute, `onClickOutside` fires and closes the menu." Good: "Without that marker,
-  the menu treats the tap on its own button as a click outside, and closes itself."
+  voice reads it, and `retryOnFailure` comes out as noise. Bad: "Without the
+  flag, `retryOnFailure` fires and re-sends the upload." Good: "Without that setting,
+  a failed upload quietly tries again and the file is sent twice."
   Count the sentences: more than 4 is too long. **Never mention how a claim was
   checked** — no "ablation", "measurement confirms", "the backend verified", or any
   other reference to the analysis process itself. The listener hears a plain
@@ -182,8 +191,8 @@ human will read `headline` and `say` WITHOUT the code, on their own — they mus
 stand alone and never contain an identifier, a file name, a function name, or
 anything in backticks. If you can't state the point without one, you're describing
 the mechanism instead of the point — simplify or say what it accomplishes instead.
-Bad: "Removed `data-prevent-outside-click` from the trigger." Good: "Clicking the
-menu button now counts as clicking outside the sidebar."
+Bad: "Removed `skipCache` from the search request." Good: "Searching now always
+returns fresh results instead of an old copy."
 
 Fill these fields on each step:
 
@@ -195,9 +204,9 @@ Fill these fields on each step:
   matters more here — do not write both plus a third consequence sentence just
   because it feels complete. If you have a third sentence, cut the least essential
   one; move genuinely useful detail to `notes` instead, or leave it for `narration`.
-  Example: NOT "The container-check code calls `event.target`. The type was
-  previously plain `Event`, which doesn't expose `target`. The type is narrowed so
-  the new code compiles." — three sentences AND identifiers. INSTEAD, one sentence,
+  Example: NOT "The parser now reads `options.locale`. The options type had no
+  `locale` field. The field is added so the new code compiles." — three sentences
+  AND identifiers. INSTEAD, one sentence,
   no identifiers, or mark the step `minor` and skip `say` detail entirely: "A
   supporting type change needed for the new check to compile."
 - Do NOT fill `check` (the reviewer UI no longer shows it; the golden example still
@@ -233,6 +242,20 @@ reviewer can look at: a `symptoms` list, a `layers`/`flow` diagram, BASE code, o
 (when the backend has produced screenshots) a single `shot`. Never make a Problem
 screen that only restates `plain.problem` in one sentence with no visual and no code.
 
+**The `symptom` step carries a `symptoms` list.** Its visual is always `symptoms` — one item per distinct
+thing the user sees go wrong, including a separate item for a problem that only shows in another
+viewport (a phone, a narrow window). Never a diagram there: the diagram belongs on the cause step. The
+screenshot verifier writes one scenario per item, and each item can end up with its own picture.
+`plain.problem` names every one of those problems, not just the first.
+
+**Assume there are no screenshots.** The backend adds them only for some repositories
+and only when the capture works — and even then some bugs leave nothing to see in a
+still (a stacking order, a handler that no longer fires). Choose the Problem evidence
+so it works on its own (a `layers`/`flow` diagram, BASE code, a clear `symptoms`
+list), and never write text that leans on a picture: no "as shown", "in the
+screenshot", "see the picture" in `headline`, `say`, `narration`, `plain.*` or a
+symptom. Screenshots, when they exist, are extra proof, not part of the explanation.
+
 Add a visual when the point of the step is:
 - a relation between values that no single code block shows (two numbers in
   different places compared, an order or priority between several items);
@@ -251,25 +274,41 @@ Leave it out when:
 Labels follow the same no-identifiers rule as `headline`/`say` (plain words, ≤ 6
 words per label). Types:
 
-- `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them.
+- `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them
+  ("the list looks empty right after saving"), not as an engineer would diagnose them.
   Prefer objects: `items: [{ "text": "..." }, ...]`, not bare strings. Each item should
   be a distinct user-visible scenario (different viewport or UI state when that matters),
   so the verifier can later attach a dedicated BASE screenshot per item when useful.
+  Exception for the very simple case: when the whole cause is one comparison anyone can
+  read at a glance (two numbers, two names) and the item would otherwise be vague, you
+  may add it in one short parenthesis — "The badge says 12 items but the list shows 10
+  (12 vs 10)". Never more than that; the reasoning belongs to the cause step.
   **Never invent `src`** — image paths are filled by the backend after verification.
 - `shot` — one screenshot (usually the broken Before state) as Problem evidence.
   Prefer this only when screenshots already exist; do not invent image paths.
 - `layers` — order or priority: z-index / stacking, middleware or
   plugin order, precedence of config sources. `before` and `after` are lists of
-  `[label, value, cls?]`, top of the list = wins / drawn last. Values are the REAL
-  values from the code (e.g. `["Sidebar", 80, "bad"]` → `["Sidebar", 120, "hl"]`),
-  and include the neighbours it is compared against (e.g. the toolbar at 100).
+  `[label, value, cls?]`, top of the list = wins / drawn last — so list the HIGHEST value first,
+  in both columns (a column written lowest-first draws the loser on top). Values are the REAL
+  values from the code (e.g. `["Banner", 20, "bad"]` → `["Banner", 60, "hl"]`),
+  and show only what the reader needs to see the change: the changed item, plus the items
+  whose order relative to it CHANGES (they are what the change reorders). Leave out items
+  that stay on the same side before and after — they explain nothing. The one exception is a
+  single limit on the side the value moves toward (the ceiling a raised value must stay
+  under, the floor a lowered one must stay over), and only when the fix depends on not
+  crossing it. Merge items with the same value and the same role into one row. At most 4
+  rows per column.
   `cls`: `"bad"` for the item that causes the problem, `"hl"` for the one that changed.
-- `flow` — a chain of events or data: a click and who handles it, a value passing
-  through functions, a request through layers. `rows` is 1–2 rows of 2–4
-  `[label, cls]` nodes; `cls` is `"bad"` (the wrong outcome — mark ONLY the final
-  wrong result, not every step of the chain), `"good"` (the fixed outcome — same
-  rule), `"old"` (a path the PR removes) or `""`. For a before/after contrast use
-  two rows ("Before: …", "After: …").
+- `flow` — use it only when the reader has to see WHO reacts to something: two or more
+  handlers or components in different places, in an order the code and `say` can't show at
+  a glance. If `say` already tells the whole story in a sentence or two, skip the diagram
+  and let the code carry the step. `rows` is 1–2 rows of `[label, cls]` nodes: at most 4
+  per row and 6 in total, each label at most 6 plain words — no identifiers, attribute,
+  variable or file names, nothing in code style. `cls`: `"bad"` / `"good"` mark where a
+  chain ENDS — only a row's last node may carry one, never a middle step; `"old"` marks a
+  guard or path the PR removes (never an event or an action); `""` otherwise. For a
+  before/after contrast use two rows and set `rowTitles: ["Before", "After"]` — do not put
+  "(before)" into a label.
 - `map` — only when the step is about how modules are wired together; it shows the
   graph at this step. At most 1 in 4 steps.
 

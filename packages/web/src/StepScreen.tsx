@@ -4,11 +4,14 @@
  * check card (SHOW_CHECKS), ask row (open question), "How the analysis got here" link.
  */
 
+import { useState } from 'react';
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
 import { VisualBlock } from './VisualBlock';
 import { CodeFold } from './CodeFold';
 import { SHOW_CHECKS } from './features';
+import { QuestionComposer, type AskResult } from './review';
+import { pickAskTarget, stepCodeBlocks } from './pickAskTarget';
 
 const CH_LABEL: Record<string, string> = {
   problem: 'Problem',
@@ -33,8 +36,8 @@ interface Props {
   plain: PlainData;
   checked: boolean;
   onCheck: (v: boolean) => void;
-  asked: boolean;
-  onAsk: () => void;
+  askResult?: AskResult;
+  onAskDone: (result: AskResult) => void;
   verifiedItems: Record<number, boolean>;
   onVerify: (k: number, v: boolean) => void;
   onOpenDrawer: () => void;
@@ -52,8 +55,8 @@ export function StepScreen({
   plain,
   checked,
   onCheck,
-  asked,
-  onAsk,
+  askResult,
+  onAskDone,
   verifiedItems,
   onVerify,
   onOpenDrawer,
@@ -61,16 +64,52 @@ export function StepScreen({
 }: Props) {
   const p = plain.steps[step.id];
   const pr = walkthrough.pr;
+  const [askSeed, setAskSeed] = useState<{
+    blockIndex: number;
+    lineIndex: number;
+    text: string;
+  } | null>(null);
+  const [generalCompose, setGeneralCompose] = useState(false);
 
   if (!p) return null;
 
   const ch = chapterLabel ?? CH_LABEL[p.ch] ?? p.ch;
   const question = walkthrough.openQuestions.find((q) => q.stepId === step.id);
   const questionText = question?.short ?? question?.question;
+  const askTarget = question ? pickAskTarget(step, question) : null;
 
   // Symptom steps describe what the user sees; their "code" is background context, not a change.
-  const codeBlocks = step.kind === 'symptom' ? [] : step.beats.flatMap((b) => b.code ?? []);
+  const codeBlocks = stepCodeBlocks(step);
   const hasCode = codeBlocks.length > 0;
+
+  function startAsk() {
+    if (!question) return;
+    const target = pickAskTarget(step, question);
+    if (target) {
+      setGeneralCompose(false);
+      setAskSeed({
+        blockIndex: target.blockIndex,
+        lineIndex: target.lineIndex,
+        text: question.question,
+      });
+    } else {
+      setAskSeed(null);
+      setGeneralCompose(true);
+    }
+  }
+
+  function clearAskCompose() {
+    setAskSeed(null);
+    setGeneralCompose(false);
+  }
+
+  const lineHint = askTarget
+    ? `${askTarget.block.file.split('/').pop() ?? askTarget.block.file}${
+        askTarget.block.lines[askTarget.lineIndex]?.n != null
+          ? `:${askTarget.block.lines[askTarget.lineIndex].n}`
+          : ''
+      }`
+    : null;
 
   const story = (
     <div className="v2step-story">
@@ -120,19 +159,52 @@ export function StepScreen({
         </label>
       )}
 
-      {questionText && (
-        <div className="ask">
-          <span className="q">
-            <b>Ask?</b>
-            <span>{questionText}</span>
-          </span>
-          <button
-            className="chip"
-            aria-pressed={asked}
-            onClick={onAsk}
-          >
-            {asked ? 'Added' : 'Add to review'}
-          </button>
+      {question && questionText && (
+        <div className="ask-block">
+          <div className={`ask${askResult && !askSeed && !generalCompose ? ' settled' : ''}`}>
+            <span className="q">
+              <b>Ask?</b>
+              <span>{questionText}</span>
+            </span>
+            {!askSeed && !generalCompose && !askResult && (
+              <button className="chip" type="button" onClick={startAsk}>
+                Ask
+              </button>
+            )}
+            {(askSeed || generalCompose) && !askResult && (
+              <span className="ask-status">
+                {askSeed ? `On ${lineHint} →` : 'Confirm below →'}
+              </span>
+            )}
+            {!askSeed && !generalCompose && askResult?.kind === 'posted' && (
+              <span className="ask-status">
+                Posted{askResult.file ? ` on ${askResult.file.split('/').pop()}` : ''}{' '}
+                <a href={askResult.url} target="_blank" rel="noopener noreferrer">view ↗</a>
+                {' · '}
+                <button type="button" className="link-btn" onClick={startAsk}>
+                  Ask again
+                </button>
+              </span>
+            )}
+            {!askSeed && !generalCompose && askResult?.kind === 'copied' && (
+              <span className="ask-status">
+                Copied{askResult.file ? ` (${askResult.file.split('/').pop()})` : ''} ·{' '}
+                <button type="button" className="link-btn" onClick={startAsk}>
+                  Ask again
+                </button>
+              </span>
+            )}
+          </div>
+          {generalCompose && (
+            <QuestionComposer
+              initialText={question.question}
+              onCancel={clearAskCompose}
+              onDone={(result) => {
+                onAskDone(result);
+                clearAskCompose();
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -161,6 +233,16 @@ export function StepScreen({
               baseSha={pr.baseSha}
               headSha={pr.headSha}
               prUrl={pr.url}
+              askSeed={
+                askSeed?.blockIndex === i
+                  ? { lineIndex: askSeed.lineIndex, text: askSeed.text }
+                  : null
+              }
+              onAskSettled={(result) => {
+                onAskDone(result);
+                clearAskCompose();
+              }}
+              onAskCancel={clearAskCompose}
             />
           ))}
         </div>

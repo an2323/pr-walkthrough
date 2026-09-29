@@ -18,6 +18,8 @@ export interface AppRecipe {
   install: { cmd: string; args: string[] };
   /** Dev server on `port`, bound to 127.0.0.1 only. */
   start(port: number): { cmd: string; args: string[]; env: Record<string, string> };
+  /** A selector that means "the app has rendered" (used by the backend warm-up before Bob starts). */
+  readySelector?: string;
   /** Viewport the screenshots are taken at. */
   viewport: { width: number; height: number };
   /** App-specific tips for Bob: first-run dialogs, where things live, selectors to trust. */
@@ -33,8 +35,11 @@ const RECIPES: AppRecipe[] = [
     start: (port) => ({
       cmd: "yarn",
       args: ["--cwd", "excalidraw-app", "vite", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
-      env: { VITE_APP_PORT: String(port), BROWSER: "none" },
+      // ESLINT off: the dev server's checker plugin would otherwise lint the whole monorepo
+      // (twice, BASE and HEAD, on the same two cores) before the app is usable.
+      env: { VITE_APP_PORT: String(port), BROWSER: "none", VITE_APP_ENABLE_ESLINT: "false" },
     }),
+    readySelector: ".excalidraw",
     viewport: { width: 1280, height: 800 },
     hints: [
       "- The editor is a single page; wait for `.excalidraw` and then ~1 s before interacting.",
@@ -45,6 +50,13 @@ const RECIPES: AppRecipe[] = [
       "  touches to find its class names.",
       "- The mobile layout kicks in below ~730 px width (use a 390×844 viewport for it).",
       "- Drawing: select a tool, then `page.mouse` down/move/up on the canvas.",
+      "- Panels (verified on this app): open the Library sidebar by clicking `.sidebar-trigger__label-element`",
+      "  (the visible trigger is a label; clicking the inner `.default-sidebar-trigger` div does nothing).",
+      "  The sidebar element is `.sidebar` (class `Island sidebar default-sidebar`). It can be docked beside",
+      "  the canvas or floating over it; `button.sidebar__dock` toggles that (`.selected` = docked).",
+      "- The main menu opens with `button.main-menu-trigger` (the top-left menu).",
+      "- The top-right group is `.excalidraw-ui-top-right`; there is no `.App-top-bar` element in this build.",
+      "- A locator that finds nothing is the usual failure here: log what was found before deciding anything.",
     ].join("\n"),
   },
 ];

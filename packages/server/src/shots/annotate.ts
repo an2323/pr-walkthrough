@@ -47,6 +47,8 @@ function isBanner(h: ShotHighlight): boolean {
 /** Minimum width (CSS px) a crop is upscaled to via deviceScaleFactor, so a tiny marked area still reads clearly. */
 const CROP_MIN_WIDTH = 640;
 const CROP_MAX_SCALE = 3;
+/** Frames narrower than this are never cropped (see annotateShot). */
+export const MIN_CROP_SOURCE_WIDTH = 700;
 
 export async function annotateShot(
   rawPath: string,
@@ -59,11 +61,14 @@ export async function annotateShot(
     cropOrOpts && typeof cropOrOpts === "object" && ("crop" in cropOrOpts || "labelsOnly" in cropOrOpts)
       ? (cropOrOpts as AnnotateOpts)
       : { crop: cropOrOpts as CropRegion | undefined };
-  const crop = opts.crop;
   const labelsOnly = !!opts.labelsOnly;
 
   const buf = await readFile(rawPath);
   const { width, height } = pngSize(buf);
+  // A crop is an upscale of pixels that were already captured. On a big desktop capture that makes a
+  // small change legible; on a phone-sized frame (a few hundred px wide) it only produces a blurry,
+  // mostly empty enlargement — there the whole frame with a tight box reads better.
+  const crop = width >= MIN_CROP_SOURCE_WIDTH ? opts.crop : undefined;
   const color = COLORS[tone];
   // A label wraps within whichever is narrower: the crop (if any) or the full image —
   // otherwise a crop tight enough to need one in the first place lets the label run
@@ -85,7 +90,19 @@ export async function annotateShot(
       // Labels-only: anchor a zero-size point so the pill sits where the box's
       // top-left was, without drawing a rectangle.
       if (labelsOnly) {
-        return `<div class="box" style="left:${h.x * 100}%;top:${h.y * 100}%;width:0;height:0;border:none;box-shadow:none"><span class="lbl" style="left:0;top:0">${esc(h.label)}</span></div>`;
+        // Keep the pill inside the picture: start no further right than leaves room for a short label,
+        // and let it use whatever width remains (a pill in a zero-width anchor would otherwise wrap
+        // every word onto its own line).
+        const startX = Math.min(h.x, Math.max(0, 1 - 220 / width));
+        const room = Math.max(160, Math.round((1 - startX) * width - 16));
+        // The pill goes just BELOW the marked spot (above it when the spot is at the bottom edge) so it
+        // never covers the very thing it points at.
+        // Room below → below. Otherwise above, if there is room above; a box spanning the whole height
+        // (a panel) has neither, so the pill sits just inside its top edge instead of off the picture.
+        const mode: "below" | "above" | "inside" = h.y + h.h <= 0.88 ? "below" : h.y > 0.12 ? "above" : "inside";
+        const anchorY = mode === "below" ? h.y + h.h : h.y;
+        const place = mode === "below" ? "top:6px;" : mode === "above" ? "top:0;transform:translateY(calc(-100% - 6px));" : "top:8px;";
+        return `<div class="box" style="left:${startX * 100}%;top:${anchorY * 100}%;width:0;height:0;border:none;box-shadow:none"><span class="lbl" style="left:0;${place}max-width:${room}px">${esc(h.label)}</span></div>`;
       }
       return `<div class="box" style="left:${h.x * 100}%;top:${h.y * 100}%;width:${h.w * 100}%;height:${h.h * 100}%;${boxBorder}">${
         `<span class="lbl" style="${labelStyle(h)}">${esc(h.label)}</span>`
@@ -101,7 +118,7 @@ export async function annotateShot(
       text-align:center;padding:4px 10px;color:#fff;background:${color};
       font:600 ${labelFontPx}px/1.25 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
       box-shadow:0 2px 6px rgba(0,0,0,.25)}
-    .lbl{position:absolute;max-width:min(360px,${labelMaxWidth}px);white-space:normal;
+    .lbl{position:absolute;width:max-content;max-width:min(360px,${labelMaxWidth}px);white-space:normal;
       font:600 ${labelFontPx}px/1.25 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
       color:#fff;background:${color};padding:5px 12px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
   </style></head><body><div class="wrap"><img src="data:image/png;base64,${buf.toString("base64")}">${boxes}</div></body></html>`;

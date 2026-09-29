@@ -10,7 +10,7 @@ import { ShotImage, ShotLightbox } from './ShotsVisual';
 
 /** Who took the before/after screenshots — shown as-is, so it has to be true. */
 const SHOTS_BY: Record<NonNullable<Walkthrough['shots']>['by'] & string, string> = {
-  'bob-verifier': 'taken by Bob in the running app',
+  'bob-verifier': 'taken in the running app',
   playwright: 'taken by a Playwright script',
   manual: 'taken by hand',
 };
@@ -76,9 +76,11 @@ export function StartScreen({ walkthrough, plain, flow }: Props) {
 
       {!shots && (
         <p className="note" style={{ marginTop: -8 }}>
-          {walkthrough.verification?.status === 'skipped' && walkthrough.verification.skipReason
-            ? `No before/after screenshots — ${walkthrough.verification.skipReason}`
-            : 'No before/after screenshots — this change isn’t visible in the UI (or screenshots weren’t taken for this walkthrough).'}
+          {walkthrough.verification?.shotsNote
+            ? `No before/after screenshots — ${walkthrough.verification.shotsNote}`
+            : walkthrough.verification?.status === 'skipped' && walkthrough.verification.skipReason
+              ? `No before/after screenshots — ${walkthrough.verification.skipReason}`
+              : 'No before/after screenshots — this change isn’t visible in the UI (or screenshots weren’t taken for this walkthrough).'}
         </p>
       )}
 

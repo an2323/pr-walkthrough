@@ -28,6 +28,7 @@ export type {
   WalkthroughPart,
   Ablation,
   AblationRun,
+  AblationScenario,
   StepEvidence,
   SymptomItem,
 } from "./walkthrough.js";

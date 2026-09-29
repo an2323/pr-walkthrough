@@ -28,7 +28,7 @@ export interface PlainStep {
 }
 
 export type PlainVisual =
-  | { type: 'flow'; rows: [string, string][][] }
+  | { type: 'flow'; rows: [string, string][][]; rowTitles?: string[] }
   | { type: 'symptoms'; items: Array<string | { text: string; src?: string }> }
   | { type: 'map'; caption?: string }
   | { type: 'layers'; before: [string, number, string?][]; after: [string, number, string?][] }

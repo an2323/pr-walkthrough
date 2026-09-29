@@ -13,7 +13,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile as fsReadFile, mkdir, rmdir } from "node:fs/promises";
+import { readFile as fsReadFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -51,6 +51,9 @@ export async function gitCommonDir(repoPath: string): Promise<string> {
  */
 async function withRepoLock<T>(mainPath: string, fn: () => Promise<T>): Promise<T> {
   const lockPath = `${mainPath}.lock`;
+  // A fresh cache volume has no parent directory yet; the lock's own mkdir must stay
+  // non-recursive (that is what makes it atomic), so create the parent first.
+  await mkdir(path.dirname(lockPath), { recursive: true });
   const deadline = Date.now() + 60_000;
   for (;;) {
     try {
@@ -183,4 +186,44 @@ export async function ensureWorktree(mainPath: string, sha: string): Promise<str
     await git(mainPath, ["worktree", "add", "--detach", "--quiet", dest, sha]);
   });
   return dest;
+}
+
+/**
+ * Free disk before a run: every analysed PR leaves two worktrees behind (BASE and HEAD), each with
+ * its own ~1.5 GB `node_modules`, and nothing ever removed them — a 47 GB VM fills in a handful
+ * of PRs. Keeps the worktrees named in `keepShas` plus the `keepRecent` most recently touched
+ * others (so re-running the previous PR stays cheap); removes the rest, and any ablation scratch
+ * directory (`abl-*`) left behind by a crashed run.
+ *
+ * @returns the names of the removed worktree directories
+ */
+export async function pruneWorktrees(
+  mainPath: string,
+  keepShas: string[],
+  keepRecent = 2
+): Promise<string[]> {
+  const wtRoot = path.join(mainPath, "wt");
+  if (!existsSync(wtRoot)) return [];
+  const removed: string[] = [];
+  await withRepoLock(mainPath, async () => {
+    const entries = (await readdir(wtRoot, { withFileTypes: true })).filter((e) => e.isDirectory());
+    const info = await Promise.all(
+      entries.map(async (e) => ({ name: e.name, mtime: (await stat(path.join(wtRoot, e.name))).mtimeMs }))
+    );
+    const keep = new Set(keepShas);
+    const now = Date.now();
+    const scratch = info.filter((i) => i.name.startsWith("abl-") && now - i.mtime > 60 * 60_000);
+    const others = info
+      .filter((i) => !i.name.startsWith("abl-") && !keep.has(i.name))
+      .sort((a, b) => b.mtime - a.mtime);
+    const drop = [...scratch, ...others.slice(keepRecent)];
+    for (const d of drop) {
+      const dir = path.join(wtRoot, d.name);
+      await git(mainPath, ["worktree", "remove", "--force", dir]).catch(() => {});
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      removed.push(d.name);
+    }
+    if (drop.length > 0) await git(mainPath, ["worktree", "prune"]).catch(() => {});
+  });
+  return removed;
 }

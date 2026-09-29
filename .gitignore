@@ -12,3 +12,10 @@ data/runs/
 # Bob Shell custom modes written by local spikes / analyzer into checkouts
 .bob/
 .env*
+# local demo VO / BGM for video (ElevenLabs + music)
+demo-vo/
+# Bob Shell package baked into the server image (IBM licence — not redistributed)
+deploy/vendor/
+# Production secrets for the GCP VM (never commit)
+deploy/.env
+deploy/.env.production

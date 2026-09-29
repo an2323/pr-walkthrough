@@ -1,0 +1,51 @@
+# Production stack on one VM:  docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+# Secrets live in deploy/.env on the VM (copied from your local deploy/.env.production).
+
+services:
+  api:
+    build:
+      context: ..
+      target: api
+    env_file: .env
+    environment:
+      ANALYZER: bob
+      PORT: "3000"
+      GIT_CACHE_DIR: /cache/repos
+    volumes:
+      # Local copies of shots/audio/runs (Supabase keeps the durable ones).
+      - data:/app/data
+      # Git clones + installed node_modules of analysed apps — makes re-runs fast.
+      - cache:/cache
+      # Bob's own task history: --resume repairs work across restarts, and a run whose
+      # answer couldn't be parsed can still be recovered from here.
+      - bob:/root/.bob
+    # Chromium needs more than Docker's default 64 MB of /dev/shm.
+    shm_size: "1gb"
+    # Node runs as PID 1 otherwise and never reaps the Chromium/Vite/yarn children that
+    # the run kills; tini does, and forwards SIGTERM so `docker stop` is not a 10 s wait + SIGKILL.
+    init: true
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      target: web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  data:
+  cache:
+  bob:
+  caddy_data:
+  caddy_config:

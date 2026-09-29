@@ -79,24 +79,25 @@ export interface WalkthroughPart {
 }
 
 /**
- * One symptom on a symptom step. Plain string is legacy; prefer `{ text, src?, schematic? }`
- * so each scenario can carry a screenshot and/or a small schematic diagram.
+ * One symptom on a symptom step. Plain string is legacy; prefer `{ text, src? }` so each scenario
+ * can carry a screenshot (filled in by the backend, never by the analyzer).
  */
-export type SymptomSchematic = "stack" | "overlap";
-
 export type SymptomItem =
   | string
   | {
       text: string;
       /** Screenshot under data/shots/{owner}/{repo}/{number}/ for this scenario. */
       src?: string;
-      /** Built-in mini-diagram instead of (or as well as) a screenshot. */
-      schematic?: SymptomSchematic;
     };
 
 /** Visual types for step screens. */
 export type Visual =
-  | { type: "flow"; rows: [string, string][][] }
+  | {
+      type: "flow";
+      rows: [string, string][][];
+      /** One heading per row ("Before", "After"), so the rows need no "(before)" in their labels. */
+      rowTitles?: string[];
+    }
   | { type: "symptoms"; items: SymptomItem[] }
   | { type: "map"; caption?: string }
   | { type: "layers"; before: [string, number, string?][]; after: [string, number, string?][] }
@@ -361,8 +362,13 @@ export interface Verification {
   status: "not_run" | "passed" | "failed" | "skipped";
   /** Human-readable scenario, one action → expectation per line. */
   scenario: string[];
-  /** Why verification was skipped (when status === "skipped"). */
+  /** Why verification was skipped (when status === "skipped"). Plain words — shown to the reader. */
   skipReason?: string;
+  /**
+   * Why there are no before/after pictures although the bug was reproduced
+   * (e.g. the two frames look the same in a still). Plain words — shown to the reader.
+   */
+  shotsNote?: string;
   baseVideoUrl?: string;
   headVideoUrl?: string;
   testOutput?: string;
@@ -384,12 +390,26 @@ export interface AblationRun {
   /** "broken" = the app didn't build/start/respond with this subset applied — itself a finding. */
   verdict: "fixed" | "bug" | "broken";
   detail?: string;
+  /**
+   * One verdict per measured scenario (same build, each scenario's own repro script). `verdict`
+   * above is then a summary for old readers: "bug" if any scenario still shows its bug, "fixed" if
+   * all that ran are fixed, "broken" if none gave an answer. Absent for single-scenario ablations.
+   */
+  results?: { scenarioId: string; verdict: "fixed" | "bug" | "broken"; detail?: string }[];
+}
+
+export interface AblationScenario {
+  id: string;
+  /** Plain words: the user-visible behaviour this scenario checks ("menu opens with the sidebar still open"). */
+  title: string;
 }
 
 export interface Ablation {
   /** The logic hunks considered (excludes mechanical/skippedHunks); capped, see verify/ablation.ts. */
   units: string[];
   runs: AblationRun[];
+  /** The scenarios measured. Absent = one unnamed scenario (older walkthroughs). */
+  scenarios?: AblationScenario[];
 }
 
 /**

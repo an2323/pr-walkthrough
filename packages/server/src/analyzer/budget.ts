@@ -15,6 +15,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ensureSchema, getPool } from "../db.js";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 export const COST_LOG_PATH = path.join(ROOT, "docs/cost-log-stage2.md");
 export const BOB_BUDGET_USD = Number(process.env.BOB_BUDGET_USD ?? 28); // raised from $20 by the user on Sep 26 (ST12 evidence loop)
@@ -49,8 +51,19 @@ async function ensureFile(): Promise<void> {
   if (!existsSync(COST_LOG_PATH)) await appendFile(COST_LOG_PATH, HEADER + "\n");
 }
 
-/** Sum of every row's "Actual cost" column logged so far this stage. */
+/**
+ * Sum of every paid run so far. With DATABASE_URL the ledger is the `spend`
+ * table (survives redeploys); otherwise the markdown log above.
+ */
 export async function spentSoFar(): Promise<number> {
+  const pool = getPool();
+  if (pool) {
+    await ensureSchema();
+    const { rows } = await pool.query<{ total: string | null }>(
+      "SELECT COALESCE(SUM(actual_cost), 0) AS total FROM spend"
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
   if (!existsSync(COST_LOG_PATH)) return 0;
   const text = await readFile(COST_LOG_PATH, "utf-8");
   let total = 0;
@@ -79,15 +92,42 @@ export async function assertBudget(plannedMaxCost: number): Promise<number> {
   return spent;
 }
 
-/** Appends one row using the run's ACTUAL cost (not its max-cost cap). */
+/**
+ * Appends one row using the run's ACTUAL cost (not its max-cost cap). Never throws: this runs
+ * right after a paid run, and a database hiccup here must not discard the (already paid for)
+ * result. If the ledger table can't be written, the row goes to the local markdown log instead.
+ */
 export async function recordSpend(row: SpendRow): Promise<void> {
-  await ensureFile();
-  const date = new Date().toISOString().replace("T", " ").slice(0, 16);
-  const cells = [
-    date, row.pr, row.mode, String(row.maxCost), row.actualCost.toFixed(3),
-    `${row.durationSec}s`, String(row.toolCalls), String(row.subagents), String(row.repairs),
-    row.valid === undefined ? "—" : row.valid ? "yes" : "no",
-    row.notes ?? "",
-  ];
-  await appendFile(COST_LOG_PATH, `| ${cells.join(" | ")} |\n`);
+  const pool = getPool();
+  if (pool) {
+    try {
+      await ensureSchema();
+      await pool.query(
+        `INSERT INTO spend (pr, mode, max_cost, actual_cost, duration_sec, tool_calls, subagents, repairs, valid, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          row.pr, row.mode, row.maxCost, row.actualCost, row.durationSec,
+          row.toolCalls, row.subagents, row.repairs, row.valid ?? null, row.notes ?? null,
+        ]
+      );
+      return;
+    } catch (err) {
+      console.warn(
+        `[budget] could not write the spend row to the database (${err instanceof Error ? err.message.split("\n")[0] : err}) — appending to the local log instead`
+      );
+    }
+  }
+  try {
+    await ensureFile();
+    const date = new Date().toISOString().replace("T", " ").slice(0, 16);
+    const cells = [
+      date, row.pr, row.mode, String(row.maxCost), row.actualCost.toFixed(3),
+      `${row.durationSec}s`, String(row.toolCalls), String(row.subagents), String(row.repairs),
+      row.valid === undefined ? "—" : row.valid ? "yes" : "no",
+      row.notes ?? "",
+    ];
+    await appendFile(COST_LOG_PATH, `| ${cells.join(" | ")} |\n`);
+  } catch (err) {
+    console.warn("[budget] could not record spend anywhere:", err instanceof Error ? err.message : err, JSON.stringify(row));
+  }
 }

@@ -11,24 +11,11 @@ import { Drawer } from './Drawer';
 import { LandingPage } from './LandingPage';
 import { ProgressScreen } from './ProgressScreen';
 import { SHOW_TRY_IT } from './features';
-import { ReviewProvider } from './review';
-import { audioUrl } from './staticMode';
+import { ReviewProvider, type AskResult } from './review';
 import { MapModal } from './MapModal';
+import { useWalkthroughNarration, buildOutroNarration } from './useWalkthroughNarration';
 import './styles.css';
 import './v2.css';
-
-// -----------------------------------------------------------------
-// Voice helpers
-// -----------------------------------------------------------------
-const synth = typeof window !== 'undefined' && 'speechSynthesis' in window
-  ? window.speechSynthesis
-  : null;
-
-/** Split narration into sentences — mirrors the server's splitSentences(). */
-function splitSentences(text: string): string[] {
-  const parts = text.split(/(?<=[.?!])\s+/);
-  return parts.map(s => s.trim()).filter(s => s.length > 0);
-}
 
 export default function App() {
   const walkthroughState = useWalkthrough();
@@ -39,21 +26,13 @@ export default function App() {
 
   // ---- Check / ask / verify state ----
   const [checks, setChecks] = useState<Record<string, boolean>>({});
-  const [asks, setAsks] = useState<Record<string, boolean>>({});
+  const [askResults, setAskResults] = useState<Record<string, AskResult>>({});
   const [verifiedItems, setVerifiedItems] = useState<Record<number, boolean>>({});
 
   // ---- Drawer state ----
   const [drawerStepId, setDrawerStepId] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapFocusNode, setMapFocusNode] = useState<string | undefined>(undefined);
-
-  // ---- Voice state ----
-  const [isPlaying, setIsPlaying] = useState(false);
-  /** Which narration sentence is currently speaking (drives symptom-card highlights). */
-  const [narrationCue, setNarrationCue] = useState<{ stepId: string; sentence: number } | null>(null);
-  const tokenRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ---- Route: /:owner/:repo/:number/progress — live or replayed analysis (ST6c) ----
   // Checked ahead of the walkthrough-viewer states below; useWalkthrough()'s own
@@ -108,8 +87,8 @@ export default function App() {
       setScreenIndex={setScreenIndex}
       checks={checks}
       setChecks={setChecks}
-      asks={asks}
-      setAsks={setAsks}
+      askResults={askResults}
+      setAskResults={setAskResults}
       verifiedItems={verifiedItems}
       setVerifiedItems={setVerifiedItems}
       drawerStepId={drawerStepId}
@@ -118,14 +97,6 @@ export default function App() {
       setMapOpen={setMapOpen}
       mapFocusNode={mapFocusNode}
       setMapFocusNode={setMapFocusNode}
-      isPlaying={isPlaying}
-      setIsPlaying={setIsPlaying}
-      narrationCue={narrationCue}
-      setNarrationCue={setNarrationCue}
-      tokenRef={tokenRef}
-      timerRef={timerRef}
-      audioRef={audioRef}
-      synth={synth}
       END={END}
     />
   );
@@ -143,8 +114,8 @@ interface InnerProps {
   setScreenIndex: (i: number) => void;
   checks: Record<string, boolean>;
   setChecks: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  asks: Record<string, boolean>;
-  setAsks: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  askResults: Record<string, AskResult>;
+  setAskResults: React.Dispatch<React.SetStateAction<Record<string, AskResult>>>;
   verifiedItems: Record<number, boolean>;
   setVerifiedItems: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
   drawerStepId: string | null;
@@ -153,14 +124,6 @@ interface InnerProps {
   setMapOpen: (v: boolean) => void;
   mapFocusNode: string | undefined;
   setMapFocusNode: (v: string | undefined) => void;
-  isPlaying: boolean;
-  setIsPlaying: (v: boolean) => void;
-  narrationCue: { stepId: string; sentence: number } | null;
-  setNarrationCue: (v: { stepId: string; sentence: number } | null) => void;
-  tokenRef: React.MutableRefObject<number>;
-  timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
-  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
-  synth: SpeechSynthesis | null;
   END: number;
 }
 
@@ -173,8 +136,8 @@ function AppInner({
   setScreenIndex,
   checks,
   setChecks,
-  asks,
-  setAsks,
+  askResults,
+  setAskResults,
   verifiedItems,
   setVerifiedItems,
   drawerStepId,
@@ -183,118 +146,47 @@ function AppInner({
   setMapOpen,
   mapFocusNode,
   setMapFocusNode,
-  isPlaying,
-  setIsPlaying,
-  narrationCue,
-  setNarrationCue,
-  tokenRef,
-  timerRef,
-  audioRef,
-  synth,
   END,
 }: InnerProps) {
   const walkthrough = walkthroughState.data;
+  const [ownerStr = '', repoStr = ''] = (walkthrough.pr.repo ?? '/').split('/');
+
+  const hasGraph = (walkthrough.graph?.nodes?.length ?? 0) > 0;
+  const outroNarration = buildOutroNarration({ hasGraph });
+
+  const {
+    mode,
+    setMode,
+    status,
+    narrationCue,
+    hasOutro,
+    toggle,
+    onManualNavigate,
+  } = useWalkthroughNarration({
+    flow,
+    endIndex: END,
+    screenIndex,
+    setScreenIndex,
+    language: walkthrough.meta?.language ?? 'en',
+    owner: ownerStr,
+    repo: repoStr,
+    prNumber: walkthrough.pr.number,
+    outroNarration,
+  });
 
   const screenIndexRef = useRef(screenIndex);
   screenIndexRef.current = screenIndex;
 
-  const stopListen = useCallback(() => {
-    tokenRef.current++;
-    setIsPlaying(false);
-    setNarrationCue(null);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    try {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    } catch {}
-    try { synth?.cancel(); } catch {}
-  }, [synth, audioRef, setIsPlaying, setNarrationCue, tokenRef, timerRef]);
-
-  const go = useCallback((i: number, keepAudio = false) => {
-    const clamped = Math.max(-1, Math.min(END, i));
-    if (!keepAudio) stopListen();
-    screenIndexRef.current = clamped;
-    setScreenIndex(clamped);
-  }, [END, stopListen, setScreenIndex]);
-
-  const listen = useCallback((all = false) => {
-    let startIdx = screenIndexRef.current;
-    if (startIdx < 0 || startIdx >= END) {
-      startIdx = 0;
-      screenIndexRef.current = 0;
-      setScreenIndex(0);
-    }
-    setIsPlaying(true);
-    const t = ++tokenRef.current;
-
-    // Play a single sentence via <audio> API; returns a Promise that resolves when done.
-    const playSentenceAudio = (url: string): Promise<void> =>
-      new Promise((resolve) => {
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => { audioRef.current = null; resolve(); };
-        audio.onerror = () => { audioRef.current = null; resolve(); }; // resolve so caller falls back
-        audio.play().catch(() => { audioRef.current = null; resolve(); });
-      });
-
-    // Speak a sentence via Web Speech (fallback).
-    const speakFallback = (text: string, lang: string): Promise<void> =>
-      new Promise((resolve) => {
-        if (!synth) {
-          timerRef.current = setTimeout(resolve, text.split(/\s+/).length * 400);
-          return;
-        }
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = lang;
-        u.onend = () => resolve();
-        u.onerror = () => { timerRef.current = setTimeout(resolve, 2500); };
-        synth.speak(u);
-      });
-
-    const speakStep = async (idx: number) => {
-      if (t !== tokenRef.current) return;
-      const step = flow[idx];
-      if (!step) { setIsPlaying(false); return; }
-
-      const lang = walkthrough.meta?.language ?? 'en';
-      const [ownerStr, repoStr] = (walkthrough.pr.repo ?? '/').split('/');
-      const prNumber = walkthrough.pr.number;
-      const sentences = splitSentences(step.narration ?? '');
-
-      for (let i = 0; i < sentences.length; i++) {
-        if (t !== tokenRef.current) return;
-        setNarrationCue({ stepId: step.id, sentence: i });
-        const url = audioUrl(ownerStr, repoStr, prNumber, step.id, i);
-        // Try the recorded audio first; if there is none (no key, missing static file) fall back to Web Speech.
-        let usedApi = false;
-        try {
-          const probe = await fetch(url, { method: 'HEAD' });
-          if (probe.ok) {
-            await playSentenceAudio(url);
-            usedApi = true;
-          }
-        } catch {
-          // network error — fall through to Web Speech
-        }
-        if (!usedApi) {
-          await speakFallback(sentences[i], lang);
-        }
-      }
-
-      if (t !== tokenRef.current) return;
-      setNarrationCue(null);
-      if (all && idx < END - 1) {
-        const next = idx + 1;
-        screenIndexRef.current = next;
-        setScreenIndex(next);
-        timerRef.current = setTimeout(() => { void speakStep(next); }, 500);
-      } else {
-        setIsPlaying(false);
-      }
-    };
-
-    void speakStep(startIdx);
-  }, [flow, END, synth, audioRef, setIsPlaying, setNarrationCue, setScreenIndex, tokenRef, timerRef, walkthrough.meta, walkthrough.pr]);
+  const go = useCallback(
+    (i: number) => {
+      const clamped = Math.max(-1, Math.min(END, i));
+      if (clamped === screenIndexRef.current) return;
+      onManualNavigate(clamped);
+      screenIndexRef.current = clamped;
+      setScreenIndex(clamped);
+    },
+    [END, onManualNavigate, setScreenIndex]
+  );
 
   // Keyboard navigation
   useEffect(() => {
@@ -305,7 +197,7 @@ function AppInner({
       else if (e.key === 'ArrowLeft') go(screenIndexRef.current - 1);
       else if (e.key === ' ') {
         e.preventDefault();
-        if (isPlaying) { stopListen(); } else { listen(); }
+        toggle();
       } else if (e.key === 'Escape') {
         setDrawerStepId(null);
         setMapOpen(false);
@@ -314,7 +206,7 @@ function AppInner({
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [go, isPlaying, listen, stopListen, setDrawerStepId, setMapOpen, setMapFocusNode]);
+  }, [go, toggle, setDrawerStepId, setMapOpen, setMapFocusNode]);
 
   // Scroll stage to top on screen change
   const stageRef = useRef<HTMLElement>(null);
@@ -322,16 +214,11 @@ function AppInner({
     if (stageRef.current) stageRef.current.scrollTop = 0;
   }, [screenIndex]);
 
-  // Handle next/back
   const handleNext = () => {
     if (screenIndex >= END) go(-1); // summary → start
     else go(screenIndex + 1);
   };
   const handleBack = () => go(screenIndex - 1);
-  const handleListen = () => {
-    if (isPlaying) { stopListen(); }
-    else { listen(screenIndex < 0 || screenIndex >= END); }
-  };
 
   // Drawer step
   const drawerStep = drawerStepId
@@ -398,13 +285,17 @@ function AppInner({
               plain={plain}
               checked={!!checks[currentStep.id]}
               onCheck={(v) => setChecks((prev) => ({ ...prev, [currentStep.id]: v }))}
-              asked={!!asks[currentStep.id]}
-              onAsk={() => setAsks((prev) => ({ ...prev, [currentStep.id]: !prev[currentStep.id] }))}
+              askResult={askResults[currentStep.id]}
+              onAskDone={(result) =>
+                setAskResults((prev) => ({ ...prev, [currentStep.id]: result }))
+              }
               verifiedItems={verifiedItems}
               onVerify={(k, v) => setVerifiedItems((prev) => ({ ...prev, [k]: v }))}
               onOpenDrawer={() => setDrawerStepId(currentStep.id)}
               narrationSentence={
-                narrationCue?.stepId === currentStep.id ? narrationCue.sentence : null
+                narrationCue?.stepId === currentStep.id
+                  ? narrationCue.sentence
+                  : null
               }
             />
           );
@@ -417,7 +308,7 @@ function AppInner({
             flow={flow}
             minors={minors}
             checks={checks}
-            asks={asks}
+            askResults={askResults}
             verifiedItems={verifiedItems}
             onGoToStep={(i) => go(i)}
             onOpenDrawer={(id) => setDrawerStepId(id)}
@@ -430,10 +321,13 @@ function AppInner({
       <BottomBarV2
         screenIndex={screenIndex}
         total={END}
-        isPlaying={isPlaying}
+        status={status}
+        mode={mode}
+        hasOutro={hasOutro}
         onBack={handleBack}
         onNext={handleNext}
-        onListen={handleListen}
+        onListen={toggle}
+        onModeChange={setMode}
       />
 
       {/* Layer: drawer + scrim */}

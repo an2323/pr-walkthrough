@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Walkthrough } from '@pr-walkthrough/shared';
-import { STATIC, walkthroughUrl, shotUrl } from './staticMode';
+import { STATIC, walkthroughUrl, shotUrl, apiUrl } from './staticMode';
 
 interface ExampleCard {
   owner: string;
@@ -34,6 +34,16 @@ const EXAMPLES: ExampleCard[] = [
     hasReplay: true,
   },
 ];
+
+/** GET /api/config — what the live server allows. */
+interface ServerConfig {
+  liveAnalysis: boolean;
+  accessCodeRequired: boolean;
+  dailyLimit: number;
+  usedToday: number;
+}
+
+const ACCESS_CODE_KEY = 'prw-access-code';
 
 /** Hero stack always uses #10295's before/after shots (Variant2a demo focus). */
 const HERO = { owner: 'excalidraw', repo: 'excalidraw', number: 10295 };
@@ -99,6 +109,16 @@ export function LandingPage() {
   }, []);
 
   const [starting, setStarting] = useState(false);
+  const [config, setConfig] = useState<ServerConfig | null>(null);
+  const [accessCode, setAccessCode] = useState(() => localStorage.getItem(ACCESS_CODE_KEY) ?? '');
+
+  useEffect(() => {
+    if (STATIC) return;
+    fetch(apiUrl('/api/config'))
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((c: ServerConfig) => setConfig(c))
+      .catch(() => setConfig(null));
+  }, []);
 
   async function handleGo() {
     const parsed = parsePRUrl(input);
@@ -108,17 +128,29 @@ export function LandingPage() {
     }
     setError('');
     const viewerPath = `/${parsed.owner}/${parsed.repo}/${parsed.number}`;
+    const progressReplay = `${viewerPath}/progress?replay=1`;
 
     setStarting(true);
-    // Prefer an already-finished walkthrough (works in both live and static demo).
+
+    // Prefer a recorded analysis replay when we already have the walkthrough —
+    // that's the demo path: paste URL → progress screen → viewer (not a skip
+    // straight into the finished walkthrough).
     try {
-      const probe = await fetch(apiHref(parsed), { method: STATIC ? 'GET' : 'HEAD' });
-      if (probe.ok) {
-        window.location.href = viewerPath;
+      const hasWalkthrough = await fetch(apiHref(parsed), { method: STATIC ? 'GET' : 'HEAD' });
+      if (hasWalkthrough.ok) {
+        if (STATIC) {
+          // Static build only ships PRs that have a recording when hasReplay is set on cards;
+          // probe the ndjson the same way ProgressScreen loads it.
+          const rec = await fetch(`/data/events/${parsed.owner}/${parsed.repo}/${parsed.number}.ndjson`, { method: 'HEAD' });
+          window.location.href = rec.ok ? progressReplay : viewerPath;
+          return;
+        }
+        const rec = await fetch(apiUrl(`/api/runs/${parsed.owner}/${parsed.repo}/${parsed.number}`), { method: 'HEAD' });
+        window.location.href = rec.ok ? progressReplay : viewerPath;
         return;
       }
     } catch {
-      // fall through
+      // fall through to live analyze
     }
 
     if (STATIC) {
@@ -127,18 +159,38 @@ export function LandingPage() {
       return;
     }
 
+    if (config && !config.liveAnalysis) {
+      setError('Live analysis is turned off on this server — only finished walkthroughs open here.');
+      setStarting(false);
+      return;
+    }
+    if (config?.accessCodeRequired && !accessCode.trim()) {
+      setError('Enter the access code to start a new analysis.');
+      setStarting(false);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/analyze', {
+      const res = await fetch(apiUrl('/api/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl: input.trim() }),
+        body: JSON.stringify({
+          prUrl: input.trim(),
+          ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}) as { error?: string });
-        setError(body.error ?? `Could not start analysis (HTTP ${res.status})`);
+        if (res.status === 401) localStorage.removeItem(ACCESS_CODE_KEY);
+        setError(
+          res.status === 401
+            ? 'Wrong access code.'
+            : body.error ?? `Could not start analysis (HTTP ${res.status})`
+        );
         setStarting(false);
         return;
       }
+      if (accessCode.trim()) localStorage.setItem(ACCESS_CODE_KEY, accessCode.trim());
       const { jobId } = (await res.json()) as { jobId: string };
       window.location.href = `${viewerPath}/progress?job=${jobId}`;
     } catch {
@@ -176,7 +228,7 @@ export function LandingPage() {
 
       <div className="landing-hero landing-hero-v2a">
         <h1 className="landing-title">
-          Stop reverse-engineering pull requests.<br />Let Bob walk you through them.
+          Stop reverse-engineering pull requests.<br />Get a narrated walkthrough instead.
         </h1>
         <p className="landing-sub landing-sub-centered">
           A narrated tour of a pull request — what broke, why, and how the fix lands.
@@ -196,6 +248,20 @@ export function LandingPage() {
             {starting ? 'Starting…' : 'Analyse →'}
           </button>
         </div>
+        {config?.liveAnalysis && config.accessCodeRequired && (
+          <div className="landing-input-row landing-input-centered landing-access-row">
+            <input
+              className="landing-input"
+              type="password"
+              placeholder="Access code (new analyses only)"
+              value={accessCode}
+              onChange={(e) => { setAccessCode(e.target.value); setError(''); }}
+              onKeyDown={handleKeyDown}
+              aria-label="Access code"
+              autoComplete="off"
+            />
+          </div>
+        )}
         {error && <p className="landing-error landing-error-centered">{error}</p>}
         {STATIC && (
           <p className="landing-note landing-note-centered">
@@ -264,7 +330,7 @@ export function LandingPage() {
                       {cost && <span>{cost}</span>}
                       {dur && <span>{dur}</span>}
                       {subagents !== undefined && <span>{subagents} sub-agent{subagents === 1 ? '' : 's'}</span>}
-                      {wt.shots?.by === 'bob-verifier' && <span className="landing-card-badge">screenshots by Bob</span>}
+                      {wt.shots?.by === 'bob-verifier' && <span className="landing-card-badge">screenshots from the running app</span>}
                       {wt.verification?.ablation && <span className="landing-card-badge">evidence-checked</span>}
                       {!wt.shots && <span className="landing-card-badge">no screenshots</span>}
                     </div>
@@ -303,7 +369,7 @@ export function LandingPage() {
       </div>
 
       <footer className="landing-footer">
-        <span>MIT licensed</span>
+        <span>MIT licensed · Analysed with IBM Bob</span>
         <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
           github.com/an2323/pr-walkthrough
         </a>

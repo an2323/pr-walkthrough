@@ -128,6 +128,7 @@ export const VisualSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("flow"),
     rows: z.array(z.array(FlowRowItemSchema)),
+    rowTitles: z.array(z.string()).optional(),
   }),
   z.object({
     type: z.literal("symptoms"),
@@ -312,17 +313,22 @@ export const AblationRunSchema = z.object({
   mode: z.enum(["alone", "all-but-one"]),
   verdict: z.enum(["fixed", "bug", "broken"]),
   detail: z.string().optional(),
+  results: z
+    .array(z.object({ scenarioId: z.string(), verdict: z.enum(["fixed", "bug", "broken"]), detail: z.string().optional() }))
+    .optional(),
 });
 
 export const AblationSchema = z.object({
   units: z.array(z.string()),
   runs: z.array(AblationRunSchema),
+  scenarios: z.array(z.object({ id: z.string(), title: z.string() })).optional(),
 });
 
 export const VerificationSchema = z.object({
   status: z.enum(["not_run", "passed", "failed", "skipped"]),
   scenario: z.array(z.string()),
   skipReason: z.string().optional(),
+  shotsNote: z.string().optional(),
   baseVideoUrl: z.string().optional(),
   headVideoUrl: z.string().optional(),
   testOutput: z.string().optional(),

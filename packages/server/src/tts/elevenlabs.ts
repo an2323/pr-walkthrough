@@ -17,6 +17,10 @@ const TTS_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech";
 const OUTPUT_FORMAT = "mp3_44100_128";
 const MODEL_ID = "eleven_multilingual_v2";
 
+/** Done-screen cue when a diagram is shown — keep in sync with the viewer. */
+export const OUTRO_STEP_ID = "outro";
+export const OUTRO_NARRATION = "Take a look at the final diagram of the fix.";
+
 // ---------------------------------------------------------------------------
 // splitSentences
 // ---------------------------------------------------------------------------
@@ -147,6 +151,26 @@ export async function pregen(
         generated++;
       }
     }
+  }
+
+  // Done-screen diagram cue (same text for every PR that has a graph).
+  const wantOutro =
+    (!allow || allow.has(OUTRO_STEP_ID)) &&
+    (wt.graph?.nodes?.length ?? 0) > 0;
+  if (wantOutro) {
+    totalChars += OUTRO_NARRATION.length;
+    const hash = sentenceHash(OUTRO_NARRATION, voiceId);
+    const outPath = path.join(outDir, `${OUTRO_STEP_ID}-0-${hash}.mp3`);
+    let wasCached = false;
+    try {
+      await access(outPath);
+      wasCached = true;
+    } catch {
+      /* not cached */
+    }
+    await generateSentenceAudio(OUTRO_NARRATION, voiceId, apiKey, outPath);
+    if (wasCached) cached++;
+    else generated++;
   }
 
   return { generated, cached, totalChars };

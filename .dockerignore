@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+.pnpm-store
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+# history lives in Supabase; the container's data/ is a volume
+data
+demo-vo
+bob_sessions
+docs/prototypes
+# holds the Outline example (licence unverified) — must not be served
+packages/web/public
