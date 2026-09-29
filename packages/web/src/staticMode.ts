@@ -18,9 +18,10 @@ export function apiUrl(path: string): string {
 }
 
 export function walkthroughUrl(owner: string, repo: string, number: number): string {
-  return STATIC
-    ? `/data/walkthroughs/${owner}/${repo}/${number}.json`
-    : apiUrl(`/api/walkthroughs/${owner}/${repo}/${number}`);
+  if (STATIC) return `/data/walkthroughs/${owner}/${repo}/${number}.json`;
+  // `?rehearsal=1` on the page: show the last $0 rehearsal's result instead of the real walkthrough.
+  const rehearsal = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('rehearsal');
+  return apiUrl(`/api/walkthroughs/${owner}/${repo}/${number}${rehearsal ? '?rehearsal=1' : ''}`);
 }
 
 export function audioUrl(owner: string, repo: string, number: number, stepId: string, sentence: number): string {

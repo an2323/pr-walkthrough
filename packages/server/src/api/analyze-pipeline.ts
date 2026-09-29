@@ -6,7 +6,8 @@
  * check → optional shots/ablation/revise), instrumented with `ProgressEvent`s.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,14 +16,12 @@ import { parseHunks, type ProgressEvent, type Walkthrough } from "@pr-walkthroug
 import { emitProgress, completeJob, failJob } from "./jobs.js";
 import { fetchPRMeta } from "../github/client.js";
 import { prepareWorkspace, pruneWorktrees } from "../git/workspace.js";
-import { createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
+import { BobShellAnalyzer, createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
+import { withRehearsal } from "../analyzer/bob-command.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
 import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
-import {
-  findWalkthroughInEvents,
-  normalizeDraft,
-  qualityRepairBob,
-} from "../analyzer/bob-shell.js";
+import { findWalkthroughInEvents, qualityRepairBob } from "../analyzer/bob-shell.js";
+import { assembleDraft, backendEvidenceOf, carryBackendEvidence } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
 import { ablationHasSignal, runAblation, verdictForStep } from "../verify/ablation.js";
@@ -52,7 +51,38 @@ export async function runAnalyzeJob(
   repo: string,
   number: number,
   baseUrl: string,
-  opts: { force?: boolean } = {}
+  opts: { force?: boolean; rehearsal?: { plan?: string } } = {}
+): Promise<void> {
+  if (!opts.rehearsal) return runPipeline(jobId, owner, repo, number, baseUrl, { force: opts.force });
+  // Rehearsal: the whole pipeline for real, Bob replaced by fake-bob answering with the last
+  // real result of this PR (and its confirmed scenario scripts). $0, nothing overwritten.
+  const answersDir = path.join(ROOT, "data/rehearsals/answers", owner, repo, String(number));
+  try {
+    const previous = await loadWalkthrough(owner, repo, number);
+    if (!previous) throw new Error(`nothing to rehearse with: ${owner}/${repo}#${number} has no finished walkthrough yet`);
+    await rm(answersDir, { recursive: true, force: true });
+    await mkdir(answersDir, { recursive: true });
+    await writeFile(path.join(answersDir, "walkthrough.json"), JSON.stringify(previous));
+    const saved = path.join(ROOT, "data/verify", owner, repo, String(number));
+    if (existsSync(saved)) await cp(saved, path.join(answersDir, "verify"), { recursive: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitProgress(jobId, { kind: "error", t: 0, message });
+    failJob(jobId, message);
+    return;
+  }
+  return withRehearsal({ answersDir, plan: opts.rehearsal.plan }, () =>
+    runPipeline(jobId, owner, repo, number, `${baseUrl}`, { force: true, rehearsal: true })
+  );
+}
+
+async function runPipeline(
+  jobId: string,
+  owner: string,
+  repo: string,
+  number: number,
+  baseUrl: string,
+  opts: { force?: boolean; rehearsal?: boolean }
 ): Promise<void> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
@@ -61,8 +91,8 @@ export async function runAnalyzeJob(
     progressLog.push(e);
     emitProgress(jobId, e);
   };
-  const walkthroughUrl = `${baseUrl}/api/walkthroughs/${owner}/${repo}/${number}`;
-  const analyzerType = process.env.ANALYZER ?? "cached";
+  const walkthroughUrl = `${baseUrl}/api/walkthroughs/${owner}/${repo}/${number}${opts.rehearsal ? "?rehearsal=1" : ""}`;
+  const analyzerType = opts.rehearsal ? "bob" : (process.env.ANALYZER ?? "cached");
   // False for the "already analysed" fast path: that job only re-emits `done`, and must not
   // overwrite the real run's replay in Storage with a one-event stub.
   let ranPipeline = false;
@@ -129,7 +159,7 @@ export async function runAnalyzeJob(
     const normalizer = createProgressNormalizer(started, emit);
     emit({ kind: "stage", t: elapsed(), stage: "analyzing", label: "Bob is analyzing the PR" });
 
-    const analyzer = createAnalyzer();
+    const analyzer = opts.rehearsal ? new BobShellAnalyzer() : createAnalyzer();
     const input = {
       repoPath: workspace.repoPath,
       baseSha: pr.baseSha!,
@@ -151,6 +181,8 @@ export async function runAnalyzeJob(
     }
 
     let walkthrough: Walkthrough = result.walkthrough;
+    // Per-symptom frames from the verifier; kept here so every later rewrite by Bob can re-attach them.
+    let symptomSrcs: Map<number, string> | undefined;
     // Quality-repair spend that is NOT already inside `meta.run.costUsd` (a failed resume still costs).
     let qualityOrphanCost = 0;
 
@@ -190,9 +222,8 @@ export async function runAnalyzeJob(
           repairs: 1,
         };
         if (repaired) {
-          normalizeDraft(repaired);
           const repairedResult = await validate(
-            { ...repaired, pr: walkthrough.pr } as unknown as Walkthrough,
+            assembleDraft(repaired, walkthrough.pr, hunks) as unknown as Walkthrough,
             input,
             workspace
           );
@@ -219,13 +250,10 @@ export async function runAnalyzeJob(
             qualityOrphanCost += cost;
           }
           if (repairedResult.valid && repairedResult.walkthrough) {
-            const prevRun = walkthrough.meta.run;
-            const evidenceKeep = { shots: walkthrough.shots, verification: walkthrough.verification };
-            walkthrough = repairedResult.walkthrough;
-            if (prevRun) walkthrough.meta.run = prevRun;
-            // A repair that follows the screenshot/revise stages must not lose what they attached.
-            if (evidenceKeep.shots) walkthrough.shots = evidenceKeep.shots;
-            if (evidenceKeep.verification) walkthrough.verification = evidenceKeep.verification;
+            // A repair that follows the screenshot/revise stages must not lose what they attached
+            // (frames, symptom cards, ablation verdicts, the cumulative run stats).
+            const evidence = backendEvidenceOf(walkthrough, { symptomSrcs });
+            walkthrough = carryBackendEvidence(repairedResult.walkthrough, evidence, { keepRun: true });
           } else {
             console.warn("[analyze-pipeline] quality repair failed validation — keeping pre-repair draft");
           }
@@ -299,6 +327,7 @@ export async function runAnalyzeJob(
             if (vr.shots) walkthrough.shots = vr.shots;
             if (vr.shotsNote) recordShotsNote(walkthrough, vr.shotsNote);
             if (vr.symptomSrcs && vr.symptomSrcs.size > 0) {
+              symptomSrcs = vr.symptomSrcs;
               attachSymptomShots(walkthrough, vr.symptomSrcs);
               emit({
                 kind: "stage",
@@ -375,10 +404,13 @@ export async function runAnalyzeJob(
                       if (revised.status === "ok") {
                         reviseCost = revised.costUsd;
                         reviseFoldedIntoMeta = true;
-                        walkthrough = revised.walkthrough;
                         // Bob returns the steps without the screenshot paths the backend attached
                         // to the symptoms — put them back, or the frames we paid for vanish.
-                        if (vr.symptomSrcs && vr.symptomSrcs.size > 0) attachSymptomShots(walkthrough, vr.symptomSrcs);
+                        // Revise brings its own cumulative meta.run, so that one is kept.
+                        walkthrough = carryBackendEvidence(
+                          revised.walkthrough,
+                          backendEvidenceOf(walkthrough, { symptomSrcs })
+                        );
                         await saveWalkthrough(walkthrough);
                         emit({
                           kind: "stage",
@@ -489,7 +521,7 @@ export async function runAnalyzeJob(
     if (analyzerType === "bob" && ranPipeline && progressLog.length > 0) {
       try {
         const stamp = new Date(started).toISOString().replace(/[:.]/g, "-");
-        const runDir = path.join(ROOT, "data/runs", `${stamp}-${repo}-${number}-live`);
+        const runDir = path.join(ROOT, "data/runs", `${stamp}-${repo}-${number}-${opts.rehearsal ? "rehearsal" : "live"}`);
         await mkdir(runDir, { recursive: true });
         await writeFile(
           path.join(runDir, "progress.ndjson"),
@@ -499,7 +531,7 @@ export async function runAnalyzeJob(
         console.warn("[analyze-pipeline] could not persist progress.ndjson (best effort):", err);
       }
     }
-    if (analyzerType === "bob" && ranPipeline && blobsEnabled() && progressLog.at(-1)?.kind === "done") {
+    if (analyzerType === "bob" && !opts.rehearsal && ranPipeline && blobsEnabled() && progressLog.at(-1)?.kind === "done") {
       try {
         const shots = await uploadDir(
           path.join(ROOT, "data/shots", owner, repo, String(number)),

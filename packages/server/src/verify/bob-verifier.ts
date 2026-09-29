@@ -44,6 +44,7 @@ import type { ProgressStage, Shots, Walkthrough } from "@pr-walkthrough/shared";
 
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { summarizeEvents } from "../analyzer/bob-shell.js";
+import { bobCommand, inRehearsal } from "../analyzer/bob-command.js";
 import { NdjsonBuffer } from "../analyzer/ndjson-buffer.js";
 import { ensureWorktree } from "../git/workspace.js";
 import { annotateShot } from "../shots/annotate.js";
@@ -282,9 +283,10 @@ async function runBobVerifier(
     ...(resumeTaskId ? [prompt] : []),
   ];
   const started = Date.now();
-  const env = scrubbedEnv(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {});
+  const cmd = bobCommand();
+  const env = scrubbedEnv({ ...(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {}), ...cmd.env });
   return new Promise((resolve, reject) => {
-    const child = spawn("bob", args, { cwd: workspace, env, detached: true, timeout: 600_000 });
+    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: workspace, env, detached: true, timeout: 600_000 });
     let stdout = "";
     const live = new NdjsonBuffer();
     child.stdout.on("data", (d: Buffer) => {
@@ -336,11 +338,12 @@ async function assertBrowserWorks(): Promise<void> {
  */
 async function preflight(maxCost: number): Promise<string | undefined> {
   try {
-    await execFileAsync("bob", ["--version"], { timeout: 20_000, env: scrubbedEnv() });
+    const cmd = bobCommand();
+    await execFileAsync(cmd.bin, [...cmd.preArgs, "--version"], { timeout: 20_000, env: scrubbedEnv(cmd.env) });
   } catch {
     return "the screenshot tool (bob) isn't available on this server";
   }
-  if (!process.env.BOB_API_KEY) return "the screenshot tool isn't configured on this server (no BOB_API_KEY)";
+  if (!process.env.BOB_API_KEY && !inRehearsal()) return "the screenshot tool isn't configured on this server (no BOB_API_KEY)";
   try {
     await assertBudget(maxCost);
   } catch {

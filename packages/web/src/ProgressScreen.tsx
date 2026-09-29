@@ -71,7 +71,8 @@ export function ProgressScreen({ owner, repo, number }: Props) {
   const jobId = search.get('job');
   const isReplay = search.get('replay') != null;
   const speed = search.get('speed'); // optional override, forwarded to the replay endpoint as-is
-  const viewerPath = `/${owner}/${repo}/${number}`;
+  // A rehearsal's result is stored apart from the real walkthrough — keep pointing at it.
+  const viewerPath = `/${owner}/${repo}/${number}${search.get('rehearsal') ? '?rehearsal=1' : ''}`;
 
   // ---- Static build: replay the recording in the browser, paced like the server's replay ----
   useEffect(() => {

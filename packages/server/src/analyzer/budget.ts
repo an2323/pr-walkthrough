@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ensureSchema, getPool } from "../db.js";
+import { inRehearsal } from "./bob-command.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 export const COST_LOG_PATH = path.join(ROOT, "docs/cost-log-stage2.md");
@@ -82,6 +83,8 @@ export async function spentSoFar(): Promise<number> {
  * stage cap. Returns the current spend so callers can log context.
  */
 export async function assertBudget(plannedMaxCost: number): Promise<number> {
+  // A rehearsal spends nothing — and must still work when the budget is exhausted.
+  if (inRehearsal()) return 0;
   const spent = await spentSoFar();
   if (spent + plannedMaxCost > BOB_BUDGET_USD) {
     throw new Error(
@@ -98,6 +101,7 @@ export async function assertBudget(plannedMaxCost: number): Promise<number> {
  * result. If the ledger table can't be written, the row goes to the local markdown log instead.
  */
 export async function recordSpend(row: SpendRow): Promise<void> {
+  if (inRehearsal()) return;
   const pool = getPool();
   if (pool) {
     try {

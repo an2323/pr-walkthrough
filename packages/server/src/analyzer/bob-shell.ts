@@ -21,6 +21,7 @@ import { gitCommonDir, type RepoWorkspace } from "../git/workspace.js";
 import { validate } from "../validation/index.js";
 import { assertBudget, recordSpend } from "./budget.js";
 import { NdjsonBuffer } from "./ndjson-buffer.js";
+import { bobCommand } from "./bob-command.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -260,8 +261,9 @@ export function runBob(
   return new Promise((resolve, reject) => {
     // Bob works in someone else's checkout with a read-only mode, but it still shouldn't be handed
     // our database password or service keys: only its own API key and what a process needs to run.
-    const env = scrubbedEnv(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {});
-    const child = spawn("bob", args, { cwd: repoPath, env, timeout: 600_000 });
+    const cmd = bobCommand();
+    const env = scrubbedEnv({ ...(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {}), ...cmd.env });
+    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: repoPath, env, timeout: 600_000 });
     let stdout = "";
     let stderr = "";
     // Only used to drive `opts.onEvent` live — the final `events` array below

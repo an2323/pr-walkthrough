@@ -15,12 +15,8 @@ import { promisify } from "node:util";
 import type { Ablation, Step, Walkthrough } from "@pr-walkthrough/shared";
 
 import type { AnalyzerInput } from "../analyzer/interface.js";
-import {
-  findWalkthroughInEvents,
-  normalizeDraft,
-  repairBob,
-  runBob,
-} from "../analyzer/bob-shell.js";
+import { findWalkthroughInEvents, repairBob, runBob } from "../analyzer/bob-shell.js";
+import { assembleDraft } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import type { RepoWorkspace } from "../git/workspace.js";
 import { validate } from "../validation/index.js";
@@ -242,8 +238,8 @@ export async function reviseFromAblation(opts: ReviseOpts): Promise<ReviseResult
     };
   }
 
-  normalizeDraft(draftRaw);
-  let currentDraft = draftRaw;
+  // Bob never saw the auto-skipped mechanical hunks — without them the rewrite fails coverage.
+  let currentDraft = assembleDraft(draftRaw, wt.pr, wt.hunks);
 
   const ws: RepoWorkspace = {
     repoPath: opts.repoPath,
@@ -291,9 +287,8 @@ export async function reviseFromAblation(opts: ReviseOpts): Promise<ReviseResult
     totalCost = repairRun.sessionCost;
     const repairedRaw = findWalkthroughInEvents(repairRun.events);
     if (repairedRaw) {
-      normalizeDraft(repairedRaw);
-      currentDraft = repairedRaw;
-      result = await validate({ ...repairedRaw, pr: wt.pr } as unknown as Walkthrough, input, ws);
+      currentDraft = assembleDraft(repairedRaw, wt.pr, wt.hunks);
+      result = await validate({ ...currentDraft } as unknown as Walkthrough, input, ws);
       if (!result.valid && tryMechanicalStitchFix(currentDraft, result.errors)) {
         mechanicalFix = true;
         result = await validate({ ...currentDraft, pr: wt.pr } as unknown as Walkthrough, input, ws);

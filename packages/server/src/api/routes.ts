@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import type { ProgressEvent } from "@pr-walkthrough/shared";
 import { splitSentences, sentenceHash, generateSentenceAudio, OUTRO_STEP_ID, OUTRO_NARRATION } from "../tts/elevenlabs.js";
-import { loadWalkthrough } from "../storage.js";
+import { loadRehearsal, loadWalkthrough } from "../storage.js";
 import { parsePRUrl } from "../github/client.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
@@ -72,7 +72,7 @@ router.get(
       return;
     }
 
-    const wt = await loadWalkthrough(owner, repo, num);
+    const wt = req.query["rehearsal"] ? await loadRehearsal(owner, repo, num) : await loadWalkthrough(owner, repo, num);
     if (!wt) {
       res.status(404).json({ error: `No walkthrough found for ${owner}/${repo}#${num}` });
       return;
@@ -127,6 +127,31 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
   }
 
   const analyzer = process.env.ANALYZER ?? "cached";
+
+  // Rehearsal ($0): the full pipeline with a fake Bob answering from this PR's last real result.
+  // Access-code gated like a paid run (it occupies the machine for minutes), one job at a time.
+  const rehearsalBody = (req.body as { rehearsal?: unknown; plan?: unknown }) ?? {};
+  if (rehearsalBody.rehearsal === true) {
+    const plan = typeof rehearsalBody.plan === "string" ? rehearsalBody.plan : undefined;
+    if (plan !== undefined && !/^[a-z]+=[a-z0-9]+(,[a-z]+=[a-z0-9]+)*$/.test(plan)) {
+      res.status(400).json({ error: "plan must look like analysis=critical,verifier=broken" });
+      return;
+    }
+    if (!accessCodeOk(req)) {
+      res.status(401).json({ error: "Invalid or missing access code" });
+      return;
+    }
+    const busy = findActiveJob();
+    if (busy || startingPaidJob) {
+      res.status(409).json({ error: "Another analysis is running — try again when it finishes", ...(busy ? { jobId: busy.id } : {}) });
+      return;
+    }
+    const job = createJob(owner, repo, number, { paid: false });
+    void runAnalyzeJob(job.id, owner, repo, number, publicBaseUrl(req), { rehearsal: { plan } });
+    res.status(202).json({ jobId: job.id, rehearsal: true });
+    return;
+  }
+
   const force = (req.body as { force?: unknown }).force === true && accessCodeOk(req);
   const alreadyDone = !force && (await loadWalkthrough(owner, repo, number)) !== null;
 

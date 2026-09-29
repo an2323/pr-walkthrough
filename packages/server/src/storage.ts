@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Walkthrough } from "@pr-walkthrough/shared";
 import { ensureSchema, getPool } from "./db.js";
+import { inRehearsal } from "./analyzer/bob-command.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -74,8 +75,26 @@ async function saveToDb(wt: Walkthrough): Promise<string> {
   return `db:walkthroughs/${owner}/${repo}/${wt.pr.number}`;
 }
 
+/** Where a rehearsal's result goes — local only, never over the real walkthrough. */
+function rehearsalPath(owner: string, repo: string, number: number): string {
+  return path.join(ROOT, "data/rehearsals", owner, repo, `${number}.json`);
+}
+
+/** The last rehearsal's result for this PR, if any (GET /api/walkthroughs/...?rehearsal=1). */
+export async function loadRehearsal(owner: string, repo: string, number: number): Promise<Walkthrough | null> {
+  const p = rehearsalPath(owner, repo, number);
+  return existsSync(p) ? (JSON.parse(await readFile(p, "utf-8")) as Walkthrough) : null;
+}
+
 /** Persist a completed walkthrough. Returns a locator string (db:… or file path). */
 export async function saveWalkthrough(wt: Walkthrough): Promise<string> {
+  if (inRehearsal()) {
+    const [owner, repo] = wt.pr.repo.split("/");
+    const p = rehearsalPath(owner, repo, wt.pr.number);
+    await mkdir(path.dirname(p), { recursive: true });
+    await writeFile(p, JSON.stringify(wt, null, 2), "utf-8");
+    return p;
+  }
   if (getPool()) return saveToDb(wt);
   return saveToFile(wt);
 }

@@ -19,3 +19,4 @@ deploy/vendor/
 # Production secrets for the GCP VM (never commit)
 deploy/.env
 deploy/.env.production
+data/vm-runs/
