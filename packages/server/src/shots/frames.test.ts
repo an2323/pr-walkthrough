@@ -14,9 +14,12 @@ function pngHeader(w: number, h: number): Buffer {
 
 describe("frames", () => {
   it("reads PNG dimensions", () => expect(pngDimensions(pngHeader(390, 844))).toEqual({ width: 390, height: 844 }));
-  it("phone frames: 1x, 2x and 3x captures of a 390 viewport; desktop is not", () => {
+  it("phone frames: 1x, 2x and 3x captures of a phone viewport; a tablet or desktop is not", () => {
     expect(isPhoneFrame(pngHeader(390, 844))).toBe(true);
     expect(isPhoneFrame(pngHeader(780, 1688))).toBe(true);
+    expect(isPhoneFrame(pngHeader(1170, 2532))).toBe(true);
+    expect(isPhoneFrame(pngHeader(375, 667))).toBe(true);
+    expect(isPhoneFrame(pngHeader(768, 1024))).toBe(false); // the #21 tablet frame: 1.33
     expect(isPhoneFrame(pngHeader(1280, 800))).toBe(false);
     expect(isPhoneFrame(pngHeader(2560, 1600))).toBe(false);
   });

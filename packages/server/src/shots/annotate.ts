@@ -31,8 +31,8 @@ function esc(s: string): string {
 }
 
 /** Minimum width (CSS px) a crop is upscaled to via deviceScaleFactor, so a tiny marked area still reads clearly. */
-const CROP_MIN_WIDTH = 640;
-const CROP_MAX_SCALE = 3;
+const CROP_MIN_WIDTH = 560;
+const CROP_MAX_SCALE = 2;
 /** Frames narrower than this are never cropped. */
 export const MIN_CROP_SOURCE_WIDTH = 700;
 

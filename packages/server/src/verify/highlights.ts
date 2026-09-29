@@ -164,7 +164,33 @@ export function maybeCropRegion(before: ShotHighlight[], after: ShotHighlight[])
   const LABEL_ROOM = 0.18;
   const x = Math.max(0, x0 - padX);
   const y = Math.max(0, y0 - padY);
-  return { x, y, w: Math.min(1, x1 + padX) - x, h: Math.min(1, y1 + padY + LABEL_ROOM) - y };
+  const crop = { x, y, w: Math.min(1, x1 + padX) - x, h: Math.min(1, y1 + padY + LABEL_ROOM) - y };
+  return withContext(crop);
+}
+
+/** A crop is never smaller than this share of the frame: a control shown alone says nothing about where it is. */
+const MIN_CROP_W = 0.6;
+const MIN_CROP_H = 0.45;
+/** A crop this large is just the frame — cropping then only loses context. */
+const CROP_NOT_WORTH_IT = 0.72;
+
+/**
+ * Give the crop enough surroundings to read: at least MIN_CROP_W × MIN_CROP_H of the frame, centred on
+ * the marked region (#21: a picker row cropped to 25% of a tablet screen, upscaled 3×, showed a blurry
+ * strip nobody could place). When that is most of the frame anyway, no crop at all.
+ */
+export function withContext(c: CropRegion): CropRegion | undefined {
+  const w = Math.max(c.w, MIN_CROP_W);
+  const h = Math.max(c.h, MIN_CROP_H);
+  if (w * h >= CROP_NOT_WORTH_IT) return undefined;
+  const cx = c.x + c.w / 2;
+  const cy = c.y + c.h / 2;
+  return {
+    x: Math.min(1 - w, Math.max(0, cx - w / 2)),
+    y: Math.min(1 - h, Math.max(0, cy - h / 2)),
+    w,
+    h,
+  };
 }
 
 const sameRect = (a: CropRegion, b: CropRegion) =>

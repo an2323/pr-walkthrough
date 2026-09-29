@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanHighlight, normalizeHighlights, maybeCropRegion, tidyLabel, focusOnChange } from "./highlights.js";
+import { cleanHighlight, normalizeHighlights, maybeCropRegion, tidyLabel, focusOnChange, withContext } from "./highlights.js";
 
 describe("cleanHighlight", () => {
   it("clamps a box that runs off the image", () => {
@@ -166,5 +166,23 @@ describe("focusOnChange — point at what changed, not at the whole component", 
     const hl = [{ x: 0, y: 0, w: 1, h: 1, label: "Everything" }];
     expect(focusOnChange(hl, null)).toEqual(hl);
     expect(focusOnChange(hl, { x: 0.05, y: 0.05, w: 0.9, h: 0.9 })).toEqual(hl);
+  });
+});
+
+describe("crops keep enough context (#21: a picker row cropped to a tiny blurry strip)", () => {
+  it("a small control gets at least 60% x 45% of the frame around it, centred on it", () => {
+    // #21: the picker row on a 768x1024 tablet frame.
+    const c = maybeCropRegion([{ x: 0.044, y: 0.683, w: 0.246, h: 0.039, label: "Canvas background color picker" }], [])!;
+    expect(c.w).toBeGreaterThanOrEqual(0.6);
+    expect(c.h).toBeGreaterThanOrEqual(0.45);
+    expect(c.x).toBeGreaterThanOrEqual(0);
+    expect(c.x + c.w).toBeLessThanOrEqual(1);
+    expect(c.y + c.h).toBeLessThanOrEqual(1);
+    expect(c.y).toBeLessThan(0.683); // the picker is inside the crop …
+    expect(c.y + c.h).toBeGreaterThan(0.722); // … including its full height
+  });
+
+  it("no crop at all when the context needed is most of the frame", () => {
+    expect(withContext({ x: 0.1, y: 0.05, w: 0.9, h: 0.9 })).toBeUndefined();
   });
 });

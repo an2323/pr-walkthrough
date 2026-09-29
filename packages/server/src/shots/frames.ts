@@ -7,17 +7,27 @@
  * and short labels in empty space (shots/annotate.ts).
  */
 
-/** Widest frame still treated as a phone: 390 CSS px at 2× is 780; the smallest desktop viewport we use is 1024. */
-export const PHONE_MAX_WIDTH = 800;
+/**
+ * A phone frame is a tall portrait capture (390×844 at 1×, 780×1688 at 2×, 375×667 …): the pixel
+ * width alone cannot tell a 2× phone (780) from a 1× tablet (768×1024), the aspect ratio can. A tablet
+ * is drawn on like a desktop frame — a control in it can be a small part of the picture.
+ */
+export const PHONE_MIN_ASPECT = 1.7;
+/** Any capture this narrow is a phone at 1×, whatever its height. */
+export const PHONE_MAX_WIDTH_1X = 500;
 
 export function pngDimensions(buf: Buffer): { width: number; height: number } | null {
   if (buf.length < 24 || buf.toString("ascii", 12, 16) !== "IHDR") return null;
   return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
 
+export function isPhoneSize(width: number, height: number): boolean {
+  return width <= PHONE_MAX_WIDTH_1X || height / width >= PHONE_MIN_ASPECT;
+}
+
 export function isPhoneFrame(png: Buffer): boolean {
   const d = pngDimensions(png);
-  return !!d && d.width <= PHONE_MAX_WIDTH;
+  return !!d && isPhoneSize(d.width, d.height);
 }
 
 /**

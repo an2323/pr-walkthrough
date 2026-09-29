@@ -12,6 +12,7 @@
 import type { Walkthrough } from "@pr-walkthrough/shared";
 
 import { formatReport, reportFailed, reportWalkthrough, type ReportLine } from "../src/validation/run-report.js";
+import { pngDimensions } from "../src/shots/frames.js";
 import { OUTRO_NARRATION, OUTRO_STEP_ID, splitSentences } from "../src/tts/elevenlabs.js";
 
 const arg = (name: string): string | undefined => {
@@ -41,13 +42,20 @@ for (const s of wt.steps) {
   if (s.visual?.type === "symptoms") for (const i of s.visual.items) if (typeof i !== "string" && i.src) frames.add(i.src);
 }
 const broken: string[] = [];
+const badLook: string[] = [];
 for (const src of frames) {
   const r = await fetch(`${site}/data/shots/${owner}/${repo}/${number}/${src}`, { redirect: "follow" });
   const type = r.headers.get("content-type") ?? "";
   if (!r.ok || !type.startsWith("image/")) broken.push(`${src} (${r.status} ${type})`);
-  await r.arrayBuffer().catch(() => undefined);
+  else {
+    // How the picture will look to the reader: big enough to read, and not a sliver or a strip.
+    const d = pngDimensions(Buffer.from(await r.arrayBuffer()));
+    if (d && d.width < 300) badLook.push(`${src}: only ${d.width}px wide`);
+    if (d && (d.width / d.height > 4 || d.width / d.height < 0.25)) badLook.push(`${src}: ${d.width}×${d.height} is a strip`);
+  }
 }
 lines.push({ ok: broken.length === 0, level: "fail", check: `all ${frames.size} frame(s) load`, ...(broken.length ? { detail: broken.join(", ") } : {}) });
+lines.push({ ok: badLook.length === 0, level: "fail", check: "frames are readable (size and proportions)", ...(badLook.length ? { detail: badLook.join("; ") } : {}) });
 
 if (audio) {
   const sentences: { step: string; n: number }[] = [];

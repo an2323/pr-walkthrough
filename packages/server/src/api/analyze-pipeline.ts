@@ -202,6 +202,7 @@ async function runPipeline(
       const taskId = walkthrough.meta.run?.taskId;
       if (critical.length === 0 || !taskId) return;
       emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Fixing ${critical.length} quality issue(s)` });
+      console.log(`[analyze-pipeline] quality issues sent to repair:\n${critical.map((w) => `  - ${w.stepId ?? "-"} ${w.code}: ${w.message}`).join("\n")}`);
       try {
         const previousCost = walkthrough.meta.run?.costUsd ?? 0;
         const cap = (previousCost + QUALITY_REPAIR_MAX_COST).toFixed(2);

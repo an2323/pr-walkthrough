@@ -48,7 +48,7 @@ import { bobCommand, inRehearsal } from "../analyzer/bob-command.js";
 import { NdjsonBuffer } from "../analyzer/ndjson-buffer.js";
 import { ensureWorktree } from "../git/workspace.js";
 import { annotateShot } from "../shots/annotate.js";
-import { isPhoneFrame, PHONE_MAX_WIDTH, pickMainIndex, pngDimensions } from "../shots/frames.js";
+import { isPhoneFrame, isPhoneSize, pickMainIndex, pngDimensions } from "../shots/frames.js";
 import { ensureInstalled, scrubbedEnv, startApp, warmUp, type AppServer } from "./app-servers.js";
 import { focusOnChange, normalizeHighlights, maybeCropRegion } from "./highlights.js";
 import { recipeFor, type AppRecipe } from "./recipes.js";
@@ -60,6 +60,8 @@ import { IDENTICAL_FRAMES_NOTE, NO_FRAMES_NOTE } from "./shots-status.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const MODE_SLUG = "pr-verifier";
+/** A highlight covering more than this share of the frame is dropped (the prompt says so too). */
+const MAX_BOX_AREA = 0.6;
 const PLAYWRIGHT = createRequire(import.meta.url).resolve("playwright");
 const execFileAsync = promisify(execFile);
 
@@ -559,9 +561,10 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     const afterPng = path.join(outDir, "after.png");
     // The widest (desktop) scenario shows the change in its whole context; a phone scenario is the main
     // pair only when nothing on desktop differs. Phone frames are also shown on the symptoms step.
-    const widths = await Promise.all(
-      passing.map(async (r) => (existsSync(r.beforePng) ? (pngDimensions(await readFile(r.beforePng))?.width ?? 0) : 0))
+    const dims = await Promise.all(
+      passing.map(async (r) => (existsSync(r.beforePng) ? pngDimensions(await readFile(r.beforePng)) : null))
     );
+    const widths = dims.map((d) => d?.width ?? 0);
     const mainIdx = pickMainIndex(passing.map((r, i) => ({ visible: r.visible, width: widths[i] })));
     const main = mainIdx >= 0 ? passing[mainIdx] : undefined;
     let shots: Shots | undefined;
@@ -573,12 +576,17 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       const normalized = normalizeHighlights(mb.highlights ?? [], ma.highlights ?? []);
       // Aim at what actually changed between the two frames, not at the whole component Bob boxed.
       const region = changedRegion(await readFile(beforePng), await readFile(afterPng));
-      const hl = { before: focusOnChange(normalized.before, region, { pad: 0.06 }), after: focusOnChange(normalized.after, region, { pad: 0.06 }) };
+      // A box over most of the picture marks nothing (and its label would sit on top of everything).
+      const notHuge = (h: { w: number; h: number }) => h.w * h.h <= MAX_BOX_AREA;
+      const hl = {
+        before: focusOnChange(normalized.before, region, { pad: 0.06 }).filter(notHuge),
+        after: focusOnChange(normalized.after, region, { pad: 0.06 }).filter(notHuge),
+      };
       const crop = maybeCropRegion(hl.before, hl.after);
       const beforeSrc = await annotateOrRaw(beforePng, path.join(outDir, "before-annotated.png"), hl.before, "bad", crop);
       const afterSrc = await annotateOrRaw(afterPng, path.join(outDir, "after-annotated.png"), hl.after, "good", crop);
       // On a phone frame nothing is drawn, so its labels become a plain caption under the picture.
-      const phoneMain = widths[mainIdx] <= PHONE_MAX_WIDTH;
+      const phoneMain = !!dims[mainIdx] && isPhoneSize(dims[mainIdx]!.width, dims[mainIdx]!.height);
       const capOf = (h: typeof hl.before) => (phoneMain ? h.map((x) => x.label).filter(Boolean).join(" · ") || undefined : undefined);
       shots = {
         before: { src: beforeSrc, raw: "before.png", highlights: hl.before, ...(capOf(hl.before) ? { caption: capOf(hl.before) } : {}) },

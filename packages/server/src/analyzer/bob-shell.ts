@@ -619,6 +619,8 @@ export class BobShellAnalyzer implements Analyzer {
       // the original spend plus the actual repair allowance.
       const repairCap = (run.sessionCost + Number(this.repairMaxCost)).toFixed(2);
       console.log(`[bob-shell] validation failed (${check.errors.length} issue(s)) — one repair attempt via --resume ${run.taskId} (cumulative cap $${repairCap})`);
+      // What Bob got wrong is the first question after any repair — it used to go only into the resume prompt.
+      console.log(`[bob-shell] validation issues:\n${check.errors.slice(0, 20).map((e) => `  - ${e}`).join("\n")}`);
       await assertBudget(Number(this.repairMaxCost));
       const repairRun = await repairBob(run.taskId, check.errors.slice(0, 20), repoPath, repairCap, onEvent);
       console.log(
