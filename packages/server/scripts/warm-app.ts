@@ -9,10 +9,10 @@
 import "../src/env.js";
 import path from "node:path";
 
-import { fetchForkParent, fetchPRMeta } from "../src/github/client.js";
+import { fetchPRMeta } from "../src/github/client.js";
 import { ensureWorktree, prepareWorkspace } from "../src/git/workspace.js";
 import { ensureInstalled, startApp, warmUp, type AppServer } from "../src/verify/app-servers.js";
-import { recipeFor, registerForkParent } from "../src/verify/recipes.js";
+import { resolveRecipe } from "../src/verify/recipes.js";
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const i = process.argv.indexOf("--pr");
@@ -23,11 +23,7 @@ const [, owner, repo, num] = m;
 const t0 = Date.now();
 const step = (s: string) => console.log(`${String(Math.round((Date.now() - t0) / 1000)).padStart(5)}s  ${s}`);
 
-if (!recipeFor(owner, repo)) {
-  const parent = await fetchForkParent(owner, repo);
-  if (parent) registerForkParent(owner, repo, parent);
-}
-const recipe = recipeFor(owner, repo);
+const recipe = await resolveRecipe(owner, repo);
 if (!recipe) {
   console.log(`FAIL  no app recipe for ${owner}/${repo} (nor its parent) — a run would have no screenshots`);
   process.exit(1);

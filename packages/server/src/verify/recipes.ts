@@ -69,6 +69,20 @@ export function registerForkParent(owner: string, repo: string, parent: string):
   forkParents.set(`${owner}/${repo}`, parent);
 }
 
+/**
+ * recipeFor, but also asks GitHub whether `owner/repo` is a fork of a repo with a recipe (and remembers
+ * it). Every entry point that may see a fork — the pipeline, the verifier, the scripts — goes through
+ * this once; a fork resolved only in the pipeline let a $0 re-render mark #21 "not set up".
+ */
+export async function resolveRecipe(owner: string, repo: string): Promise<AppRecipe | undefined> {
+  const known = recipeFor(owner, repo);
+  if (known) return known;
+  const { fetchForkParent } = await import("../github/client.js");
+  const parent = await fetchForkParent(owner, repo).catch(() => undefined);
+  if (parent) registerForkParent(owner, repo, parent);
+  return recipeFor(owner, repo);
+}
+
 export function recipeFor(owner: string, repo: string): AppRecipe | undefined {
   const name = `${owner}/${repo}`;
   const parent = forkParents.get(name);

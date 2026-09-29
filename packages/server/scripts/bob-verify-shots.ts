@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
 import { verifyShots } from "../src/verify/bob-verifier.js";
 import { ablationHasSignal, runAblation, verdictForStep } from "../src/verify/ablation.js";
-import { recipeFor } from "../src/verify/recipes.js";
+import { resolveRecipe } from "../src/verify/recipes.js";
 import { attachSymptomShots } from "../src/verify/symptom-shots.js";
 import { markVerified, recordNoShots, recordShotsNote } from "../src/verify/shots-status.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../src/verify/revise.js";
@@ -74,6 +74,11 @@ console.log(`session cost so far $${result.costUsd.toFixed(3)}`);
 
 if (result.status === "skipped") {
   console.log(`skipped (${result.kind ?? "failed"}): ${result.reason}`);
+  // A re-render or retry that failed must not overwrite evidence an earlier run already confirmed.
+  if (apply && wt.verification?.status === "passed" && result.kind !== "declined") {
+    console.log("walkthrough left as it was: it is already verified, and this attempt failed");
+    process.exit(1);
+  }
   if (apply) {
     recordNoShots(wt, result.reason, result.kind === "declined" ? { alreadyPlain: true } : {});
     await saveWalkthrough(wt);
@@ -97,7 +102,7 @@ if (apply) {
 }
 
 if (flag("ablate")) {
-  const recipe = recipeFor(owner, repo);
+  const recipe = await resolveRecipe(owner, repo);
   if (!recipe || !wt.pr.baseSha) {
     console.log("ablation skipped: no recipe or baseSha");
   } else {

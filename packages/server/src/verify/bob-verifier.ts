@@ -51,7 +51,7 @@ import { annotateShot } from "../shots/annotate.js";
 import { isPhoneFrame, isPhoneSize, pickMainIndex, pngDimensions } from "../shots/frames.js";
 import { ensureInstalled, scrubbedEnv, startApp, warmUp, type AppServer } from "./app-servers.js";
 import { focusOnChange, normalizeHighlights, maybeCropRegion } from "./highlights.js";
-import { recipeFor, type AppRecipe } from "./recipes.js";
+import { recipeFor, resolveRecipe, type AppRecipe } from "./recipes.js";
 import { confirmScenariosWithRepair } from "./repro-confirm.js";
 import { changedRegion, comparePngs } from "../shots/png-diff.js";
 import { listSymptomTexts } from "./symptom-shots.js";
@@ -398,7 +398,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
   const maxCost = opts.maxCost ?? Number(process.env.VERIFY_MAX_COST ?? 2);
   const repairMax = Number(process.env.VERIFY_REPAIR_MAX_COST ?? 1);
   const [owner, repo] = wt.pr.repo.split("/");
-  const recipe = recipeFor(owner, repo);
+  const recipe = await resolveRecipe(owner, repo);
   if (!recipe) return { status: "skipped", reason: `no app recipe for ${wt.pr.repo}`, costUsd: 0 };
   if (!wt.pr.baseSha || !wt.pr.headSha) return { status: "skipped", reason: "walkthrough has no base/head SHA", costUsd: 0 };
 

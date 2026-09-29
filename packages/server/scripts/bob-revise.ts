@@ -13,7 +13,7 @@ import { loadWalkthrough, saveWalkthrough } from "../src/storage.js";
 import { prepareWorkspace, ensureWorktree } from "../src/git/workspace.js";
 import { reviseFromAblation } from "../src/verify/revise.js";
 import { runRepro } from "../src/verify/ablation.js";
-import { recipeFor } from "../src/verify/recipes.js";
+import { resolveRecipe } from "../src/verify/recipes.js";
 import { startApp } from "../src/verify/app-servers.js";
 import type { Ablation } from "@pr-walkthrough/shared";
 
@@ -51,7 +51,7 @@ const diff = await workspace.diff();
 const reproPath = path.join(ROOT, "data/verify", owner, repo, String(number), "repro.cjs");
 let measures: { base: unknown; head: unknown } | undefined;
 {
-  const recipe = recipeFor(owner, repo);
+  const recipe = await resolveRecipe(owner, repo);
   if (recipe) {
     console.log("re-measuring BASE/HEAD with the confirmed repro script…");
     const mainPath = path.join(GIT_CACHE_DIR, `${owner}__${repo}`);

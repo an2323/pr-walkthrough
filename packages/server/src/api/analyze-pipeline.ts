@@ -15,7 +15,7 @@ import { parseHunks, type ProgressEvent, type Walkthrough } from "@pr-walkthroug
 
 import { emitProgress, completeJob, failJob } from "./jobs.js";
 import { plainJobError } from "./plain-error.js";
-import { fetchForkParent, fetchPRMeta } from "../github/client.js";
+import { fetchPRMeta } from "../github/client.js";
 import { prepareWorkspace, pruneWorktrees } from "../git/workspace.js";
 import { BobShellAnalyzer, createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { withRehearsal } from "../analyzer/bob-command.js";
@@ -26,7 +26,7 @@ import { assembleDraft, backendEvidenceOf, carryBackendEvidence } from "../analy
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
 import { ablationHasSignal, runAblation, verdictForStep } from "../verify/ablation.js";
-import { recipeFor, registerForkParent } from "../verify/recipes.js";
+import { recipeFor, resolveRecipe } from "../verify/recipes.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
@@ -144,10 +144,7 @@ async function runPipeline(
     const pr = await fetchPRMeta(owner, repo, number);
     // A fork (a PR copied into the user's own fork) runs the parent's app: without this it silently
     // got "no app recipe" — no screenshots, no ablation.
-    if (!recipeFor(owner, repo)) {
-      const parent = await fetchForkParent(owner, repo).catch(() => undefined);
-      if (parent) registerForkParent(owner, repo, parent);
-    }
+    await resolveRecipe(owner, repo);
     const repoUrl = `https://github.com/${owner}/${repo}`;
     const workspace = await prepareWorkspace(repoUrl, pr.headSha!, pr.baseSha!, number, GIT_CACHE_DIR);
     const diff = await workspace.diff();
