@@ -609,6 +609,9 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       try {
         // A card that just repeats the main "before" adds nothing (the scenario behind it is not the main one).
         if (main && r !== main && comparePngs(await readFile(r.beforePng), await readFile(main.beforePng))?.identical) continue;
+        // With ONE scenario the start screen already shows its before/after pair; a card on the very next
+        // screen would repeat that same picture (#21). Cards are for showing several problems side by side.
+        if (main && r === main && passing.length === 1 && shots) continue;
         // Same idea for the card: zoom on what differs between this scenario's BASE and HEAD frames.
         const bRegion = existsSync(r.afterPng) ? changedRegion(await readFile(r.beforePng), await readFile(r.afterPng)) : null;
         const bh = focusOnChange(normalizeHighlights((r.outcome.before as { highlights?: unknown[] }).highlights ?? [], []).before, bRegion, { pad: 0.06 });
