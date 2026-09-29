@@ -52,6 +52,24 @@ describe("normalizeHighlights", () => {
     expect(after[0]).toMatchObject({ x: 0.7, w: 0.1 });
   });
 
+  it("a gone element takes its rectangle from the other build and stays marked gone", () => {
+    const { before, after } = normalizeHighlights(
+      [{ x: 0.77, y: 0, w: 0.23, h: 1, label: "Sidebar is still open", pair: "sidebar" }],
+      [{ gone: true, pair: "sidebar", label: "Sidebar closed by itself" }]
+    );
+    expect(after[0]).toMatchObject({ gone: true, label: "Sidebar closed by itself" });
+    expect(after[0].x).toBeCloseTo(0.77);
+    expect(after[0].w).toBeCloseTo(0.23);
+    expect(after[0].h).toBe(1);
+    expect(after[0].w).toBe(before[0].w); // exactly the other build's rectangle
+    expect(before[0].gone).toBeUndefined();
+  });
+
+  it("a gone box without a partner is dropped", () => {
+    const { after } = normalizeHighlights([], [{ gone: true, pair: "nothing", label: "Gone" }]);
+    expect(after).toEqual([]);
+  });
+
   it("leaves unpaired boxes alone and caps the count per side", () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ x: i * 0.1, y: 0, w: 0.05, h: 0.05 }));
     const { before, after } = normalizeHighlights(many, [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, pair: "x" }]);

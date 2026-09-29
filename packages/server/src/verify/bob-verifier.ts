@@ -48,6 +48,7 @@ import { bobCommand, inRehearsal } from "../analyzer/bob-command.js";
 import { NdjsonBuffer } from "../analyzer/ndjson-buffer.js";
 import { ensureWorktree } from "../git/workspace.js";
 import { annotateShot } from "../shots/annotate.js";
+import { isPhoneFrame, PHONE_MAX_WIDTH, pickMainIndex, pngDimensions } from "../shots/frames.js";
 import { ensureInstalled, scrubbedEnv, startApp, warmUp, type AppServer } from "./app-servers.js";
 import { focusOnChange, normalizeHighlights, maybeCropRegion } from "./highlights.js";
 import { recipeFor, type AppRecipe } from "./recipes.js";
@@ -177,9 +178,13 @@ proving its own problem — this is what gives every problem its own before/afte
 backend measure each fix separately.
 1. For each visible problem pick ONE short scenario (at most 6 UI actions) that ENDS in a state where the
    problem is visible on screen — the panel that overlaps is open, the element that overflows is on
-   screen — and take the screenshot in that state. Use the viewport where the problem shows (e.g. a
-   390×844 phone for a small-screen problem, ${width}×${height} otherwise); a script uses the SAME viewport
-   whichever url it is given. Read only what you need for a reliable selector — do not guess.
+   screen — and take the screenshot in that state. Viewports: a problem that shows on a desktop gets its
+   script at ${width}×${height} — the reader's main before/after picture is ALWAYS a desktop frame when
+   the change is visible there, so do not swap it for a phone script. A problem that only shows on a small
+   screen gets its own script on a phone: viewport 390×844 AND \`deviceScaleFactor: 2\` (a phone frame at 1×
+   is blurry) — \`const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }); const page = await ctx.newPage();\`.
+   A script uses the SAME viewport whichever url it is given. If a change shows on BOTH desktop and
+   phone, write both scripts (two scenarios). Read only what you need for a reliable selector — do not guess.
    The signal for "the problem is present" must come from that visible state (an element's bounding box
    overflowing, a z-order via \`document.elementFromPoint\`, a class, visible text) — not from a value that
    leaves both screenshots identical. If a screenshot of BASE and HEAD would look the same, you picked a
@@ -195,13 +200,7 @@ backend measure each fix separately.
    - open a page at its viewport, go to the url, run the scenario (≤ 30 s per action);
    - measure the signal and decide \`bugPresent\` (boolean) from it — not from which url string was passed
      in; the same logic must work no matter which build is running there;
-   - if argv[3] is given, save a screenshot there, and also compute 1–3 highlight boxes (the element(s) that
-     show the difference), as fractions of the viewport: \`{x,y,w,h,label,pair?}\`. A label is a caption of
-     at most 5 plain words that a non-engineer understands ("Sidebar still open", "Menu opened") — no property
-     names, numbers, comparisons or sentences. It says what is wrong when \`bugPresent\` and what is fixed when
-     not. Box the thing the label talks about (the open menu itself, not the button that opened it). A box
-     and its counterpart in the other build share one "pair" id, and each pair has its OWN id — two different
-     boxes on one screenshot never share a "pair";
+   - if argv[3] is given, save a screenshot there, and also return the highlights (see "Highlights" below);
    - print EXACTLY ONE line of JSON as your last line of output:
      \`{"bugPresent": true, "measure": {...the numbers you used...}, "highlights": [...]}\`
    - only say \`bugPresent: false\` after the scenario actually ran and the signal was measured. If a step it
@@ -219,6 +218,26 @@ backend measure each fix separately.
    throwaway probes — fix the script, or stop: the backend re-runs your files and, if one disagrees or shows
    nothing, sends you its real outputs for one final fix. A script left half-fixed is worth nothing; a probe
    is worth nothing until it is in a script.
+
+## Highlights (what the script returns in \`"highlights"\`)
+A highlight is \`{x, y, w, h, label, pair}\`, x/y/w/h as fractions (0..1) of the viewport.
+- **Desktop scripts: 1–3 boxes. Each box is the WHOLE element its label names:** take
+  \`el.getBoundingClientRect()\` of that element and divide by the viewport width/height. Never a slice of it —
+  do not cap its height, do not pick an inner icon or its first row instead of the panel, do not box the
+  button that opened a panel when the label talks about the panel. An element sticking out of the viewport is
+  clamped to the viewport. If the element fills more than about 60% of the screen a box says nothing: leave the
+  box out (a label without a box is not allowed either — return no highlight for it).
+- **Phone scripts (viewport width under 700): return \`"highlights": []\`.** On a phone the panel or menu IS the
+  screen, so a rectangle marks nothing, and anything drawn on a narrow picture covers content. The reader
+  sees the plain frame; the words are in the walkthrough text.
+- **label**: at most 5 plain words a non-engineer understands ("Sidebar still open", "Menu opened") — no
+  property names, numbers, comparisons or sentences. It says what is wrong when \`bugPresent\` and what is fixed
+  when not. The backend places the label itself, in empty space next to the box — do not try to.
+- **pair**: the box for the SAME element on the other build has the same "pair" id (\`"pair": "sidebar"\` in both
+  runs). Every pair has its OWN id; two different boxes on one screenshot never share one.
+- **An element the fix removes** (a panel that now closes by itself): on the build where it is gone, you cannot
+  measure it — return \`{"pair": "<same id>", "label": "Sidebar closed by itself", "gone": true}\` with NO
+  coordinates. The backend draws a dashed outline where it stood on the other build.
 
 ## Rules
 - Write files ONLY under \`.walkthrough/verify/\` — not \`/tmp\`, not anywhere else. Never edit the
@@ -358,6 +377,10 @@ async function preflight(maxCost: number): Promise<string | undefined> {
 
 /** annotateShot can fail (Chromium hiccup, huge capture) — the raw frame is still good evidence. */
 async function annotateOrRaw(raw: string, annotated: string, ...rest: [Parameters<typeof annotateShot>[2], Parameters<typeof annotateShot>[3], Parameters<typeof annotateShot>[4]]): Promise<string> {
+  // A phone frame is shown as captured: a box on a phone screen marks nothing and text on it covers content.
+  try {
+    if (isPhoneFrame(await readFile(raw))) return path.basename(raw);
+  } catch { /* unreadable → let annotateShot report it below */ }
   try {
     await annotateShot(raw, annotated, ...rest);
     return path.basename(annotated);
@@ -534,7 +557,13 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     // reads as broken evidence — so if none differs, say so instead of showing one.
     const beforePng = path.join(outDir, "before.png");
     const afterPng = path.join(outDir, "after.png");
-    const main = passing.find((r) => r.visible);
+    // The widest (desktop) scenario shows the change in its whole context; a phone scenario is the main
+    // pair only when nothing on desktop differs. Phone frames are also shown on the symptoms step.
+    const widths = await Promise.all(
+      passing.map(async (r) => (existsSync(r.beforePng) ? (pngDimensions(await readFile(r.beforePng))?.width ?? 0) : 0))
+    );
+    const mainIdx = pickMainIndex(passing.map((r, i) => ({ visible: r.visible, width: widths[i] })));
+    const main = mainIdx >= 0 ? passing[mainIdx] : undefined;
     let shots: Shots | undefined;
     if (main) {
       await copyFile(main.beforePng, beforePng);
@@ -548,9 +577,12 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       const crop = maybeCropRegion(hl.before, hl.after);
       const beforeSrc = await annotateOrRaw(beforePng, path.join(outDir, "before-annotated.png"), hl.before, "bad", crop);
       const afterSrc = await annotateOrRaw(afterPng, path.join(outDir, "after-annotated.png"), hl.after, "good", crop);
+      // On a phone frame nothing is drawn, so its labels become a plain caption under the picture.
+      const phoneMain = widths[mainIdx] <= PHONE_MAX_WIDTH;
+      const capOf = (h: typeof hl.before) => (phoneMain ? h.map((x) => x.label).filter(Boolean).join(" · ") || undefined : undefined);
       shots = {
-        before: { src: beforeSrc, raw: "before.png", highlights: hl.before },
-        after: { src: afterSrc, raw: "after.png", highlights: hl.after },
+        before: { src: beforeSrc, raw: "before.png", highlights: hl.before, ...(capOf(hl.before) ? { caption: capOf(hl.before) } : {}) },
+        after: { src: afterSrc, raw: "after.png", highlights: hl.after, ...(capOf(hl.after) ? { caption: capOf(hl.after) } : {}) },
         ...(wt.plain?.title ? { caption: wt.plain.title.slice(0, 120) } : {}),
         by: "bob-verifier",
         run: { costUsd, durationMs: (firstRun?.ms ?? 0) + (repairRun?.ms ?? 0), toolCalls: (firstRun?.toolCalls ?? 0) + (repairRun?.toolCalls ?? 0) },
@@ -573,7 +605,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
         const bRegion = existsSync(r.afterPng) ? changedRegion(await readFile(r.beforePng), await readFile(r.afterPng)) : null;
         const bh = focusOnChange(normalizeHighlights((r.outcome.before as { highlights?: unknown[] }).highlights ?? [], []).before, bRegion, { pad: 0.06 });
         const crop = maybeCropRegion(bh, []);
-        const src = await annotateOrRaw(r.beforePng, path.join(outDir, `symptom-${idx}-annotated.png`), bh, "bad", { crop, labelsOnly: true });
+        const src = await annotateOrRaw(r.beforePng, path.join(outDir, `symptom-${idx}-annotated.png`), bh, "bad", { crop });
         (symptomSrcs ??= new Map()).set(idx, src);
       } catch (err) {
         console.warn(`[verify] symptom card ${idx} failed:`, err instanceof Error ? err.message : err);

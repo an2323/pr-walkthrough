@@ -108,3 +108,23 @@ describe("buildPrompt", () => {
     for (const k of ["DATABASE_URL", "SERVICE_ROLE", "BOB_API_KEY"]) expect(prompt).not.toContain(k);
   });
 });
+
+describe("buildPrompt — highlight rules (the agreed reference look)", () => {
+  const wt = { pr: { title: "t" }, hunks: [], steps: [], plain: {} } as never;
+  const recipe = { viewport: { width: 1280, height: 800 }, hints: "" } as never;
+  const p = buildPrompt(wt, recipe, "http://b/", "http://h/");
+
+  it("boxes are the whole element, never a slice", () => {
+    expect(p).toMatch(/WHOLE element/);
+    expect(p).toMatch(/getBoundingClientRect/);
+    expect(p).toMatch(/do not cap its height/);
+  });
+  it("phone scripts return no highlights and use a 2x scale factor", () => {
+    expect(p).toMatch(/"highlights": \[\]/);
+    expect(p).toMatch(/deviceScaleFactor: 2/);
+  });
+  it("the main picture stays a desktop frame; gone elements are described without coordinates", () => {
+    expect(p).toMatch(/main before\/after picture is ALWAYS a desktop frame/);
+    expect(p).toMatch(/"gone": true/);
+  });
+});

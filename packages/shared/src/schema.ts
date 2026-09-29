@@ -94,6 +94,7 @@ const FlowRowItemSchema = z.tuple([z.string(), z.string()]);
 const ShotSideSchema = z.object({
   src: z.string(),
   raw: z.string().optional(),
+  caption: z.string().optional(),
   highlights: z
     .array(
       z.object({
@@ -103,6 +104,7 @@ const ShotSideSchema = z.object({
         h: z.number().min(0).max(1),
         label: z.string().optional(),
         pair: z.string().optional(),
+        gone: z.boolean().optional(),
       })
     )
     .optional(),

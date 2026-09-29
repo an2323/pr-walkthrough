@@ -35,6 +35,7 @@ export function ShotImage({ shots, side, owner, repo, number, onOpen, label }: S
       >
         <img src={shotUrl(owner, repo, number, shots[side].src)} alt={`${LABEL[side]} screenshot`} className="shot-img" />
       </button>
+      {shots[side].caption && <span className="shot-caption">{shots[side].caption}</span>}
       <span className="shot-hint">Click to enlarge</span>
     </figure>
   );

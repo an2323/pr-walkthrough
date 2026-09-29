@@ -51,6 +51,11 @@ export interface ShotHighlight {
    * eye compares one place. Unpaired boxes keep their own rectangle.
    */
   pair?: string;
+  /**
+   * The element this box names does not exist on this build (the fix closed it): the box marks where it
+   * WAS, taken from the paired box on the other build, and is drawn dashed.
+   */
+  gone?: boolean;
 }
 
 export interface ShotSide {
@@ -58,6 +63,8 @@ export interface ShotSide {
   src: string;
   /** The unannotated screenshot `src` was drawn from. */
   raw?: string;
+  /** Words for a frame that isn't drawn on (a phone frame): shown as a caption under the picture. */
+  caption?: string;
   highlights?: ShotHighlight[];
 }
 

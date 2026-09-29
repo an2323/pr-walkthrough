@@ -761,12 +761,16 @@ html, body { height: 100%; }
 }
 .pf.start-s1 .shot-frame { margin-top: 0; }
 .pf.start-s1 .shot-cap { display: none; }
-.pf.start-s1 .shot-img { max-height: 42vh; }
+/* A frame keeps its own proportions: `width:100%` together with a `max-height` squashed a portrait phone
+   frame into a wide slot (the text came out stretched). Width and height are both "auto, capped". */
 .pf.start-s1 .shot-img-wrap {
   border-radius: 10px;
   width: 100%;
+  display: flex;
+  justify-content: center;
 }
-.pf.start-s1 .shot-img-wrap .shot-img { width: 100%; max-width: 100%; height: auto; }
+.pf.start-s1 .shot-img-wrap .shot-img { width: auto; max-width: 100%; height: auto; max-height: min(56vh, 560px); object-fit: contain; }
+.shot-caption { margin: 2px 0 0; font-size: 13.5px; line-height: 1.35; color: var(--muted); font-weight: 600; }
 .pf-label {
   display: flex;
   align-items: center;

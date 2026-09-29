@@ -42,6 +42,13 @@ function clamp01(n: number): number {
 export function cleanHighlight(raw: unknown): ShotHighlight | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const o = raw as Record<string, unknown>;
+  // "The element is gone on this build": no coordinates, only which pair it belongs to. The rectangle
+  // is filled in from the other build (normalizeHighlights) — a script can't measure what isn't there.
+  if (o.gone === true && typeof o.pair === "string" && o.pair.trim()) {
+    const g: ShotHighlight = { x: 0, y: 0, w: 0, h: 0, gone: true, pair: o.pair.trim() };
+    if (typeof o.label === "string" && tidyLabel(o.label)) g.label = tidyLabel(o.label);
+    return g;
+  }
   const nums = [o.x, o.y, o.w, o.h].map(Number);
   if (nums.some((n) => !Number.isFinite(n))) return undefined;
   const x = clamp01(nums[0]);
@@ -86,6 +93,18 @@ export function normalizeHighlights(
   // Match the k-th box with a given pair id on one side to the k-th on the other: a script that gave
   // two different boxes the same id (#10295: the sidebar AND the menu button, both "sidebar-menu") used
   // to union both with the first match — one huge box under two different labels.
+  // A "gone" box takes the rectangle of its pair on the other build; with no partner it has nothing to mark.
+  const resolveGone = (side: ShotHighlight[], other: ShotHighlight[]): ShotHighlight[] =>
+    side.flatMap((h) => {
+      if (!h.gone) return [h];
+      const src = other.find((o) => !o.gone && o.pair === h.pair);
+      return src ? [{ ...h, x: src.x, y: src.y, w: src.w, h: src.h }] : [];
+    });
+  const beforeR = resolveGone(before, after);
+  const afterR = resolveGone(after, before);
+  before.splice(0, before.length, ...beforeR);
+  after.splice(0, after.length, ...afterR);
+
   const taken = new Set<ShotHighlight>();
   for (const b of before) {
     if (!b.pair) continue;
