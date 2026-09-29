@@ -154,6 +154,11 @@ export async function fillPrompt(pr: PullRequestMeta, hunks: Hunk[]): Promise<st
   return template.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
 }
 
+/** Bob's "out of Bobcoins" message (trial ended / plan exhausted). */
+export function outOfCredits(text: string): boolean {
+  return /bobcoins?|trial|out of credits|usage limit|upgrade|unlock more/i.test(text) && /trial|credit|coins|limit/i.test(text);
+}
+
 // ---------------------------------------------------------------------------
 // runBob — `--format stream-json`, optional `--resume` for repair
 // ---------------------------------------------------------------------------
@@ -301,7 +306,11 @@ export function runBob(
         .map((line) => {
           try { return JSON.parse(line); } catch { return line; }
         });
-      resolve({ code, stdout, stderr, ms: Date.now() - started, events, ...summarizeEvents(events) });
+      const summary = summarizeEvents(events);
+      // The service says so on stderr when the key has no credit left: the run just stops, with no
+      // answer — without this it reads as "Bob returned nothing parseable".
+      if (outOfCredits(stderr.slice(-2000))) summary.errorMessage = "Bob has no credits left: " + stderr.trim().split("\n").pop();
+      resolve({ code, stdout, stderr, ms: Date.now() - started, events, ...summary });
     });
     child.stdin.end(opts.resumeTaskId ? "" : prompt);
   });
@@ -557,6 +566,7 @@ export class BobShellAnalyzer implements Analyzer {
         toolCalls: run.toolCalls, subagents: run.subagents, repairs: 0,
         valid: false, notes: "no walkthrough found in output",
       });
+      if (run.errorMessage && outOfCredits(run.errorMessage)) throw new Error(run.errorMessage);
       throw new Error(
         `BobShellAnalyzer: no walkthrough found in bob output. ` +
           `exit=${run.code}  task=${run.taskId ?? "unknown"}  stderr=${run.stderr.slice(0, 500)}`

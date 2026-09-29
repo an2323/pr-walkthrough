@@ -28,10 +28,11 @@ const STAGES: { stage: ProgressStage; label: string }[] = [
   { stage: 'saving', label: 'Saving' },
   { stage: 'app', label: 'Starting app' },
   { stage: 'shots', label: 'Screenshots' },
+  { stage: 'voicing', label: 'Voice' },
 ];
 
 /** Stages that only some runs have — shown once they actually start. */
-const OPTIONAL_STAGES: ReadonlySet<ProgressStage> = new Set(['repairing', 'app', 'shots']);
+const OPTIONAL_STAGES: ReadonlySet<ProgressStage> = new Set(['repairing', 'app', 'shots', 'voicing']);
 
 /** How long to show the "Done" state before auto-navigating to the viewer. */
 const AUTO_NAVIGATE_MS = 1500;

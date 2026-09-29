@@ -128,6 +128,24 @@ describe("confirmScenariosWithRepair", () => {
     expect(r.repaired).toBe(false);
   });
 
+  it("a scenario that fails once and passes on the $0 second check is flaky — no paid repair", async () => {
+    // Says "bug absent" on its very first BASE run only (a counter file next to it), like the saved
+    // #10295 scripts did in the first rehearsal.
+    const flaky = `
+const fs = require("fs"); const path = require("path"); const c = path.join(__dirname, "count");
+const n = fs.existsSync(c) ? Number(fs.readFileSync(c, "utf8")) : 0; fs.writeFileSync(c, String(n + 1));
+const u = process.argv[2]; const png = process.argv[3]; const base = u.includes("base");
+if (png) fs.writeFileSync(png, Buffer.from(base ? "${WHITE}" : "${DARK}", "base64"));
+console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights: [] }));`;
+    const o = await setup({ "a.cjs": flaky }, [{ id: "a", file: "a.cjs", title: "A" }]);
+    let calls = 0;
+    const r = await confirmScenariosWithRepair(o, async () => void calls++);
+    expect(calls).toBe(0);
+    expect(r.repaired).toBe(false);
+    expect(r.flaky).toEqual(["a"]);
+    expect(r.results[0].outcome.ok).toBe(true);
+  });
+
   it("gives ONE repair covering all problems at once, then re-confirms", async () => {
     const o = await setup(
       { "a.cjs": script(DARK), "b.cjs": script(WHITE) },

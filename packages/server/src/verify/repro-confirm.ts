@@ -221,10 +221,40 @@ export function buildScenarioRepairPrompt(o: { baseUrl: string; headUrl: string;
 export async function confirmScenariosWithRepair(
   o: ScenariosOptions,
   repair?: (prompt: string) => Promise<void>
-): Promise<{ results: ScenarioResult[]; repaired: boolean }> {
-  const first = await confirmScenarios(o);
-  const problems = scenarioProblems(first);
-  if (problems.length === 0 || !repair) return { results: first, repaired: false };
+): Promise<{ results: ScenarioResult[]; repaired: boolean; flaky: string[] }> {
+  let results = await confirmScenarios(o);
+  let problems = scenarioProblems(results);
+  const flaky: string[] = [];
+  if (problems.length > 0) {
+    await logProblems(o, "first check", problems);
+    // A second $0 check before paying for a rewrite: a rehearsal showed saved, previously confirmed
+    // scripts failing once and passing on the next run — that is a flaky run, not a broken script.
+    const again = await confirmScenarios(o);
+    results = results.map((r, i) => {
+      const b = again.find((x) => x.scenario.id === r.scenario.id) ?? again[i];
+      if (!r.outcome.ok && b?.outcome.ok) {
+        flaky.push(r.scenario.id);
+        return b;
+      }
+      return r;
+    });
+    problems = scenarioProblems(results);
+    if (flaky.length > 0) console.warn(`[verify] passed on a second check (flaky): ${flaky.join(", ")}`);
+  }
+  if (problems.length === 0 || !repair) return { results, repaired: false, flaky };
+  await logProblems(o, "sent to repair", problems);
   await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }));
-  return { results: await confirmScenarios(o), repaired: true };
+  results = await confirmScenarios(o);
+  const left = scenarioProblems(results);
+  if (left.length > 0) await logProblems(o, "after repair", left);
+  return { results, repaired: true, flaky };
+}
+
+/** What the contract rejected, and why — the first question after any failed or repaired run. */
+async function logProblems(o: ScenariosOptions, when: string, problems: string[]): Promise<void> {
+  console.warn(`[verify] scenario problems (${when}):\n${problems.join("\n").slice(0, 2000)}`);
+  if (o.logDir) {
+    const { appendFile } = await import("node:fs/promises");
+    await appendFile(path.join(o.logDir, "scenario-problems.txt"), `== ${when}\n${problems.join("\n")}\n\n`).catch(() => {});
+  }
 }

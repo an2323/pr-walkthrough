@@ -43,6 +43,8 @@ interface World {
   ablation: Ablation | undefined | Error;
   contradicts: boolean;
   revise: ((wt: Walkthrough) => unknown) | Error;
+  /** Narration voice outcome; undefined = voice not configured. */
+  voice?: "ok" | "failed";
   // --- observed ---
   events: ProgressEvent[];
   completed?: { walkthroughUrl: string; qualityWarnings?: { code: string }[] };
@@ -176,6 +178,14 @@ vi.mock("../verify/revise.js", () => ({
     w.world.spent += out.costUsd;
     return out;
   },
+}));
+
+vi.mock("../tts/voice-stage.js", () => ({
+  voicingConfigured: () => !!w.world.voice,
+  voiceWalkthrough: async () =>
+    w.world.voice === "ok"
+      ? { status: "ok", generated: 30, cached: 0, chars: 3000 }
+      : { status: "failed", reason: "ElevenLabs TTS error 401: quota_exceeded" },
 }));
 
 const { runAnalyzeJob } = await import("./analyze-pipeline.js");
@@ -476,9 +486,23 @@ describe("runAnalyzeJob — every path ends in a trustworthy result", () => {
     expect(wt.verification?.skipReason).toMatch(/turned off/);
   });
 
+  it("voice recorded as the last stage before done", async () => {
+    const { final, world: wd } = await run({ voice: "ok" });
+    expectFinishedCleanly(final, wd);
+    const stages = wd.events.filter((e) => e.kind === "stage").map((e) => (e as { stage: string }).stage);
+    expect(stages.at(-1)).toBe("voicing");
+  });
+
+  it("voice fails (quota) → run still finishes, says the browser voice will read it", async () => {
+    const { final, world: wd } = await run({ voice: "failed" });
+    expectFinishedCleanly(final, wd);
+    const labels = wd.events.filter((e) => e.kind === "stage").map((e) => (e as { label: string }).label);
+    expect(labels.at(-1)).toMatch(/browser voice/);
+  });
+
   it("analysis throws → one error event, job failed, nothing saved", async () => {
     const { world: wd } = await run({ analysis: new Error("BobShellAnalyzer: no walkthrough found in bob output") });
-    expect(wd.failed).toMatch(/no walkthrough/);
+    expect(wd.failed).toMatch(/couldn.t be read as a walkthrough/);
     expect(wd.events.filter((e) => e.kind === "done")).toEqual([]);
     expect(wd.events.at(-1)?.kind).toBe("error");
     expect(wd.saves).toEqual([]);

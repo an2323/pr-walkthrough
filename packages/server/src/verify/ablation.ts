@@ -260,6 +260,8 @@ export type StepVerdict = "needed" | "fixes-alone" | "no-effect" | "not-separabl
  * or when either of its two runs is missing/broken and gives no signal.
  */
 export function verdictForStep(ablation: Ablation, stepHunkIds: string[]): StepVerdict | undefined {
+  // A step with no code (the symptoms, the cause in words) makes no claim ablation can measure.
+  if (stepHunkIds.length === 0) return undefined;
   const relevant = stepHunkIds.filter((id) => ablation.units.includes(id));
   if (relevant.length !== 1 || relevant.length !== stepHunkIds.length) return "not-separable";
   const unitId = relevant[0];

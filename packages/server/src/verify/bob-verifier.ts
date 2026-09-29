@@ -43,7 +43,7 @@ import { promisify } from "node:util";
 import type { ProgressStage, Shots, Walkthrough } from "@pr-walkthrough/shared";
 
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
-import { summarizeEvents } from "../analyzer/bob-shell.js";
+import { outOfCredits, summarizeEvents } from "../analyzer/bob-shell.js";
 import { bobCommand, inRehearsal } from "../analyzer/bob-command.js";
 import { NdjsonBuffer } from "../analyzer/ndjson-buffer.js";
 import { ensureWorktree } from "../git/workspace.js";
@@ -257,10 +257,7 @@ function modeYaml(): string {
   ].join("\n");
 }
 
-/** Bob's "out of Bobcoins" message (trial ended / plan exhausted). */
-export function outOfCredits(text: string): boolean {
-  return /bobcoins?|trial|out of credits|usage limit|upgrade|unlock more/i.test(text) && /trial|credit|coins|limit/i.test(text);
-}
+export { outOfCredits };
 
 type BobRunResult = { events: unknown[]; ms: number } & ReturnType<typeof summarizeEvents>;
 
@@ -492,7 +489,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     // instead of throwing the paid run away — only with a task to resume and budget for it.
     const canRepair =
       !!taskId && repairMax > 0 && (await assertBudget(repairMax).then(() => true, () => false));
-    const { results, repaired } = await confirmScenariosWithRepair(
+    const { results, repaired, flaky } = await confirmScenariosWithRepair(
       { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title },
       canRepair
         ? async (prompt) => {
@@ -527,7 +524,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       JSON.stringify(passing.map((r) => ({ id: r.scenario.id, file: r.scenario.file, title: r.scenario.title, ...(r.scenario.symptomIndex !== undefined ? { symptomIndex: r.scenario.symptomIndex } : {}) })), null, 2)
     );
     outcomeOk = true;
-    outcomeNote = `${passing.length} scenario(s) confirmed true@BASE/false@HEAD${repaired ? " after one repair" : ""}`;
+    outcomeNote = `${passing.length} scenario(s) confirmed true@BASE/false@HEAD${repaired ? " after one repair" : ""}${flaky.length ? ` (flaky on first check: ${flaky.join(", ")})` : ""}`;
     const dropped = results.length - passing.length;
     if (dropped > 0) outcomeNote += `; ${dropped} dropped: ${results.filter((r) => !r.outcome.ok).map((r) => r.scenario.id).join(", ")}`;
 

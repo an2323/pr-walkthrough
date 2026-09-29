@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { parseHunks, type ProgressEvent, type Walkthrough } from "@pr-walkthrough/shared";
 
 import { emitProgress, completeJob, failJob } from "./jobs.js";
+import { plainJobError } from "./plain-error.js";
 import { fetchPRMeta } from "../github/client.js";
 import { prepareWorkspace, pruneWorktrees } from "../git/workspace.js";
 import { BobShellAnalyzer, createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
@@ -33,6 +34,7 @@ import { markVerified, recordNoShots, recordShotsNote } from "../verify/shots-st
 import { validate, checkQuality, criticalQualityWarnings } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 import { blobsEnabled, uploadBlob, uploadDir } from "../blobs.js";
+import { voiceWalkthrough, voicingConfigured } from "../tts/voice-stage.js";
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -72,7 +74,7 @@ export async function runAnalyzeJob(
     return;
   }
   return withRehearsal({ answersDir, plan: opts.rehearsal.plan }, () =>
-    runPipeline(jobId, owner, repo, number, `${baseUrl}`, { force: true, rehearsal: true })
+    runPipeline(jobId, owner, repo, number, baseUrl, { force: true, rehearsal: true, rehearsalPlan: opts.rehearsal!.plan })
   );
 }
 
@@ -82,7 +84,7 @@ async function runPipeline(
   repo: string,
   number: number,
   baseUrl: string,
-  opts: { force?: boolean; rehearsal?: boolean }
+  opts: { force?: boolean; rehearsal?: boolean; rehearsalPlan?: string }
 ): Promise<void> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
@@ -174,10 +176,7 @@ async function runPipeline(
     emit({ kind: "stage", t: elapsed(), stage: "validating", label: "Validating the walkthrough" });
     let result = await validate(draft, input, workspace);
     if (!result.valid || !result.walkthrough) {
-      const message = `Validation failed: ${result.errors.slice(0, 3).join("; ")}`;
-      emit({ kind: "error", t: elapsed(), message });
-      failJob(jobId, message);
-      return;
+      throw new Error(`Validation failed: ${result.errors.slice(0, 3).join("; ")}`);
     }
 
     let walkthrough: Walkthrough = result.walkthrough;
@@ -495,6 +494,22 @@ async function runPipeline(
       await saveWalkthrough(walkthrough);
     }
 
+    // Voice last: the text is final now. A rehearsal only voices with plan tts=on (it costs characters).
+    const voiceWanted = !opts.rehearsal || /(^|,)tts=on(,|$)/.test(opts.rehearsalPlan ?? "");
+    if (voiceWanted && voicingConfigured()) {
+      emit({ kind: "stage", t: elapsed(), stage: "voicing", label: "Recording the narration" });
+      const voice = await voiceWalkthrough(walkthrough, ROOT);
+      emit({
+        kind: "stage",
+        t: elapsed(),
+        stage: "voicing",
+        label:
+          voice.status === "ok"
+            ? `Narration recorded (${voice.generated} new, ${voice.cached} reused)`
+            : `Narration not recorded — the browser voice will read it (${voice.reason.slice(0, 120)})`,
+      });
+    }
+
     // Successful quality/revise resumes fold their spend into meta.run.costUsd
     // (Bob's cumulative task total). Failed ones still spent — add the increment.
     // Verifier is a separate Bob task, always additive.
@@ -514,7 +529,9 @@ async function runPipeline(
     });
     completeJob(jobId, { walkthroughUrl, qualityWarnings });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const raw = err instanceof Error ? err.message : String(err);
+    console.error(`[analyze-pipeline] ${owner}/${repo}#${number} failed:`, raw);
+    const message = plainJobError(raw);
     emit({ kind: "error", t: elapsed(), message });
     failJob(jobId, message);
   } finally {

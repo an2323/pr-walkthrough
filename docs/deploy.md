@@ -151,6 +151,44 @@ cd ~/app && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.
   `SITE_ADDRESS`), `deploy/deploy.sh`. **No data migration** — everything is in Supabase.
 - Force a provider: `DEPLOY_PROVIDER=gcp|oracle deploy/deploy.sh`.
 
+## Run protocol — nothing is paid for until it has passed for $0
+
+Every problem found on a paid run so far (a draft thrown away over one quote, `cp -cR` on Linux, a
+revise that skipped the quality repair, a repair that dropped the auto-skipped hunks) was
+catchable for $0. The order below is enforced where it can be:
+
+1. **`pnpm preflight`** — builds, typecheck, every test, including `analyze-pipeline.test.ts`
+   (every pipeline branch held to the same invariants) and `fake-bob.test.ts`. It stamps the
+   tree's content hash; **`deploy/deploy.sh` refuses a tree that hasn't passed** (`SKIP_PREFLIGHT=1`
+   overrides) and waits for `/health` after starting the containers.
+2. **Rehearsal on the deployed site** ($0, ~10 min with ablation):
+   ```bash
+   pnpm --filter @pr-walkthrough/server rehearse --pr excalidraw/excalidraw#10295
+   pnpm --filter @pr-walkthrough/server rehearse --pr excalidraw/excalidraw#10295 --plan analysis=critical,verifier=broken
+   ```
+   The real pipeline on the real VM — worktrees, installs, dev servers, backend confirmation,
+   frames, ablation, storage, the progress screen (the command prints its URL) — with
+   `scripts/fake-bob.mjs` answering from the PR's last real result. It is stored apart
+   (`data/rehearsals/`, `?rehearsal=1`), is not in the spend ledger, and never overwrites the real
+   walkthrough. `--plan` injects the failures seen on paid runs (see the header of fake-bob.mjs);
+   `tts=on` also records the narration. The command ends with the rubric check below.
+3. **The paid run**, from the site. One at a time; the job's `done`
+   reports the full cost.
+4. **Acceptance** — the rubric as code (`src/validation/run-report.ts`), against the site:
+   ```bash
+   pnpm --filter @pr-walkthrough/server check-run --site https://$SITE_ADDRESS --pr owner/repo#123 --audio
+   ```
+   Schema, coverage, no critical quality warning, an honest screenshot outcome, ablation verdicts
+   kept, every frame loads, every narration sentence has audio. A run is done when this prints
+   `RESULT: PASS`, not when it "looks fine".
+5. **A failure on a paid run becomes a $0 case first**: a fixture or a `--plan` fault and a test
+   that reproduces it, then the fix — never a second paid run to debug.
+
+**Voice.** The pipeline's last stage records the narration with ElevenLabs when
+`ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` are set (`TTS_PREGEN=0` turns it off) and uploads it to
+Supabase Storage. A voice failure never fails the run — the viewer reads with the browser voice.
+`TTS_GENERATE` stays `0`: visitors never trigger paid generation.
+
 ## Known limits
 
 - The screenshot verifier runs the analysed repository's own code (`yarn install`,
