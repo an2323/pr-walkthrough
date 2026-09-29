@@ -28,6 +28,12 @@ async function githubGet(url: string): Promise<unknown> {
   return res.json();
 }
 
+/** "owner/repo" this repository was forked from, or undefined when it isn't a fork. */
+export async function fetchForkParent(owner: string, repo: string): Promise<string | undefined> {
+  const r = (await githubGet(`${GITHUB_API}/repos/${owner}/${repo}`)) as { fork?: boolean; parent?: { full_name?: string } };
+  return r.fork ? r.parent?.full_name : undefined;
+}
+
 interface GHPullResponse {
   number: number;
   title: string;

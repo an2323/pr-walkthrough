@@ -61,6 +61,16 @@ const RECIPES: AppRecipe[] = [
   },
 ];
 
+/** Forks whose parent has a recipe run the same app the same way (filled from GitHub at run time). */
+const forkParents = new Map<string, string>();
+
+/** Remember that `owner/repo` is a fork of `parent` ("owner/repo"). */
+export function registerForkParent(owner: string, repo: string, parent: string): void {
+  forkParents.set(`${owner}/${repo}`, parent);
+}
+
 export function recipeFor(owner: string, repo: string): AppRecipe | undefined {
-  return RECIPES.find((r) => r.repo === `${owner}/${repo}`);
+  const name = `${owner}/${repo}`;
+  const parent = forkParents.get(name);
+  return RECIPES.find((r) => r.repo === name) ?? (parent ? RECIPES.find((r) => r.repo === parent) : undefined);
 }
