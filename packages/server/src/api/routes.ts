@@ -3,6 +3,7 @@
  *
  * Routes:
  *   GET  /api/walkthroughs/:owner/:repo/:number               — serve stored walkthrough JSON
+ *   GET  /api/recent?limit=N                                  — latest finished walkthroughs (landing page)
  *   POST /api/analyze  { prUrl, force? }                      — queue an analysis job, returns { jobId }
  *   GET  /api/jobs/:jobId                                     — current job status/result
  *   GET  /api/jobs/:jobId/events                              — SSE stream of ProgressEvents (live)
@@ -22,7 +23,7 @@ import { fileURLToPath } from "node:url";
 
 import type { ProgressEvent } from "@pr-walkthrough/shared";
 import { splitSentences, sentenceHash, generateSentenceAudio, OUTRO_STEP_ID, OUTRO_NARRATION } from "../tts/elevenlabs.js";
-import { loadRehearsal, loadWalkthrough } from "../storage.js";
+import { listRecentWalkthroughs, loadRehearsal, loadWalkthrough } from "../storage.js";
 import { parsePRUrl } from "../github/client.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
@@ -55,6 +56,16 @@ const router = Router();
 function isSafePathSegment(s: string): boolean {
   return /^[\w.-]+$/.test(s) && s !== "." && s !== "..";
 }
+
+// GET /api/recent — the latest finished walkthroughs, for the landing page's "Recent analyses".
+router.get("/recent", async (req: Request, res: Response): Promise<void> => {
+  try {
+    res.json(await listRecentWalkthroughs(Number(req.query["limit"] ?? 12) || 12));
+  } catch (err) {
+    console.warn("[recent] could not list walkthroughs:", err instanceof Error ? err.message : err);
+    res.json([]);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/walkthroughs/:owner/:repo/:number

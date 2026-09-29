@@ -35,6 +35,18 @@ const EXAMPLES: ExampleCard[] = [
   },
 ];
 
+/** GET /api/recent — one finished walkthrough on this server. */
+interface RecentWalkthrough {
+  owner: string;
+  repo: string;
+  number: number;
+  title?: string;
+  problem?: string;
+  thumb?: string;
+  costUsd?: number;
+  updatedAt: string;
+}
+
 /** GET /api/config — what the live server allows. */
 interface ServerConfig {
   liveAnalysis: boolean;
@@ -59,7 +71,7 @@ function parsePRUrl(raw: string): { owner: string; repo: string; number: number 
   return null;
 }
 
-function cardHref(c: ExampleCard): string {
+function cardHref(c: { owner: string; repo: string; number: number }): string {
   return `/${c.owner}/${c.repo}/${c.number}`;
 }
 
@@ -106,6 +118,19 @@ export function LandingPage() {
           if (card.number === HERO.number) setHero(null);
         });
     }
+  }, []);
+
+  // Every finished analysis on this server, newest first — a run started here can always be found again.
+  const [recent, setRecent] = useState<RecentWalkthrough[]>([]);
+  useEffect(() => {
+    if (STATIC) return;
+    fetch(apiUrl('/api/recent?limit=12'))
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: RecentWalkthrough[]) => {
+        const shown = new Set(EXAMPLES.map(cardHref));
+        setRecent(list.filter((r) => !shown.has(cardHref(r))));
+      })
+      .catch(() => setRecent([]));
   }, []);
 
   const [starting, setStarting] = useState(false);
@@ -355,6 +380,37 @@ export function LandingPage() {
           })}
         </div>
       </div>
+
+      {recent.length > 0 && (
+        <div className="landing-examples" id="recent">
+          <h2 className="landing-examples-h">Recent analyses</h2>
+          <div className="landing-cards landing-cards-2">
+            {recent.map((r) => {
+              const href = cardHref(r);
+              const cost = fmtCost(r.costUsd);
+              return (
+                <div className="landing-card" key={href}>
+                  {r.thumb && <img className="landing-card-thumb" src={shotUrl(r.owner, r.repo, r.number, r.thumb)} alt="" />}
+                  <div className="landing-card-title">
+                    {r.owner}/{r.repo} #{r.number}
+                    {r.title ? ` — ${r.title}` : ''}
+                  </div>
+                  {r.problem && <div className="landing-card-desc">{r.problem}</div>}
+                  <div className="landing-card-meta">
+                    {cost && <span>{cost}</span>}
+                    <span>{new Date(r.updatedAt).toLocaleString()}</span>
+                  </div>
+                  <div className="landing-card-footer">
+                    <a className="landing-card-link" href={href}>
+                      Open walkthrough →
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="landing-how" id="how-it-works">
         <h2 className="landing-examples-h">How it works</h2>

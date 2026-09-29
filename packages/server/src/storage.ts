@@ -112,6 +112,50 @@ export async function loadWalkthrough(
   return loadFromFile(owner, repo, number);
 }
 
+export interface WalkthroughSummary {
+  owner: string;
+  repo: string;
+  number: number;
+  title?: string;
+  problem?: string;
+  /** Before-frame file name (under data/shots/owner/repo/number/), for a thumbnail. */
+  thumb?: string;
+  costUsd?: number;
+  updatedAt: string;
+}
+
+/**
+ * The most recently finished walkthroughs, newest first — so a run started from the site can be found
+ * again from the landing page (it used to show only two hard-coded examples). Database only.
+ */
+export async function listRecentWalkthroughs(limit = 12): Promise<WalkthroughSummary[]> {
+  const pool = getPool();
+  if (!pool) return [];
+  await ensureSchema();
+  const { rows } = await pool.query<{
+    owner: string; repo: string; number: number; updated_at: Date;
+    title: string | null; problem: string | null; thumb: string | null; cost: string | null;
+  }>(
+    `SELECT owner, repo, number, updated_at,
+            payload->'plain'->>'title' AS title,
+            payload->'plain'->>'problem' AS problem,
+            payload->'shots'->'before'->>'src' AS thumb,
+            payload->'meta'->'run'->>'costUsd' AS cost
+       FROM walkthroughs ORDER BY updated_at DESC LIMIT $1`,
+    [Math.max(1, Math.min(50, limit))]
+  );
+  return rows.map((r) => ({
+    owner: r.owner,
+    repo: r.repo,
+    number: r.number,
+    updatedAt: r.updated_at.toISOString(),
+    ...(r.title ? { title: r.title } : {}),
+    ...(r.problem ? { problem: r.problem } : {}),
+    ...(r.thumb ? { thumb: r.thumb } : {}),
+    ...(r.cost ? { costUsd: Number(r.cost) } : {}),
+  }));
+}
+
 /** Job rows created since `since`, or null without a database. */
 export async function countJobRowsSince(since: Date): Promise<number | null> {
   const pool = getPool();
