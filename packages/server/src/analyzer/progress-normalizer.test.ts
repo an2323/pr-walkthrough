@@ -88,10 +88,22 @@ describe("createProgressNormalizer", () => {
     expect(emitted).toEqual([]);
   });
 
-  it("forwards an error event's message", () => {
+  it("does not forward a Bob error event (it is not the run failing — the pipeline reports its own)", () => {
     const { emitted, normalizer } = collect();
     normalizer.handle({ type: "error", message: "The task reached the cost limit" }, 10);
-    expect(emitted).toEqual([{ kind: "error", t: 10, message: "The task reached the cost limit" }]);
+    expect(emitted).toEqual([]);
+  });
+
+  it("with a run tracker, cost events carry the whole run's total across Bob tasks", () => {
+    const emitted: unknown[] = [];
+    const tracker = { tasks: new Map<string, number>(), maxUsd: 9.5 };
+    const analysis = createProgressNormalizer(0, (e) => emitted.push(e), { tracker, task: "analysis" });
+    const verifier = createProgressNormalizer(0, (e) => emitted.push(e), { tracker, task: "verifier" });
+    analysis.handle({ type: "result", stats: { session_costs: 0.6, max_cost: 4.9 } }, 1);
+    verifier.handle({ type: "result", stats: { session_costs: 0.4, max_cost: 2 } }, 2);
+    analysis.handle({ type: "result", stats: { session_costs: 0.75, max_cost: 1.6 } }, 3); // resume: cumulative
+    expect(emitted.map((e) => (e as { costUsd: number }).costUsd)).toEqual([0.6, 1.0, 1.15]);
+    expect(emitted.every((e) => (e as { maxCostUsd: number }).maxCostUsd === 9.5)).toBe(true);
   });
 
   it("turns a final 'result' event's stats into a 'cost' event", () => {

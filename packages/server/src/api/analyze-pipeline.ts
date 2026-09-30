@@ -20,7 +20,7 @@ import { prepareWorkspace, pruneWorktrees } from "../git/workspace.js";
 import { BobShellAnalyzer, createAnalyzer, CachedAnalyzer } from "../analyzer/index.js";
 import { withRehearsal } from "../analyzer/bob-command.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
-import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
+import { createProgressNormalizer, type RunSpend } from "../analyzer/progress-normalizer.js";
 import { answerOf, qualityRepairBob } from "../analyzer/bob-shell.js";
 import { assembleDraft, backendEvidenceOf, carryBackendEvidence } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
@@ -167,7 +167,15 @@ async function runPipeline(
           : `${hunks.length} hunks`,
     });
 
-    const normalizer = createProgressNormalizer(started, emit);
+    // One running total for the progress screen, across the analysis task and the verifier task.
+    const spend: RunSpend = {
+      tasks: new Map(),
+      maxUsd:
+        Number(process.env.MAX_COST ?? 8) + QUALITY_REPAIR_MAX_COST +
+        Number(process.env.VERIFY_MAX_COST ?? 2) + Number(process.env.VERIFY_REPAIR_MAX_COST ?? 1) +
+        Number(process.env.FACTCHECK_MAX_COST ?? 0.6),
+    };
+    const normalizer = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
     emit({ kind: "stage", t: elapsed(), stage: "analyzing", label: "Bob is analyzing the PR" });
 
     const analyzer = opts.rehearsal ? new BobShellAnalyzer() : createAnalyzer();
@@ -214,7 +222,7 @@ async function runPipeline(
         const previousCost = walkthrough.meta.run?.costUsd ?? 0;
         const cap = (previousCost + QUALITY_REPAIR_MAX_COST).toFixed(2);
         await assertBudget(QUALITY_REPAIR_MAX_COST);
-        const repairEvents = createProgressNormalizer(started, emit);
+        const repairEvents = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
         const repairRun = await qualityRepairBob(
           taskId,
           critical.map((w) => w.message),
@@ -325,7 +333,7 @@ async function runPipeline(
           console.warn("[analyze-pipeline] worktree pruning failed (continuing):", err instanceof Error ? err.message : err);
         }
 
-        const verifierEvents = createProgressNormalizer(started, emit);
+        const verifierEvents = createProgressNormalizer(started, emit, { tracker: spend, task: "verifier" });
         try {
           const vr = await verifyShots({
             walkthrough,
@@ -406,7 +414,7 @@ async function runPipeline(
                       stage: "repairing",
                       label: "Revising the explanation from measured evidence",
                     });
-                    const reviseEvents = createProgressNormalizer(started, emit);
+                    const reviseEvents = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
                     try {
                       const revised = await reviseFromAblation({
                         walkthrough,
@@ -523,7 +531,10 @@ async function runPipeline(
           facts: scenarioFacts,
           repoPath: workspace.repoPath,
           prLabel: `${owner}/${repo}#${number}`,
-          onEvent: (raw) => createProgressNormalizer(started, emit).handle(raw, Date.now()),
+          onEvent: (() => {
+            const n = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
+            return (raw: unknown) => n.handle(raw, Date.now());
+          })(),
         });
         // The resume's cost is the analysis task's new cumulative total, like the quality repair's.
         if (fc.sessionCost !== undefined && fc.sessionCost > 0) {

@@ -200,11 +200,14 @@ export async function runAblation(opts: RunAblationOptions): Promise<Ablation | 
   let infraFailures = 0;
   let aborted = false;
 
+  // Every unit alone + every unit left out: the reader sees "3 of 10", not one label for minutes.
+  const planned = units.length * 2;
+  let done = 0;
   const measure = async (unitIds: string[], label: string) => {
     const key = runKey(unitIds);
     const hit = cache.get(key);
     if (hit) return hit;
-    opts.onProgress?.(label);
+    opts.onProgress?.(`${label} (${Math.min(++done, planned)} of ${planned}, about a minute each)`);
     const res = await oneRun({
       mainPath: opts.mainPath,
       baseSha: opts.baseSha,

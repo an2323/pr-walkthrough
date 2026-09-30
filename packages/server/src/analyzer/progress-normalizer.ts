@@ -87,7 +87,23 @@ function shortenPath(p: string): string {
 }
 
 /** Create a stateful handler for one bob run's raw event stream. */
-export function createProgressNormalizer(startMs: number, emit: (e: ProgressEvent) => void): ProgressNormalizer {
+/**
+ * Spend across the whole run. Each Bob task reports its OWN cumulative cost (the analysis task and its
+ * resumes; the verifier task and its repair), and the progress screen showed whichever came last — so
+ * the number jumped up and down. With a shared tracker every cost event carries the run's total.
+ */
+export interface RunSpend {
+  /** Latest cumulative cost per Bob task ("analysis", "verifier"). */
+  tasks: Map<string, number>;
+  /** The run's planned maximum across all stages. */
+  maxUsd?: number;
+}
+
+export function createProgressNormalizer(
+  startMs: number,
+  emit: (e: ProgressEvent) => void,
+  spend?: { tracker: RunSpend; task: string }
+): ProgressNormalizer {
   let writingChars = 0;
   let lastWritingEmitMs = -Infinity;
 
@@ -118,17 +134,24 @@ export function createProgressNormalizer(startMs: number, emit: (e: ProgressEven
 
       if (e["type"] === "tool_result") return; // no separate UI signal today
 
-      if (e["type"] === "error" && typeof e["message"] === "string") {
-        emit({ kind: "error", t, message: e["message"] as string });
-        return;
-      }
+      // A Bob error event (e.g. "The task reached the cost limit" on a resume) is NOT the run failing —
+      // the pipeline carries on and reports its own terminal error. Forwarding it made the progress
+      // screen show "Analysis failed" for a run that then finished.
+      if (e["type"] === "error") return;
 
       if (e["type"] === "result") {
         const stats = (e["stats"] as Record<string, unknown> | undefined) ?? {};
         const costUsd = typeof stats["session_costs"] === "number" ? (stats["session_costs"] as number) : undefined;
         if (costUsd !== undefined) {
           const maxCostUsd = typeof stats["max_cost"] === "number" ? (stats["max_cost"] as number) : undefined;
-          emit({ kind: "cost", t, costUsd, maxCostUsd });
+          if (spend) {
+            const prev = spend.tracker.tasks.get(spend.task) ?? 0;
+            spend.tracker.tasks.set(spend.task, Math.max(prev, costUsd));
+            const total = [...spend.tracker.tasks.values()].reduce((a, b) => a + b, 0);
+            emit({ kind: "cost", t, costUsd: total, ...(spend.tracker.maxUsd ? { maxCostUsd: spend.tracker.maxUsd } : {}) });
+          } else {
+            emit({ kind: "cost", t, costUsd, maxCostUsd });
+          }
         }
       }
     },
