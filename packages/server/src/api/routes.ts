@@ -24,7 +24,9 @@ import { fileURLToPath } from "node:url";
 import type { ProgressEvent } from "@pr-walkthrough/shared";
 import { splitSentences, sentenceHash, generateSentenceAudio, OUTRO_STEP_ID, OUTRO_NARRATION } from "../tts/elevenlabs.js";
 import { listRecentWalkthroughs, loadRehearsal, loadWalkthrough } from "../storage.js";
-import { parsePRUrl } from "../github/client.js";
+import { fetchPRMeta, parsePRUrl } from "../github/client.js";
+import { buildPreview, PreviewError } from "./preview.js";
+import { resolveRecipe } from "../verify/recipes.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
 import { runAnalyzeJob } from "./analyze-pipeline.js";
@@ -56,6 +58,42 @@ const router = Router();
 function isSafePathSegment(s: string): boolean {
   return /^[\w.-]+$/.test(s) && s !== "." && s !== "..";
 }
+
+// GET /api/preview?pr=<github PR url> — what analysing this PR would give, before anyone presses the button.
+// Free (our own store, or one cached GitHub lookup); never starts Bob. Light per-IP limit: it is public.
+const previewHits = new Map<string, number[]>();
+router.get("/preview", async (req: Request, res: Response): Promise<void> => {
+  const ip = req.ip ?? "unknown";
+  const now = Date.now();
+  const recent = (previewHits.get(ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 30) {
+    res.status(429).json({ error: "Too many lookups — wait a minute" });
+    return;
+  }
+  previewHits.set(ip, [...recent, now]);
+  const pr = typeof req.query["pr"] === "string" ? req.query["pr"] : "";
+  if (!pr) {
+    res.status(400).json({ error: "pr is required" });
+    return;
+  }
+  try {
+    res.json(
+      await buildPreview(pr, {
+        parsePRUrl,
+        loadWalkthrough,
+        fetchPRMeta,
+        canVerify: async (owner, repo) => !!(await resolveRecipe(owner, repo)),
+      })
+    );
+  } catch (err) {
+    if (err instanceof PreviewError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    console.warn("[preview] failed:", err instanceof Error ? err.message : err);
+    res.status(502).json({ error: "Couldn't look that up just now" });
+  }
+});
 
 // GET /api/recent — the latest finished walkthroughs, for the landing page's "Recent analyses".
 router.get("/recent", async (req: Request, res: Response): Promise<void> => {
