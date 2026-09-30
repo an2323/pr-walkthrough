@@ -157,6 +157,32 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
     expect(r.results.map((x) => x.outcome.ok)).toEqual([true, true]);
   });
 
+  it("a stacking claim in the symptom text must be measured — else one repair asks for it", async () => {
+    const withTop = script(DARK).replace("measure: { u }", 'measure: { u, onTop: base ? "sidebar" : "menu" }');
+    const texts = ["The sidebar covers the menu on phones"];
+    const bare = await setup({ "a.cjs": script(DARK) }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    const prompts: string[] = [];
+    const r1 = await confirmScenariosWithRepair({ ...bare, symptomTexts: texts }, async (p) => {
+      prompts.push(p);
+      await writeFile(path.join(bare.verifyDir, "a.cjs"), withTop);
+    });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/elementFromPoint/);
+    expect(r1.repaired).toBe(true);
+
+    const measured = await setup({ "a.cjs": withTop }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    let calls = 0;
+    await confirmScenariosWithRepair({ ...measured, symptomTexts: texts }, async () => void calls++);
+    expect(calls).toBe(0);
+  });
+
+  it("a symptom text without a stacking claim asks for nothing extra", async () => {
+    const o = await setup({ "a.cjs": script(DARK) }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    let calls = 0;
+    await confirmScenariosWithRepair({ ...o, symptomTexts: ["The picker shrinks to one button"] }, async () => void calls++);
+    expect(calls).toBe(0);
+  });
+
   it("gives ONE repair covering all problems at once, then re-confirms", async () => {
     const broken = `console.log(JSON.stringify({ bugPresent: true, measure: {}, highlights: [] }));`;
     const o = await setup(

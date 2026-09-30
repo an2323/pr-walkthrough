@@ -528,7 +528,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     const canRepair =
       !!taskId && repairMax > 0 && (await assertBudget(repairMax).then(() => true, () => false));
     const { results, repaired, flaky } = await confirmScenariosWithRepair(
-      { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title },
+      { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title, symptomTexts: listSymptomTexts(wt) },
       canRepair
         ? async (prompt) => {
             onStage?.("shots", "Some scenarios didn't hold up — asking Bob to fix them with the real results");

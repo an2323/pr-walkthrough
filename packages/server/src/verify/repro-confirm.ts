@@ -142,6 +142,28 @@ export interface ScenariosOptions {
   frameDir: string;
   logDir?: string;
   fallbackTitle?: string;
+  /** The walkthrough's symptom texts: a scenario tied to one must measure the visible claims it makes. */
+  symptomTexts?: string[];
+}
+
+/** A symptom text that says which of two things is drawn over the other. */
+const STACKING_CLAIM = /\b(on top of|covers?|covering|covered|behind|underneath|under|above|over(?:lap)?s?|hides?|hidden)\b/i;
+/** A measurement that says which element is on top (any reasonable key name, or an elementFromPoint result). */
+const STACKING_MEASURE = /onTop|on_top|topmost|atPoint|fromPoint|elementAt|covers|covered|above|below|stack|zOrder|hitTest/i;
+
+/**
+ * Claims the scenario's own symptom text makes but its measurement doesn't cover. The text is fact-checked
+ * against the measurement later — an unmeasured claim can't be checked (#10295: "the sidebar covers the
+ * menu on mobile" was never measured, and was false). Only stacking is detected for now: it is the claim a
+ * screenshot can't settle and the one that was wrong.
+ */
+export function unmeasuredClaims(r: ScenarioResult, symptomTexts: string[] = []): string[] {
+  const idx = r.scenario.symptomIndex;
+  if (idx === undefined || !r.outcome.ok) return [];
+  const text = symptomTexts[idx];
+  if (!text || !STACKING_CLAIM.test(text)) return [];
+  const keys = JSON.stringify((r.outcome.before as { measure?: unknown } | undefined)?.measure ?? {});
+  return STACKING_MEASURE.test(keys) ? [] : [text];
 }
 
 export async function confirmScenarios(o: ScenariosOptions): Promise<ScenarioResult[]> {
@@ -172,7 +194,7 @@ export async function confirmScenarios(o: ScenariosOptions): Promise<ScenarioRes
 }
 
 /** What is wrong with a set of results, one line per scenario that needs work (empty = all good). */
-export function scenarioProblems(results: ScenarioResult[]): string[] {
+export function scenarioProblems(results: ScenarioResult[], symptomTexts: string[] = []): string[] {
   if (results.length === 0) return ["No scenario script was written (no scenarios.json and no repro.cjs)."];
   const lines: string[] = [];
   // Identical frames only matter when NOTHING shows a difference: with one visible pair the reader
@@ -184,6 +206,12 @@ export function scenarioProblems(results: ScenarioResult[]): string[] {
     if (!r.outcome.ok) {
       lines.push(
         `${head} ${r.outcome.problem ?? "rejected"}.\n    on BASE: ${describeRun(r.outcome.before)}\n    on HEAD: ${describeRun(r.outcome.after)}`
+      );
+    } else if (unmeasuredClaims(r, symptomTexts).length > 0) {
+      lines.push(
+        `${head} passes the contract, but its symptom says "${unmeasuredClaims(r, symptomTexts)[0]}" and its \`measure\` ` +
+          `doesn't say which element is on top. Add it: at a point both elements cover, record what ` +
+          `\`document.elementFromPoint\` returns (e.g. \`"onTop": "menu"\`), at the viewport the text names — on both builds.`
       );
     } else if (r.identical && !anyVisible) {
       lines.push(
@@ -227,7 +255,7 @@ export async function confirmScenariosWithRepair(
   repair?: (prompt: string) => Promise<void>
 ): Promise<{ results: ScenarioResult[]; repaired: boolean; flaky: string[] }> {
   let results = await confirmScenarios(o);
-  let problems = scenarioProblems(results);
+  let problems = scenarioProblems(results, o.symptomTexts);
   const flaky: string[] = [];
   if (problems.length > 0) {
     await logProblems(o, "first check", problems);
@@ -242,14 +270,14 @@ export async function confirmScenariosWithRepair(
       }
       return r;
     });
-    problems = scenarioProblems(results);
+    problems = scenarioProblems(results, o.symptomTexts);
     if (flaky.length > 0) console.warn(`[verify] passed on a second check (flaky): ${flaky.join(", ")}`);
   }
   if (problems.length === 0 || !repair) return { results, repaired: false, flaky };
   await logProblems(o, "sent to repair", problems);
   await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }));
   results = await confirmScenarios(o);
-  const left = scenarioProblems(results);
+  const left = scenarioProblems(results, o.symptomTexts);
   if (left.length > 0) await logProblems(o, "after repair", left);
   return { results, repaired: true, flaky };
 }
