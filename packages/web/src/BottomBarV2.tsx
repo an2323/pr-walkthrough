@@ -4,6 +4,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ListenMode, ListenStatus } from './useWalkthroughNarration';
+import { track } from './track';
 
 interface Props {
   screenIndex: number; // -1 = start
@@ -99,7 +100,10 @@ export function BottomBarV2({
       <div className="listen-cluster">
         <button
           className={`listen${isPlaying || isPaused ? ' on' : ''}${muted || listenDisabled ? ' muted' : ''}`}
-          onClick={onListen}
+          onClick={() => {
+            if (!isPlaying) track('narration-play');
+            onListen();
+          }}
           disabled={listenDisabled}
           aria-label={listenLabel}
         >

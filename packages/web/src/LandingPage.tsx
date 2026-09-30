@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Walkthrough } from '@pr-walkthrough/shared';
 import { STATIC, walkthroughUrl, shotUrl, apiUrl } from './staticMode';
 import { parsePRUrl } from './prUrl';
+import { track } from './track';
 import { EXCALIDRAW_UI_FIXES_URL, SUGGESTED_PRS } from './landingData';
 import './Landing.css';
 
@@ -287,6 +288,7 @@ function PrInput() {
         return;
       }
       const { jobId } = (await res.json()) as { jobId: string };
+      track(`analyze-start ${parsed.owner}/${parsed.repo}#${parsed.number}`);
       window.location.href = `${viewerPath(parsed)}/progress?job=${jobId}`;
     } catch {
       setError('Could not reach the server to start the analysis.');
@@ -390,7 +392,7 @@ function Suggested({ onPick }: { onPick: (url: string) => void }) {
           <p className="lp-suggest-h">Suggested for a new analysis <span>(about 15–25 minutes)</span></p>
           <div className="lp-picks">
             {SUGGESTED_PRS.map((p) => (
-              <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
+              <button key={p.url} type="button" className="lp-pick" onClick={() => { track(`pick-suggested ${p.label}`); onPick(p.url); }}>
                 <i>●</i>{p.label}<small>{p.size}</small>
               </button>
             ))}
@@ -424,7 +426,10 @@ function DemoVideo() {
         playsInline
         poster="/demo/pr-walkthrough-demo-poster.jpg"
         aria-label="One-minute demo: a PR pasted, analysed and explained"
-        onPlay={() => setStarted(true)}
+        onPlay={() => {
+          if (!started) track('demo-video-play');
+          setStarted(true);
+        }}
         onError={() => setFailed(true)}
       >
         <source src="/demo/pr-walkthrough-demo.mp4" type="video/mp4" onError={() => setFailed(true)} />
