@@ -22,4 +22,4 @@ deploy/.env.production
 data/vm-runs/
 .preflight-ok
 docs/video/music/*.mp3
-docs/video/out/
+docs/video/out*/
