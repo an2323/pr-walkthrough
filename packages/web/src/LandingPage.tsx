@@ -159,20 +159,25 @@ export function LandingPage() {
           PR Walkthrough
         </span>
         <span className="lp-nav-links">
-          {!STATIC && <a href="#demo">Watch the demo</a>}
-          <a href="#try">Try it</a>
+          {!STATIC && <a href="#demo">Demo</a>}
           <a href="#analysed">Already analysed</a>
           <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          <a href="#try" className="lp-nav-cta">Try it on a PR</a>
         </span>
       </nav>
 
       <header className="lp-hero">
-        <h1>Stop reverse-engineering pull requests.<br />Get a narrated walkthrough instead.</h1>
-        <p className="lp-sub">
-          Bob reads the whole repo and explains the PR step by step — what broke, why, and whether the fix holds.{' '}
-          <b>When the app can run, he runs it before and after and shows the difference.</b>
-        </p>
+        <h1>
+          <span className="lp-h1-dim">Stop reverse-engineering pull requests.</span>
+          <br />
+          Get a <span className="lp-h1-accent">narrated walkthrough</span> instead.
+        </h1>
+        <p className="lp-sub">Bob reads the whole repo, explains the PR step by step, and shows whether the fix holds.</p>
         <DemoVideo />
+        <div className="lp-actions">
+          <a href="#try" className="lp-cta">Analyse a PR →</a>
+          <a href="#analysed" className="lp-link">or open a finished example</a>
+        </div>
       </header>
 
       <section className="lp-try" id="try" aria-labelledby="lp-try-h">

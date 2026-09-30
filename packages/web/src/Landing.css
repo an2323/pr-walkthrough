@@ -4,13 +4,21 @@
 
 .lp-nav { display: flex; align-items: center; justify-content: space-between; height: 68px; border-bottom: 1px solid var(--line); }
 .lp-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; }
-.lp-nav-links { display: flex; gap: 26px; font-size: 14px; }
+.lp-nav-links { display: flex; align-items: center; gap: 26px; font-size: 14px; }
 .lp-nav-links a { color: var(--muted); text-decoration: none; }
 .lp-nav-links a:hover { color: var(--accent); }
+.lp-nav-links a.lp-nav-cta { color: #0a1a3a; background: var(--accent); font-weight: 650; padding: 7px 16px; border-radius: 8px; }
+.lp-nav-links a.lp-nav-cta:hover { color: #0a1a3a; filter: brightness(1.08); }
 
-.lp-hero { text-align: center; padding: 44px 0 10px; }
-.lp-hero h1 { margin: 0 auto 14px; max-width: 780px; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.16; letter-spacing: -.02em; font-weight: 650; }
-.lp-sub { margin: 0 auto; max-width: 660px; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.lp-hero { text-align: center; padding: 40px 0 10px; }
+.lp-hero h1 { margin: 0 auto 16px; max-width: 900px; font-size: clamp(28px, 3.3vw, 40px); line-height: 1.1; letter-spacing: -.025em; font-weight: 700; }
+.lp-h1-dim { color: var(--faint); }
+.lp-h1-accent { background: linear-gradient(90deg, #9cc2ff 0%, #78a9ff 45%, #be95ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lp-sub { margin: 0 auto; max-width: 820px; color: var(--muted); font-size: 16px; line-height: 1.5; }
+.lp-actions { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 20px; flex-wrap: wrap; }
+.lp-cta { display: inline-block; padding: 9px 18px; border-radius: 8px; background: var(--accent); color: #0a1a3a; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 4px 16px rgba(120, 169, 255, .25); }
+.lp-cta:hover { filter: brightness(1.08); }
+.lp-link { color: var(--accent); font-size: 13.5px; font-weight: 600; text-decoration: none; }
 .lp-sub b { color: var(--ink); font-weight: 600; }
 
 /* ---- input ---- */
