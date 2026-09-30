@@ -12,6 +12,7 @@
  *                                                    rejected or it ran out of budget) instead of starting a new one:
  *                                                    costs at most the repair (VERIFY_REPAIR_MAX_COST, default $1)
  *
+ *   … --factcheck                                    then the paid fact check (prose vs what the scenarios measured)
  *   … --reuse                                        $0: no Bob. Re-confirm the scenario scripts saved by an earlier run against the
  *                                                    live builds and rebuild all frames/crops/cards with the current code
  *
@@ -28,7 +29,8 @@ import { resolveRecipe } from "../src/verify/recipes.js";
 import { attachSymptomShots } from "../src/verify/symptom-shots.js";
 import { markVerified, recordNoShots, recordShotsNote } from "../src/verify/shots-status.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../src/verify/revise.js";
-import { checkQuality } from "../src/validation/quality.js";
+import { checkQuality, criticalQualityWarnings } from "../src/validation/quality.js";
+import { factCheck } from "../src/verify/fact-check.js";
 import { prepareWorkspace } from "../src/git/workspace.js";
 import { blobsEnabled, uploadDir } from "../src/blobs.js";
 
@@ -155,6 +157,24 @@ if (flag("ablate")) {
           console.log(`saved; quality warnings now: ${checkQuality(wt).map((w) => w.code).join(", ") || "none"}`);
         }
       }
+    }
+  }
+}
+
+if (flag("factcheck")) {
+  // The same fact check the pipeline runs: one resume of the analysis session (paid, small).
+  console.log("\nfact check against the running app…");
+  const fc = await factCheck({ walkthrough: wt, facts: result.facts ?? [], repoPath: workspace.repoPath, prLabel: `${owner}/${repo}#${num}` });
+  console.log(`fact check: ${fc.status}${"reason" in fc ? ` — ${fc.reason}` : ""}${"changed" in fc ? ` — ${fc.changed.join(", ")}` : ""} (cost $${fc.costUsd.toFixed(3)})`);
+  if (fc.status === "ok") {
+    for (const f of fc.changed) console.log(`  ${f}`);
+    console.log("  plain.problem:", fc.walkthrough.plain?.problem);
+    if (apply) {
+      const run = wt.meta.run;
+      wt = fc.walkthrough;
+      if (run) wt.meta.run = { ...run, costUsd: Math.max(run.costUsd ?? 0, fc.sessionCost) };
+      await saveWalkthrough(wt);
+      console.log(`saved; critical quality warnings now: ${criticalQualityWarnings(checkQuality(wt)).map((w) => `${w.stepId}:${w.code}`).join(", ") || "none"}`);
     }
   }
 }
