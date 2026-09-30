@@ -8,8 +8,8 @@
 .lp-nav-links a { color: var(--muted); text-decoration: none; }
 .lp-nav-links a:hover { color: var(--accent); }
 
-.lp-hero { text-align: center; padding: 26px 0 8px; }
-.lp-hero h1 { margin: 0 auto 10px; max-width: 780px; font-size: clamp(28px, 3.1vw, 38px); line-height: 1.16; letter-spacing: -.02em; font-weight: 650; }
+.lp-hero { text-align: center; padding: 44px 0 10px; }
+.lp-hero h1 { margin: 0 auto 14px; max-width: 780px; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.16; letter-spacing: -.02em; font-weight: 650; }
 .lp-sub { margin: 0 auto; max-width: 660px; color: var(--muted); font-size: 16px; line-height: 1.55; }
 .lp-sub b { color: var(--ink); font-weight: 600; }
 
@@ -38,7 +38,7 @@
 .lp-pv-quiet { color: var(--faint); }
 
 /* ---- demo video (in the hero) ---- */
-.lp-demo { position: relative; margin: 18px auto 0; max-width: 620px; }
+.lp-demo { position: relative; margin: 26px auto 0; max-width: 760px; }
 .lp-play { position: absolute; inset: 0 0 42px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 0; border-radius: 12px; background: linear-gradient(rgba(10, 10, 10, .15), rgba(10, 10, 10, .55)); cursor: pointer; color: #fff; }
 .lp-play-disc { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; background: rgba(120, 169, 255, .96); color: #0a1a3a; box-shadow: 0 8px 30px rgba(0, 0, 0, .55); transition: transform .15s; }
 .lp-play:hover .lp-play-disc { transform: scale(1.07); }
@@ -46,7 +46,7 @@
 .lp-video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; border: 1px solid var(--line); background: #000; }
 
 /* ---- try it ---- */
-.lp-try { padding: 22px 0 30px; text-align: center; }
+.lp-try { padding: 34px 0 30px; text-align: center; }
 .lp-try h2 { margin: 0 0 6px; font-size: 24px; font-weight: 650; }
 .lp-try-lead { max-width: 700px; margin: 0 auto; color: var(--muted); font-size: 15px; line-height: 1.55; }
 .lp-try-lead b { color: var(--ink); font-weight: 600; }
