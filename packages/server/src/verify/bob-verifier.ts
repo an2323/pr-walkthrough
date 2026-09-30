@@ -205,6 +205,11 @@ backend measure each fix separately.
    - open a page at its viewport, go to the url, run the scenario (≤ 30 s per action);
    - measure the signal and decide \`bugPresent\` (boolean) from it — not from which url string was passed
      in; the same logic must work no matter which build is running there;
+   - also put in \`measure\` every visible claim its symptom text makes, measured the same way on both
+     builds — which element is on top where two overlap (\`document.elementFromPoint\` at a point both
+     cover), what is open or closed, where something sits — at the viewport the text talks about ("on
+     phones" → a phone viewport). The walkthrough's text is checked against these values afterwards; a
+     claim you don't measure stays unchecked;
    - if argv[3] is given, save a screenshot there, and also return the highlights (see "Highlights" below);
    - print EXACTLY ONE line of JSON as your last line of output:
      \`{"bugPresent": true, "measure": {...the numbers you used...}, "highlights": [...]}\`
