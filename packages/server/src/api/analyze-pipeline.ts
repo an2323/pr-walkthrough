@@ -163,7 +163,8 @@ async function runPipeline(
       const voice = voicingConfigured();
       const estimate = estimateRun({
         shotsPlanned: canShots,
-        ablationUnits: logicUnits(hunks, skipped).length,
+        // VERIFY_ABLATION=0 (off on the VM since Sep 30: on 5 live PRs it never changed the text, and took a third to half of the run).
+        ablationUnits: process.env.VERIFY_ABLATION === "0" ? 0 : logicUnits(hunks, skipped).length,
         coldInstall: !(installed(pr.baseSha) && installed(pr.headSha)),
         voice,
       });

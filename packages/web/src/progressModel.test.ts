@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ProgressEvent } from '@pr-walkthrough/shared';
 
-import { ablationProgress, deriveProgressView, plainStageLabel, plainTool, scenarioProgress } from './progressModel';
+import { deriveProgressView, isAblationEvent, plainTool, scenarioProgress } from './progressModel';
 
 let t = 0;
 const at = (e: Record<string, unknown>): ProgressEvent => ({ ...e, t: (t += 1000) }) as ProgressEvent;
@@ -81,12 +81,12 @@ describe('deriveProgressView — a run with the structured events', () => {
       stage('clone'), plan(true), stage('shots', 'Bob is reproducing…'),
       at({ kind: 'frames', before: 'before-annotated.png', after: 'after-annotated.png', caption: 'c' }),
       outcome('ok', 'The bug reproduced at the old commit and is gone at the new one.'),
-      stage('shots', 'Testing which changes fix the bug'),
+      stage('shots', 'Attached 1 per-symptom screenshot(s)'),
     ];
     const v = deriveProgressView(events);
     expect(v.pane).toBe('outcome');
     expect(v.shots.frames).toEqual({ before: 'before-annotated.png', after: 'after-annotated.png', caption: 'c' });
-    expect(v.steps.find((s) => s.id === 'shots')).toMatchObject({ status: 'done', detail: 'Testing which changes fix the bug' });
+    expect(v.steps.find((s) => s.id === 'shots')).toMatchObject({ status: 'done', detail: 'Attached 1 per-symptom screenshot(s)' });
     // once voicing starts the screenshot row shows the verdict again, not an old sub-step
     const v2 = deriveProgressView([...events, stage('voicing', 'Recording the narration')]);
     expect(v2.steps.find((s) => s.id === 'shots')?.detail).toMatch(/reproduced at the old commit/);
@@ -95,9 +95,9 @@ describe('deriveProgressView — a run with the structured events', () => {
 
   it('a repair after the screenshots does not move the screen back to "checking the story"', () => {
     t = 0;
-    const v = deriveProgressView([stage('saving'), plan(true), stage('shots'), outcome('ok', 'ok'), stage('repairing', 'Revising the explanation from measured evidence')]);
+    const v = deriveProgressView([stage('saving'), plan(true), stage('shots'), outcome('ok', 'ok'), stage('repairing', "Some scenarios didn't hold up — asking Bob to fix them")]);
     expect(status(v, 'check')).toBe('done');
-    expect(v.steps.find((s) => s.id === 'shots')?.detail).toBe('Revising the explanation from measured evidence');
+    expect(v.steps.find((s) => s.id === 'shots')?.detail).toBe("Some scenarios didn't hold up — asking Bob to fix them");
   });
 
   it('not planned for this repository: the row is skipped from the start, with the reason', () => {
@@ -151,57 +151,14 @@ describe('deriveProgressView — a run with the structured events', () => {
   });
 });
 
-describe('plainStageLabel — the rail never shows a file path or a hunk id', () => {
-  it('says the ablation in plain words', () => {
-    expect(plainStageLabel('Testing "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1" alone')).toBe('Testing which changes fix the bug');
-    expect(plainStageLabel('Testing everything except "packages/x/y.ts#2"')).toBe('Testing which changes fix the bug');
-    expect(plainStageLabel('Measured 4 change(s) against the running app')).toBe('Measured which changes fix the bug');
-  });
-  it('leaves ordinary labels alone', () => {
-    expect(plainStageLabel('Bob is reproducing the change and taking screenshots')).toBe('Bob is reproducing the change and taking screenshots');
-  });
-  it('the screenshot row shows the plain label while the ablation runs, before and after the verdict', () => {
-    t = 0;
-    const path = 'Testing "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1" alone';
-    const running = deriveProgressView([stage('clone'), plan(true), stage('shots', path)]);
-    expect(running.steps.find((s) => s.id === 'shots')?.detail).toBe('Testing which changes fix the bug');
-    const later = deriveProgressView([stage('clone'), plan(true), stage('shots'), outcome('ok', 'ok'), stage('shots', path)]);
-    expect(later.steps.find((s) => s.id === 'shots')?.detail).toBe('Testing which changes fix the bug');
-  });
-});
-
 describe('the long waits say what they are doing and what is left', () => {
-  const build = (k: number, n: number) => stage('shots', `Testing "packages/x/y.ts#1" alone (${k} of ${n}, about a minute each)`);
   const okRun = () => [stage('clone'), plan(true), stage('shots'), outcome('ok', 'ok')];
-
-  it('reads "k of n" from the server label', () => {
-    expect(ablationProgress('Testing everything except "a#2" (3 of 10, about a minute each)')).toEqual({ k: 3, n: 10 });
-    expect(ablationProgress('Testing "a#1" alone')).toBeUndefined();
-    expect(ablationProgress(undefined)).toBeUndefined();
-  });
-
-  it('the ablation is a count and a bar, with the time left', () => {
-    t = 0;
-    const v = deriveProgressView([...okRun(), build(3, 10)]);
-    const row = v.steps.find((s) => s.id === 'shots')!;
-    expect(row.progress).toEqual({ done: 2, total: 10 });
-    expect(row.detail).toBe('Testing which changes fix the bug — build 3 of 10, about 8 min left');
-    expect(row.detail).not.toMatch(/packages|#1/);
-    expect(row.status).toBe('current');
-    expect(v.feed.at(-1)).toBe('Testing which changes fix the bug (3 of 10)');
-  });
-
-  it('once the ablation is over the bar is gone', () => {
-    t = 0;
-    const v = deriveProgressView([...okRun(), build(10, 10), stage('shots', 'Measured 5 change(s) against the running app')]);
-    expect(v.steps.find((s) => s.id === 'shots')?.progress).toBeUndefined();
-  });
 
   it('names the stages that are still ahead, in order', () => {
     t = 0;
-    const v = deriveProgressView([...okRun(), build(1, 4)]);
+    const v = deriveProgressView(okRun());
     const tail = v.steps.slice(-3);
-    expect(tail.map((s) => [s.id, s.status])).toEqual([['shots', 'current'], ['facts', 'pending'], ['voice', 'pending']]);
+    expect(tail.map((s) => [s.id, s.status])).toEqual([['shots', 'done'], ['facts', 'pending'], ['voice', 'pending']]);
     expect(tail[1].label).toBe('Fact-checking the explanation');
     expect(tail[2].label).toBe('Recording the narration');
   });
@@ -263,7 +220,6 @@ describe('narration, the estimate and the screenshot stage are visible from the 
   it('each scenario replay is a counted row', () => {
     t = 0;
     expect(scenarioProgress('Trying "Open the menu" on the old and the new version (2 of 3)')).toEqual({ k: 2, n: 3 });
-    expect(scenarioProgress('Testing "a#1" alone (2 of 3, about a minute each)')).toBeUndefined();
     const v = deriveProgressView([stage('clone'), planWith({}), stage('shots', 'Trying "Open the menu" on the old and the new version (2 of 3)')]);
     const row = v.steps.find((s) => s.id === 'shots')!;
     expect(row).toMatchObject({ status: 'current', progress: { done: 1, total: 3 }, detail: 'Trying the scenario on the old and the new version — 2 of 3' });
@@ -282,48 +238,47 @@ describe('narration, the estimate and the screenshot stage are visible from the 
   });
 });
 
-describe('the ablation is its own row', () => {
-  const planEst = (ablationBuilds: number) =>
-    at({ kind: 'plan', pr: { title: 'fix', additions: 3, deletions: 1, files: 1 }, shots: { planned: true }, estimate: { minMinutes: 16, maxMinutes: 29, ablationBuilds, coldInstall: false } });
-  const ok = () => [stage('clone'), planEst(10), stage('shots'), outcome('ok', 'The bug reproduced.')];
+describe('the ablation is off: recordings that still carry it show the same steps as a run today', () => {
+  const ok = () => [stage('clone'), plan(true), stage('shots'), outcome('ok', 'The bug reproduced.')];
   const ids = (v: ReturnType<typeof deriveProgressView>) => v.steps.map((s) => s.id);
 
-  it('is named up front when the plan counts builds, between the screenshots and the fact check', () => {
+  it('knows its events, old and new, and nothing else', () => {
     t = 0;
-    const v = deriveProgressView(ok());
-    expect(ids(v).slice(-3)).toEqual(['ablation', 'facts', 'voice']);
-    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ label: 'Finding the critical changes', status: 'pending' });
-    expect(ids(deriveProgressView([stage('clone'), planEst(0)]))).not.toContain('ablation');
+    for (const e of [
+      stage('ablation', 'Testing which changes fix the bug'),
+      stage('shots', 'Testing "a#1" alone (3 of 10, about a minute each)'),
+      stage('shots', 'Testing everything except "a#2"'),
+      stage('shots', 'Measured 5 change(s) against the running app'),
+      stage('repairing', 'Revising the explanation from measured evidence'),
+      stage('repairing', 'Explanation revised to match measured evidence'),
+    ]) expect(isAblationEvent(e)).toBe(true);
+    for (const e of [
+      stage('shots', 'Trying "Open the menu" on the old and the new version (1 of 2)'),
+      stage('shots', 'Bob is reproducing the change'),
+      stage('repairing', 'Checking the text against the running app'),
+      stage('factcheck', 'Fact-checking the explanation'),
+    ]) expect(isAblationEvent(e)).toBe(false);
   });
 
-  it('counts its builds; the screenshots row keeps the verdict', () => {
+  it('a recording with the ablation (as its own stage or under "shots") shows no trace of it', () => {
     t = 0;
-    const v = deriveProgressView([...ok(), stage('ablation', 'Testing "a#1" alone (3 of 10, about a minute each)')]);
-    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ status: 'current', progress: { done: 2, total: 10 }, detail: 'Build 3 of 10, about 8 min left' });
-    expect(v.steps.find((s) => s.id === 'shots')).toMatchObject({ status: 'done', detail: 'The bug reproduced.' });
-    expect(v.feed.at(-1)).toBe('Testing which changes fix the bug (3 of 10)');
+    const withStage = deriveProgressView([...ok(), stage('ablation', 'Testing "a#1" alone (3 of 10, about a minute each)')]);
+    t = 0;
+    const legacy = deriveProgressView([...ok(), stage('shots', 'Testing "a#1" alone (3 of 10, about a minute each)'), stage('shots', 'Measured 5 change(s) against the running app')]);
+    t = 0;
+    const today = deriveProgressView(ok());
+    for (const v of [withStage, legacy]) {
+      expect(ids(v)).toEqual(ids(today));
+      expect(v.steps.find((s) => s.id === 'shots')).toMatchObject({ status: 'done', detail: 'The bug reproduced.' });
+      expect(v.steps.find((s) => s.id === 'shots')?.progress).toBeUndefined();
+      expect(v.feed.join(' ')).not.toMatch(/Testing|Measured/);
+    }
   });
 
-  it('is done once the fact check starts, and a revision after it belongs to it', () => {
+  it('the clock still runs to the last event of the recording', () => {
     t = 0;
-    const revising = deriveProgressView([...ok(), stage('ablation', 'Measured 5 change(s) against the running app'), stage('repairing', 'Revising the explanation from measured evidence')]);
-    expect(status(revising, 'ablation')).toBe('current');
-    expect(revising.steps.find((s) => s.id === 'ablation')?.detail).toBe('Revising the explanation from measured evidence');
-    const later = deriveProgressView([...ok(), stage('ablation'), stage('repairing', 'Checking the text against the running app')]);
-    expect(['ablation', 'facts'].map((id) => status(later, id))).toEqual(['done', 'current']);
-  });
-
-  it('old recordings (labels under "shots") keep the old handling and get no ablation row', () => {
-    t = 0;
-    const v = deriveProgressView([...ok(), stage('shots', 'Testing "a#1" alone (3 of 10, about a minute each)')]);
-    expect(ids(v)).not.toContain('ablation');
-    expect(v.steps.find((s) => s.id === 'shots')?.progress).toEqual({ done: 2, total: 10 });
-  });
-
-  it('a finished run shows no ablation row if none ran', () => {
-    t = 0;
-    const v = deriveProgressView([...ok(), at({ kind: 'done', walkthroughUrl: '/x', durationMs: 5000 })]);
-    expect(ids(v)).not.toContain('ablation');
+    const v = deriveProgressView([...ok(), stage('ablation', 'Testing which changes fix the bug')]);
+    expect(v.elapsedMs).toBe(5000);
   });
 });
 

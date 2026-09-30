@@ -11,7 +11,7 @@ import type { ProgressEvent, ProgressEventOf, ShotsOutcomeCode } from '@pr-walkt
 export type StepStatus = 'done' | 'current' | 'pending' | 'skipped' | 'warn';
 
 export interface StepView {
-  id: 'checkout' | 'diff' | 'read' | 'check' | 'shots' | 'ablation' | 'facts' | 'voice';
+  id: 'checkout' | 'diff' | 'read' | 'check' | 'shots' | 'facts' | 'voice';
   label: string;
   status: StepStatus;
   /** One short line under the label. */
@@ -84,20 +84,17 @@ function targetPath(target: string): string {
 }
 
 /**
- * A stage label written for the log, said for a reader. The ablation runs one label per hunk ("Testing "packages/…/x.tsx#1"
- * alone") — file paths and hunk ids mean nothing on the screen, and an unbroken path used to push out of the rail.
+ * The ablation (which of the PR's changes the fix needs, 2 app builds per change) is off since Sep 30: on the five
+ * live PRs it never changed the text and took a third to half of the run. Recordings of earlier runs still carry its
+ * events — stage "ablation", or its labels under "shots" before it had a stage — and the revise it could trigger;
+ * the screen leaves them all out, so a replay shows the same steps as a run today.
  */
-export function plainStageLabel(label: string): string {
-  if (/^Testing\b/.test(label)) return 'Testing which changes fix the bug';
-  if (/^Measured \d+ change/.test(label)) return 'Measured which changes fix the bug';
-  return label;
-}
-
-/** The server labels each ablation build "… (3 of 10, about a minute each)". */
-export function ablationProgress(label: string | undefined): { k: number; n: number } | undefined {
-  if (scenarioProgress(label)) return undefined; // same "(k of n)" tail, a different stage
-  const m = label === undefined ? null : /\((\d+) of (\d+)(?:, [^)]*)?\)\s*$/.exec(label);
-  return m ? { k: Number(m[1]), n: Number(m[2]) } : undefined;
+export function isAblationEvent(e: ProgressEvent): boolean {
+  if (e.kind !== 'stage') return false;
+  if (e.stage === 'ablation') return true;
+  if (e.stage === 'shots') return /^Testing\b/.test(e.label) || /^Measured \d+ change/.test(e.label);
+  if (e.stage === 'repairing') return /^(Revising the explanation from measured evidence|Explanation revised to match measured evidence|Revise skipped\b)/.test(e.label);
+  return false;
 }
 
 /** The verifier replays Bob's script once per scenario: "Trying "<title>" on the old and the new version (2 of 3)". */
@@ -122,12 +119,6 @@ export function plainTool(tool: string, target: string): string {
 /** How much of the walkthrough text is usually written when a run is about to finish (a bar needs a guess). */
 export const TYPICAL_WRITING_CHARS = 50_000;
 
-/** The log line for a stage: the ablation's file path is dropped, its count ("3 of 10") is kept. */
-function feedLabel(label: string): string {
-  const a = ablationProgress(label);
-  return a ? `${plainStageLabel(label)} (${a.k} of ${a.n})` : label;
-}
-
 const OUTCOME_STATUS: Record<ShotsOutcomeCode, StepStatus> = {
   ok: 'done',
   identical: 'done',
@@ -138,7 +129,8 @@ const OUTCOME_STATUS: Record<ShotsOutcomeCode, StepStatus> = {
   unavailable: 'warn',
 };
 
-export function deriveProgressView(events: ProgressEvent[]): ProgressView {
+export function deriveProgressView(all: ProgressEvent[]): ProgressView {
+  const events = all.filter((e) => !isAblationEvent(e));
   const stages = of(events, 'stage');
   const seen = new Set(stages.map((s) => s.stage));
   const plan = last(of(events, 'plan'));
@@ -161,28 +153,25 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
 
   // Order the pipeline runs in. `repairing` belongs to whatever is being repaired (the story before the
   // screenshots, the text after them) and must never move the screen backwards.
-  const order: StepView['id'][] = ['checkout', 'diff', 'read', 'check', 'shots', 'ablation', 'facts', 'voice'];
-  const stageStep = (stage: string, s: { label: string }, afterAblation: boolean): StepView['id'] | undefined => {
+  const order: StepView['id'][] = ['checkout', 'diff', 'read', 'check', 'shots', 'facts', 'voice'];
+  const stageStep = (stage: string, s: { label: string }): StepView['id'] | undefined => {
     switch (stage) {
       case 'clone': return 'checkout';
       case 'hunks': return 'diff';
       case 'analyzing': return 'read';
       case 'validating':
       case 'saving': return 'check';
-      case 'repairing': return inShots ? (isFactCheck(s.label) ? 'facts' : afterAblation ? 'ablation' : 'shots') : 'check';
+      case 'repairing': return inShots ? (isFactCheck(s.label) ? 'facts' : 'shots') : 'check';
       case 'app':
       case 'shots': return 'shots';
-      case 'ablation': return 'ablation';
       case 'factcheck': return 'facts';
       case 'voicing': return 'voice';
       default: return undefined;
     }
   };
   let currentIdx = -1;
-  let afterAblation = false;
   for (const s of stages) {
-    if (s.stage === 'ablation') afterAblation = true;
-    const step = stageStep(s.stage, s, afterAblation);
+    const step = stageStep(s.stage, s);
     if (step) currentIdx = Math.max(currentIdx, order.indexOf(step));
   }
 
@@ -192,23 +181,23 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   if (outcome) {
     shotsStatus = OUTCOME_STATUS[outcome.code];
     shotsDetail = outcome.message;
-    // Work that still belongs to the screenshot stage after the verdict (measuring, revising, checking the text).
-    const busy = !done && lastStage && (lastStage.stage === 'shots' || (lastStage.stage === 'repairing' && !isFactCheck(lastStage.label) && !seen.has('ablation')));
-    if (busy && outcome.code === 'ok') shotsDetail = plainStageLabel(lastStage.label);
+    // Work that still belongs to the screenshot stage after the verdict (a repair, extra frames).
+    // Only a stage that started after the verdict: "Screenshots taken by Bob" comes just before it.
+    const afterVerdict = lastStage !== undefined && events.lastIndexOf(lastStage) > events.lastIndexOf(outcome);
+    const busy = !done && lastStage && afterVerdict && (lastStage.stage === 'shots' || (lastStage.stage === 'repairing' && !isFactCheck(lastStage.label)));
+    if (busy && outcome.code === 'ok') shotsDetail = lastStage.label;
   } else if (planned === false) {
     shotsStatus = 'skipped';
     shotsDetail = plan?.shots.reason;
   } else if (inShots) {
     shotsStatus = done ? 'done' : 'current';
-    const raw = labelOf('shots') ?? labelOf('app');
-    shotsDetail = raw === undefined ? undefined : plainStageLabel(raw);
+    shotsDetail = labelOf('shots') ?? labelOf('app');
   } else if (planned === true) {
     shotsStatus = 'pending';
     shotsDetail = 'planned — this app can be started';
   }
 
-  // The ablation takes 2 builds per changed hunk, about a minute each: say which build it is on, and how long is left.
-  const running = !done && lastStage && lastStage.stage === 'shots' ? ablationProgress(lastStage.label) : undefined;
+  // The verifier replays each scenario on both versions: a counted row, so a long stage never looks frozen.
   const replaying = !done && lastStage && lastStage.stage === 'shots' ? scenarioProgress(lastStage.label) : undefined;
   let shotsProgress: StepView['progress'];
   if (replaying) {
@@ -216,28 +205,8 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     shotsDetail = `Trying the scenario on the old and the new version${replaying.n > 1 ? ` — ${replaying.k} of ${replaying.n}` : ''}`;
     shotsStatus = 'current';
   }
-  if (running) {
-    shotsProgress = { done: running.k - 1, total: running.n };
-    const left = running.n - running.k + 1;
-    shotsDetail = `Testing which changes fix the bug — build ${running.k} of ${running.n}, about ${left} min left`;
-    shotsStatus = 'current'; // the verdict is in, but the row is still working: keep it pulsing
-  }
-  // Newer servers send the ablation as its own stage; older recordings carry the same labels under "shots" (handled above).
-  const inAblationRow = !done && lastStage && (lastStage.stage === 'ablation' || (lastStage.stage === 'repairing' && !isFactCheck(lastStage.label) && seen.has('ablation')));
-  const ablationBuild = inAblationRow && lastStage.stage === 'ablation' ? ablationProgress(lastStage.label) : undefined;
-  let ablationRowDetail: string | undefined;
-  let ablationRowProgress: StepView['progress'];
-  if (ablationBuild) {
-    ablationRowProgress = { done: ablationBuild.k - 1, total: ablationBuild.n };
-    ablationRowDetail = `Build ${ablationBuild.k} of ${ablationBuild.n}, about ${ablationBuild.n - ablationBuild.k + 1} min left`;
-  } else if (inAblationRow) {
-    ablationRowDetail = plainStageLabel(lastStage.label);
-  }
-  const legacyAblation = stages.some((s) => s.stage === 'shots' && (ablationProgress(s.label) !== undefined || /^Measured \d+ change/.test(s.label)));
-  const showAblation = seen.has('ablation') || (!done && !legacyAblation && (plan?.estimate?.ablationBuilds ?? 0) > 0);
-  // What follows the ablation is known, so name it while it is still ahead: the fact check and the voice-over.
-  const ablationSeen = legacyAblation || seen.has('ablation');
-  const expectAfter = !done && (outcome?.code === 'ok' || ablationSeen);
+  // What follows the screenshots is known, so name it while it is still ahead: the fact check and the narration.
+  const expectAfter = !done && outcome?.code === 'ok';
   // The narration is recorded on every run, screenshots or not: the plan says so from the first second.
   const showVoice = seen.has('voicing') || (!done && (plan?.voice ? plan.voice.planned : expectAfter));
 
@@ -247,7 +216,6 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     { id: 'read', label: 'Reading the code', status: 'pending' },
     { id: 'check', label: 'Checking the story', status: 'pending' },
     { id: 'shots', label: 'Screenshots', status: shotsStatus ?? 'pending' },
-    { id: 'ablation', label: 'Finding the critical changes', status: 'pending' },
     { id: 'facts', label: 'Fact-checking the explanation', status: 'pending' },
     { id: 'voice', label: 'Recording the narration', status: 'pending' },
   ];
@@ -266,7 +234,6 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   for (const st of base) {
     // Old recordings have no screenshot row unless a screenshot stage ran; the voice row exists only when voicing ran.
     if (st.id === 'shots' && shotsStatus === undefined) continue;
-    if (st.id === 'ablation' && !showAblation) continue;
     if (st.id === 'facts' && !seen.has('factcheck') && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
     if (st.id === 'voice' && !showVoice) continue;
     const idx = order.indexOf(st.id);
@@ -283,10 +250,6 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
       row.status = 'current';
       if (detail[st.id]) row.detail = detail[st.id];
       if (st.id === 'read' && writingBar) row.progress = writingBar;
-      if (st.id === 'ablation') {
-        if (ablationRowDetail) row.detail = ablationRowDetail;
-        if (ablationRowProgress) row.progress = ablationRowProgress;
-      }
     }
     steps.push(row);
   }
@@ -309,7 +272,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   const shotsLog: string[] = [];
   if (inShots) {
     events.slice(Math.max(0, firstShots)).forEach((e) => {
-      if (e.kind === 'stage' && (e.stage === 'app' || e.stage === 'shots' || e.stage === 'ablation')) shotsLog.push(feedLabel(e.label));
+      if (e.kind === 'stage' && (e.stage === 'app' || e.stage === 'shots')) shotsLog.push(e.label);
       else if (e.kind === 'tool') {
         const line = plainTool(e.tool, e.target);
         if (shotsLog[shotsLog.length - 1] !== line) shotsLog.push(line);
@@ -337,7 +300,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     },
     ...(cost ? { costUsd: cost.costUsd, ...(cost.maxCostUsd !== undefined ? { maxCostUsd: cost.maxCostUsd } : {}) } : {}),
     subagents: tools.filter((t) => t.tool === 'spawn_subagent').length,
-    elapsedMs: events.reduce((m, e) => Math.max(m, e.t), 0),
+    elapsedMs: all.reduce((m, e) => Math.max(m, e.t), 0),
     ...(done ? { done } : {}),
     ...(error ? { error: error.message } : {}),
   };

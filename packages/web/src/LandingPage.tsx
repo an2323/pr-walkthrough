@@ -184,7 +184,7 @@ export function LandingPage() {
       <Analysed cards={cards} />
 
       <p className="lp-numbers">
-        <span><b>15–25 min</b> per new PR</span>
+        <span><b>10–20 min</b> per new PR</span>
         <span><b>about $2–5</b> each</span>
       </p>
 
@@ -321,7 +321,7 @@ function PrInput() {
       </div>
       {error && <p className="lp-error" role="alert">{error}</p>}
       {pv.kind === 'idle' && !STATIC && (
-        <p className="lp-micro">New analysis: about 15–25 minutes. Already analysed PRs open instantly.</p>
+        <p className="lp-micro">New analysis: about 10–20 minutes. Already analysed PRs open instantly.</p>
       )}
       {STATIC && <p className="lp-micro">Demo: finished walkthroughs below open here; new PRs need a local/server build.</p>}
       <PreviewLine pv={pv} />
@@ -370,7 +370,7 @@ function PreviewLine({ pv }: { pv: PreviewState }) {
         ) : (
           <span className="lp-pv-warn">○ Walkthrough only — {p.screenshots.reason ?? "screenshots aren't set up for this repository."}</span>
         )}
-        <span>15–25 min · about $2–5</span>
+        <span>10–20 min · about $2–5</span>
       </span>
     </div>
   );
@@ -387,13 +387,13 @@ function TryIntro() {
   );
 }
 
-/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (15–25 min). */
+/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (10–20 min). */
 function Suggested({ onPick }: { onPick: (url: string) => void }) {
   return (
     <div className="lp-suggest">
       {SUGGESTED_PRS.length > 0 && (
         <>
-          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 15–25 minutes)</span></p>
+          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 10–20 minutes)</span></p>
           <div className="lp-picks">
             {SUGGESTED_PRS.map((p) => (
               <button key={p.url} type="button" className="lp-pick" onClick={() => { track(`pick-suggested ${p.label}`); onPick(p.url); }}>

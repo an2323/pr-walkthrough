@@ -3,11 +3,11 @@
  * fake-run-stream.mjs — plays a whole analysis run for the progress screen, for $0, nothing paid, nothing deployed.
  *
  * It answers GET /api/jobs/<any id>/events with the events a real run sends (plan with estimate, files, reading,
- * writing, scenario, screenshots with counted replays, frames, outcome, ablation builds, fact check, narration,
+ * writing, scenario, screenshots with counted replays, frames, outcome, fact check, narration,
  * done), at SPEED times real speed. Everything else (/data/..., other /api/...) is served from this repo's data
  * folder or passed on to the live site, so the viewer that opens at the end works too.
  *
- *   node packages/server/scripts/fake-run-stream.mjs            # listens on :3001, SPEED=6 (a 23-minute run in ~4 min)
+ *   node packages/server/scripts/fake-run-stream.mjs            # listens on :3001, SPEED=6 (a 16-minute run in ~3 min)
  *   API_TARGET=http://localhost:3001 pnpm --filter @pr-walkthrough/web exec vite --port 5173
  *   open http://localhost:5173/excalidraw/excalidraw/10295/progress?job=fake
  *
@@ -37,7 +37,7 @@ const T = [];
 const at = (s, e) => T.push([s, e]);
 
 at(0, { kind: 'stage', stage: 'clone', label: 'Checked out the PR' });
-at(4, { kind: 'plan', pr: PR, shots: { planned: true }, voice: { planned: true }, estimate: { minMinutes: 16, maxMinutes: 29, ablationBuilds: 10, coldInstall: true } });
+at(4, { kind: 'plan', pr: PR, shots: { planned: true }, voice: { planned: true }, estimate: { minMinutes: 10, maxMinutes: 19, ablationBuilds: 0, coldInstall: true } });
 at(6, { kind: 'stage', stage: 'hunks', label: '5 hunks' });
 at(7, { kind: 'files', files: FILES.map((path, i) => ({ path, additions: 4 - (i % 3), deletions: 1 + (i % 2), skipped: i === 3 })) });
 at(10, { kind: 'stage', stage: 'analyzing', label: 'Bob is analysing the PR' });
@@ -61,17 +61,11 @@ at(640, { kind: 'stage', stage: 'shots', label: 'Trying "Open the main menu whil
 at(700, { kind: 'stage', stage: 'shots', label: 'Trying "Sidebar closes by itself" on the old and the new version (2 of 2)' });
 at(760, { kind: 'frames', before: 'before-annotated.png', after: 'after-annotated.png', caption: 'Same clicks, both versions' });
 at(762, { kind: 'outcome', what: 'shots', code: 'ok', message: 'The bug reproduced at the old commit and is gone at the new one.' });
-at(770, { kind: 'stage', stage: 'ablation', label: 'Testing which changes fix the bug' });
-for (let k = 1; k <= 10; k++) {
-  at(775 + (k - 1) * 60, { kind: 'stage', stage: 'ablation', label: `Testing "${FILES[k % 2]}#${1 + (k % 3)}" alone (${k} of 10, about a minute each)` });
-  if (k % 3 === 0) at(775 + (k - 1) * 60 + 30, { kind: 'cost', costUsd: 2.0 + k * 0.12 });
-}
-at(1380, { kind: 'stage', stage: 'ablation', label: 'Measured 5 change(s) against the running app' });
-at(1392, { kind: 'stage', stage: 'factcheck', label: 'Fact-checking the explanation — comparing what the text says with what the app actually did' });
-at(1450, { kind: 'stage', stage: 'factcheck', label: 'Fixed 1 statement(s) the app contradicted' });
-at(1460, { kind: 'stage', stage: 'voicing', label: 'Recording the narration' });
-at(1520, { kind: 'cost', costUsd: 3.4 });
-at(1560, { kind: 'done', walkthroughUrl: '/excalidraw/excalidraw/10295', durationMs: 1560_000, costUsd: 3.4, toolCalls: 11, subagents: 1 });
+at(772, { kind: 'stage', stage: 'factcheck', label: 'Fact-checking the explanation — comparing what the text says with what the app actually did' });
+at(830, { kind: 'stage', stage: 'factcheck', label: 'Fixed 1 statement(s) the app contradicted' });
+at(840, { kind: 'stage', stage: 'voicing', label: 'Recording the narration' });
+at(900, { kind: 'cost', costUsd: 3.4 });
+at(940, { kind: 'done', walkthroughUrl: '/excalidraw/excalidraw/10295', durationMs: 940_000, costUsd: 3.4, toolCalls: 11, subagents: 1 });
 
 const jobs = new Map(); // id → start time (the run starts when the first viewer connects)
 
@@ -117,4 +111,4 @@ http.createServer((req, res) => {
     }
   }
   return fallback(req, res);
-}).listen(PORT, () => console.log(`fake run on :${PORT} (SPEED ${SPEED}x, ~${Math.round(1560 / SPEED / 60)} min). Open …/progress?job=fake`));
+}).listen(PORT, () => console.log(`fake run on :${PORT} (SPEED ${SPEED}x, ~${Math.round(940 / SPEED / 60)} min). Open …/progress?job=fake`));
