@@ -12,7 +12,7 @@
 import type { Walkthrough } from "@pr-walkthrough/shared";
 
 import { formatReport, reportFailed, reportWalkthrough, type ReportLine } from "../src/validation/run-report.js";
-import { pngDimensions } from "../src/shots/frames.js";
+import { isPhoneSize, pngDimensions } from "../src/shots/frames.js";
 import { OUTRO_NARRATION, OUTRO_STEP_ID, splitSentences } from "../src/tts/elevenlabs.js";
 
 const arg = (name: string): string | undefined => {
@@ -55,6 +55,19 @@ for (const src of frames) {
   }
 }
 lines.push({ ok: broken.length === 0, level: "fail", check: `all ${frames.size} frame(s) load`, ...(broken.length ? { detail: broken.join(", ") } : {}) });
+// The start screen's pair: a phone frame there is only right for a phone-only change (#10295 once lost its
+// desktop pair to a verifier that moved every scenario to a phone viewport — nothing else flagged it).
+if (wt.shots?.before?.src) {
+  const r = await fetch(`${site}/data/shots/${owner}/${repo}/${number}/${wt.shots.before.src}`, { redirect: "follow" });
+  const d = r.ok ? pngDimensions(Buffer.from(await r.arrayBuffer())) : null;
+  const phone = !!d && isPhoneSize(d.width, d.height);
+  lines.push({
+    ok: !phone,
+    level: "warn",
+    check: "main before/after pair is a desktop frame",
+    ...(phone ? { detail: `${wt.shots.before.src} is ${d!.width}×${d!.height} — right only if the change shows on phones alone` } : {}),
+  });
+}
 lines.push({ ok: badLook.length === 0, level: "fail", check: "frames are readable (size and proportions)", ...(badLook.length ? { detail: badLook.join("; ") } : {}) });
 
 if (audio) {

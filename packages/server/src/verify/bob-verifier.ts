@@ -207,9 +207,12 @@ backend measure each fix separately.
      in; the same logic must work no matter which build is running there;
    - also put in \`measure\` every visible claim its symptom text makes, measured the same way on both
      builds — which element is on top where two overlap (\`document.elementFromPoint\` at a point both
-     cover), what is open or closed, where something sits — at the viewport the text talks about ("on
-     phones" → a phone viewport). The walkthrough's text is checked against these values afterwards; a
-     claim you don't measure stays unchecked;
+     cover), what is open or closed, where something sits. A claim the text makes only "on phones" is
+     measured with an EXTRA phone-sized page inside the same script (\`browser.newPage({ viewport: { width:
+     390, height: 844 } })\`), recorded under its own key — it never moves the scenario itself to a phone:
+     a scenario whose change shows on desktop keeps its desktop viewport and screenshot (that is the main
+     before/after pair). The walkthrough's text is checked against these values afterwards; a claim you
+     don't measure stays unchecked;
    - if argv[3] is given, save a screenshot there, and also return the highlights (see "Highlights" below);
    - print EXACTLY ONE line of JSON as your last line of output:
      \`{"bugPresent": true, "measure": {...the numbers you used...}, "highlights": [...]}\`
