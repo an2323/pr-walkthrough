@@ -21,3 +21,4 @@ deploy/.env
 deploy/.env.production
 data/vm-runs/
 .preflight-ok
+docs/video/music/*.mp3
