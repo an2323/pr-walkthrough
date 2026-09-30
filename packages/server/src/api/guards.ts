@@ -24,31 +24,26 @@ export class GuardError extends Error {
   }
 }
 
-export function accessCodeRequired(): boolean {
-  return Boolean(process.env.ACCESS_CODE?.trim());
-}
-
 /** Paid runs allowed per rolling 24 h (ANALYZE_DAILY_LIMIT, default 5; 0 = no limit). */
 export function dailyLimit(): number {
   return Number(process.env.ANALYZE_DAILY_LIMIT ?? 5);
 }
 
-/** Shared invite code — typed by the user on the landing page (body.accessCode) or header x-access-code. */
-export function assertAccessCode(req: {
-  body?: { accessCode?: unknown };
-  header(name: string): string | undefined;
-}): void {
+/**
+ * Admin key (env ACCESS_CODE). Ordinary analyses need no code — anyone may start one, within the daily limit and the
+ * overall budget cap. The key guards the two things a visitor must never do: `force` (re-run and OVERWRITE a finished
+ * walkthrough) and rehearsals (they occupy the machine). Unset = those two are refused.
+ */
+export function adminKeyOk(req: { body?: { accessCode?: unknown }; header(name: string): string | undefined }): boolean {
   const expected = process.env.ACCESS_CODE?.trim();
-  if (!expected) return;
+  if (!expected) return false;
   const got =
     (typeof req.body?.accessCode === "string" ? req.body.accessCode : undefined)?.trim() ||
     req.header("x-access-code")?.trim() ||
     "";
   const a = Buffer.from(got);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    throw new GuardError("Invalid or missing access code", 401);
-  }
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export async function assertDailyLimit(usedLast24h: number): Promise<void> {

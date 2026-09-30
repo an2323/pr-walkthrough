@@ -29,3 +29,9 @@ copy the live run's events over `data/events/excalidraw/excalidraw/10295.ndjson`
 `docs/video/out/voice-cache`. The music is a fixed envelope: full level, a dip under the presenter, almost silent
 for the whole stretch where the site's own narration plays. To replace the video: record, then copy the mp4 and a
 frame (`ffmpeg -ss 29 -i demo.mp4 -frames:v 1 poster.jpg`) into `packages/web/public/demo/`.
+
+### Splicing a re-filmed scene (no full re-record)
+`record-demo-video.ts --only viewer --cut 45 --out <dir>` films just the finished walkthrough (Start → Next → Listen, the site's own
+narration, Pause at the Nth sentence) and writes `voices-viewer.json`. `assemble-demo-video.ts` then cuts the first N seconds of an
+earlier video, appends that scene and mixes the sound again (same music envelope). The current demo is the first 29.4 s of the
+previous cut (landing → paste → Analyse → the analysis, ending as the before/after appears) + the stacking-diagram step.

@@ -31,17 +31,8 @@ import { resolveRecipe } from "../verify/recipes.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
 import { runAnalyzeJob } from "./analyze-pipeline.js";
-import { GuardError, assertAccessCode, assertAnalyzablePr, assertDailyLimit, accessCodeRequired, dailyLimit } from "./guards.js";
+import { GuardError, adminKeyOk, assertAnalyzablePr, assertDailyLimit, dailyLimit } from "./guards.js";
 import { blobExists, blobsEnabled, fetchBlobText, publicUrl, uploadBlob } from "../blobs.js";
-
-function accessCodeOk(req: Request): boolean {
-  try {
-    assertAccessCode(req);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** Origin the browser used (behind Caddy: X-Forwarded-*). */
 function publicBaseUrl(req: Request): string {
@@ -144,7 +135,6 @@ router.get("/config", async (_req: Request, res: Response): Promise<void> => {
   const analyzer = process.env.ANALYZER ?? "cached";
   res.json({
     liveAnalysis: analyzer === "bob",
-    accessCodeRequired: accessCodeRequired(),
     dailyLimit: dailyLimit(),
     usedToday: analyzer === "bob" ? await countJobsSince(24 * 60 * 60 * 1000) : 0,
   });
@@ -187,8 +177,8 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "plan must look like analysis=critical,verifier=broken" });
       return;
     }
-    if (!accessCodeOk(req)) {
-      res.status(401).json({ error: "Invalid or missing access code" });
+    if (!adminKeyOk(req)) {
+      res.status(401).json({ error: "Rehearsals need the admin key" });
       return;
     }
     const busy = findActiveJob();
@@ -202,7 +192,7 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const force = (req.body as { force?: unknown }).force === true && accessCodeOk(req);
+  const force = (req.body as { force?: unknown }).force === true && adminKeyOk(req);
   const alreadyDone = !force && (await loadWalkthrough(owner, repo, number)) !== null;
 
   // Everything below spends Bobcoins, so it is gated; an existing walkthrough is free to open.
@@ -224,7 +214,6 @@ router.post("/analyze", async (req: Request, res: Response): Promise<void> => {
     startingPaidJob = true;
     reserved = true;
     try {
-      assertAccessCode(req);
       await assertDailyLimit(await countJobsSince(24 * 60 * 60 * 1000));
       await assertAnalyzablePr(owner, repo, number);
     } catch (err) {

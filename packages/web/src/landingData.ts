@@ -14,7 +14,7 @@ export interface SuggestedPr {
 
 /** Small, recent, visible UI fixes in Excalidraw. Each was checked with scripts/warm-app.ts (both commits install and the app loads, 2026-09-30); that does not prove a run reproduces the bug. */
 export const SUGGESTED_PRS: SuggestedPr[] = [
-  { url: 'https://github.com/excalidraw/excalidraw/pull/11680', label: '#11680 scroll-back button on mobile', size: '+60 −53' },
-  { url: 'https://github.com/excalidraw/excalidraw/pull/11286', label: '#11286 duplicate lasso toolbar item', size: '+30 −7' },
-  { url: 'https://github.com/excalidraw/excalidraw/pull/10880', label: '#10880 spacing in the left menu', size: '+1 −1' },
+  { url: 'https://github.com/excalidraw/excalidraw/pull/11680', label: '#11680 scroll-back button', size: '+60 −53' },
+  { url: 'https://github.com/excalidraw/excalidraw/pull/11286', label: '#11286 duplicate lasso item', size: '+30 −7' },
+  { url: 'https://github.com/excalidraw/excalidraw/pull/10880', label: '#10880 left-menu spacing', size: '+1 −1' },
 ];

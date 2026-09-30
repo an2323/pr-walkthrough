@@ -55,7 +55,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 BOB_API_KEY=...
 GITHUB_TOKEN=...                         # read-only PAT: PR metadata + rate limits
 
-ACCESS_CODE=...                          # typed by users on the landing page
+ACCESS_CODE=...                          # ADMIN key: needed only for `force` re-runs and rehearsals (analyses need no code)
 ANALYZE_DAILY_LIMIT=5                    # paid runs per rolling 24 h
 BOB_BUDGET_USD=40                        # total cap across all runs (ledger in Postgres)
 MAX_PR_FILES=80
@@ -131,7 +131,7 @@ curl -s https://$SITE_ADDRESS/health
 ```
 
 Open `https://$SITE_ADDRESS/`: the example cards load from Supabase; paste a small
-Excalidraw PR, enter the access code, watch the progress screen.
+Excalidraw PR, press Analyse, watch the progress screen (no code needed; `force` and rehearsals use ACCESS_CODE).
 
 ## Operations
 

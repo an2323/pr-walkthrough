@@ -43,7 +43,6 @@ interface RecentWalkthrough {
 /** GET /api/config — what the live server allows. */
 interface ServerConfig {
   liveAnalysis: boolean;
-  accessCodeRequired: boolean;
   dailyLimit: number;
   usedToday: number;
 }
@@ -67,8 +66,6 @@ type PreviewState =
   | { kind: 'notPr' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; preview: PrPreview };
-
-const ACCESS_CODE_KEY = 'prw-access-code';
 
 /** Static demo build: no API, so the finished walkthroughs are the files it ships. */
 const STATIC_EXAMPLES = [
@@ -184,7 +181,6 @@ export function LandingPage() {
       <p className="lp-numbers">
         <span><b>~10 min</b> per new PR</span>
         <span><b>under $2</b> each</span>
-        <span><b>access code</b> for new analyses</span>
       </p>
 
       <footer className="lp-footer">
@@ -204,7 +200,6 @@ function PrInput() {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [config, setConfig] = useState<ServerConfig | null>(null);
-  const [accessCode, setAccessCode] = useState(() => localStorage.getItem(ACCESS_CODE_KEY) ?? '');
   const [pv, setPv] = useState<PreviewState>({ kind: 'idle' });
   const seq = useRef(0);
 
@@ -279,26 +274,18 @@ function PrInput() {
       setStarting(false);
       return;
     }
-    if (config?.accessCodeRequired && !accessCode.trim()) {
-      setError('Enter the access code to start a new analysis.');
-      setStarting(false);
-      return;
-    }
-
     try {
       const res = await fetch(apiUrl('/api/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl: input.trim(), ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}) }),
+        body: JSON.stringify({ prUrl: input.trim() }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}) as { error?: string });
-        if (res.status === 401) localStorage.removeItem(ACCESS_CODE_KEY);
-        setError(res.status === 401 ? 'Wrong access code.' : body.error ?? `Could not start the analysis (HTTP ${res.status})`);
+        setError(body.error ?? `Could not start the analysis (HTTP ${res.status})`);
         setStarting(false);
         return;
       }
-      if (accessCode.trim()) localStorage.setItem(ACCESS_CODE_KEY, accessCode.trim());
       const { jobId } = (await res.json()) as { jobId: string };
       window.location.href = `${viewerPath(parsed)}/progress?job=${jobId}`;
     } catch {
@@ -307,7 +294,6 @@ function PrInput() {
     }
   }
 
-  const showAccess = !STATIC && !!config?.liveAnalysis && config.accessCodeRequired && !analysed;
   const go = () => void handleGo();
 
   return (
@@ -327,32 +313,18 @@ function PrInput() {
           {starting ? 'Starting…' : analysed ? 'Open now →' : 'Analyse →'}
         </button>
       </div>
-      {showAccess && (
-        <div className="lp-input-row lp-input-row--access">
-          <input
-            className="lp-input"
-            type="password"
-            placeholder="Access code (new analyses only)"
-            value={accessCode}
-            onChange={(e) => { setAccessCode(e.target.value); setError(''); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') go(); }}
-            aria-label="Access code"
-            autoComplete="off"
-          />
-        </div>
-      )}
       {error && <p className="lp-error" role="alert">{error}</p>}
       {pv.kind === 'idle' && !STATIC && (
-        <p className="lp-micro">New analysis: ~10 min{config?.accessCodeRequired ? ', needs an access code' : ''}. Already analysed PRs open instantly.</p>
+        <p className="lp-micro">New analysis: ~10 min. Already analysed PRs open instantly.</p>
       )}
       {STATIC && <p className="lp-micro">Demo: finished walkthroughs below open here; new PRs need a local/server build.</p>}
-      <PreviewLine pv={pv} accessCodeRequired={!!config?.accessCodeRequired} />
+      <PreviewLine pv={pv} />
       {!STATIC && <Suggested onPick={(u) => setInput(u)} />}
     </div>
   );
 }
 
-function PreviewLine({ pv, accessCodeRequired }: { pv: PreviewState; accessCodeRequired: boolean }) {
+function PreviewLine({ pv }: { pv: PreviewState }) {
   if (pv.kind === 'idle') return null;
   if (pv.kind === 'loading') return <div className="lp-pv" aria-live="polite"><span className="lp-pv-quiet">Looking that up…</span></div>;
   if (pv.kind === 'notPr') {
@@ -392,7 +364,7 @@ function PreviewLine({ pv, accessCodeRequired }: { pv: PreviewState; accessCodeR
         ) : (
           <span className="lp-pv-warn">○ Walkthrough only — {p.screenshots.reason ?? "screenshots aren't set up for this repository."}</span>
         )}
-        <span>~10 min · under $2{accessCodeRequired ? ' · needs the access code' : ''}</span>
+        <span>~10 min · under $2</span>
       </span>
     </div>
   );
@@ -401,21 +373,21 @@ function PreviewLine({ pv, accessCodeRequired }: { pv: PreviewState; accessCodeR
 function TryIntro() {
   return (
     <p className="lp-try-lead">
-      Paste a public GitHub PR. We recommend a <b>UI-bug fix in Excalidraw</b>: we can start that app, so Bob runs it before and
-      after and you get screenshots.{' '}
-      <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">Browse Excalidraw UI-fix PRs ↗</a>
-      {' '}Or skip the wait and <a href="#analysed">open one that is already analysed ↓</a>
+      Paste a public GitHub PR. Best: a <b>UI-bug fix in Excalidraw</b> — Bob runs it before and after and you get screenshots.{' '}
+      <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">Browse UI-fix PRs ↗</a>
+      {' · '}
+      <a href="#analysed">or open one that is already analysed ↓</a>
     </p>
   );
 }
 
-/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (~10 min, access code). */
+/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (~10 min). */
 function Suggested({ onPick }: { onPick: (url: string) => void }) {
   return (
     <div className="lp-suggest">
       {SUGGESTED_PRS.length > 0 && (
         <>
-          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 10 minutes, needs the access code)</span></p>
+          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 10 minutes)</span></p>
           <div className="lp-picks">
             {SUGGESTED_PRS.map((p) => (
               <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
@@ -439,20 +411,30 @@ function Suggested({ onPick }: { onPick: (url: string) => void }) {
 
 function DemoVideo() {
   const [failed, setFailed] = useState(false);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLVideoElement>(null);
   if (STATIC || failed) return null;
   return (
     <div className="lp-demo" id="demo">
       <video
+        ref={ref}
         className="lp-video"
         controls
         preload="metadata"
         playsInline
         poster="/demo/pr-walkthrough-demo-poster.jpg"
         aria-label="One-minute demo: a PR pasted, analysed and explained"
+        onPlay={() => setStarted(true)}
         onError={() => setFailed(true)}
       >
         <source src="/demo/pr-walkthrough-demo.mp4" type="video/mp4" onError={() => setFailed(true)} />
       </video>
+      {!started && (
+        <button type="button" className="lp-play" onClick={() => void ref.current?.play()} aria-label="Play the one-minute demo">
+          <span className="lp-play-disc" aria-hidden="true">▶</span>
+          <span className="lp-play-label">Watch the demo · 1 min</span>
+        </button>
+      )}
     </div>
   );
 }

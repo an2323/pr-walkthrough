@@ -35,6 +35,8 @@ const VOICE_KIND = arg("voice", "eleven");
 const VOICE_ID = arg("voice-id", "EXAVITQu4vr4xnSDxMaL");
 const SAY_VOICE = arg("say-voice", "Daniel (Enhanced)");
 const VO_ON = VOICE_KIND !== "off";
+// --only viewer: film just the finished walkthrough (Start → Next → Listen), for splicing onto footage recorded earlier.
+const ONLY = arg("only", "");
 const SPEED = Number(arg("speed", "0.84")); // presenter pace (ElevenLabs speed 0.7–1.2); the default reads clearly and slowly
 const ENV_FILE = arg("env", "");
 if (ENV_FILE) process.loadEnvFile(path.resolve(ENV_FILE));
@@ -198,7 +200,7 @@ async function main(): Promise<void> {
   //      and that job's event stream IS the recorded real run, replayed at `speed`. Everything else is the site. ----
   let staged = true;
   const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
-  await page.route("**/api/config", (r) => r.fulfill(json({ liveAnalysis: true, accessCodeRequired: false, dailyLimit: 20, usedToday: 3 })));
+  await page.route("**/api/config", (r) => r.fulfill(json({ liveAnalysis: true, dailyLimit: 20, usedToday: 3 })));
   await page.route("**/api/preview*", (r) =>
     staged
       ? r.fulfill(json({ owner: PR.owner, repo: PR.repo, number: PR.number, analysed: false, title: "fix: close floating sidebar on main menu open", additions: 19, deletions: 7, files: 5, screenshots: { available: true } }))
@@ -229,12 +231,14 @@ async function main(): Promise<void> {
   }
 
   // ---- go --------------------------------------------------------------------------------
-  await page.goto(SITE + "/", { waitUntil: "networkidle" });
+  await page.goto(ONLY === "viewer" ? `${SITE}/${PR.owner}/${PR.repo}/${PR.number}` : SITE + "/", { waitUntil: "networkidle" });
   await page.mouse.move(W * 0.72, H * 0.3);
   await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: Math.round(W * SCALE), maxHeight: Math.round(H * SCALE), everyNthFrame: 1 });
   t0 = Date.now();
   mark("landing");
 
+  let l7 = 0;
+  if (ONLY !== "viewer") {
   // 1 — the page
   const l1 = await narrate("Bob reads the whole PR — and runs it.");
   await sleep(Math.max(CUT === 45 ? 3400 : 2400, (l1 - now()) * 1000 + 300));
@@ -269,15 +273,22 @@ async function main(): Promise<void> {
     await sleep(200);
   }
   mark("done");
-  const l7 = await narrate("Done. The screenshots come from the running app.", CUT === 45);
+  l7 = await narrate("Done. The screenshots come from the running app.", CUT === 45);
   staged = false;
   await page.waitForURL(new RegExp(`/${PR.owner}/${PR.repo}/${PR.number}$`), { timeout: 15000 });
   await page.waitForLoadState("networkidle");
+  }
 
   // 5 — the finished walkthrough, read aloud by the site itself: press "Listen" and let it play (Auto mode)
   mark("viewer");
-  const l8 = await narrate("And then it explains every change, read aloud.");
+  const l8 = await narrate(ONLY === "viewer" ? "Then it explains every change: the diagram and the code, read aloud." : "And then it explains every change, read aloud.");
   await sleep(Math.max(1200, (Math.max(l7, l8) - now()) * 1000 + 350)); // the presenter finishes before the site starts talking
+  if (ONLY === "viewer") {
+    await click('button:has-text("Start")');
+    await sleep(1100); // the first step: the symptoms
+    await click('button:has-text("Next")');
+    await sleep(900); // the stacking diagram and the code
+  }
   await click(".listen");
   await sleep(700);
   mark("listen");
@@ -352,6 +363,11 @@ async function main(): Promise<void> {
     const clashes = spans.flatMap((x, i) => (spans[i + 1] && spans[i + 1]!.a < x.b - 0.05 ? [`${x.file} (${x.a.toFixed(1)}–${x.b.toFixed(1)}) overlaps ${spans[i + 1]!.file} (from ${spans[i + 1]!.a.toFixed(1)})`] : []));
     if (clashes.length > 0) throw new Error(`voices overlap:\n${clashes.join("\n")}`);
     console.log(`voices: ${spans.length} clips, no overlap; last ends at ${spans.at(-1)!.b.toFixed(1)} s of ${vdur.toFixed(1)} s`);
+  }
+  if (ONLY === "viewer") {
+    writeFileSync(path.join(OUT, `voices-${ONLY}.json`), JSON.stringify({ videoSeconds: vdur, ttsWindow, voices: voIn }, null, 2));
+    console.log(`viewer scene: ${video} + voices-${ONLY}.json (work folder kept: ${work})`);
+    return;
   }
   MUSIC.forEach((music, idx) => {
     const name = path.basename(music).replace(/\.mp3$/i, "").slice(0, 28);
