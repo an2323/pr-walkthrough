@@ -193,7 +193,6 @@ export function ProgressScreen({ owner, repo, number }: Props) {
 // ---------------------------------------------------------------------------------------------
 
 function Rail({ view, owner, repo, number, elapsed, quietMs }: { view: ProgressView; owner: string; repo: string; number: number; elapsed: number; quietMs: number }) {
-  const pct = view.costUsd !== undefined && view.maxCostUsd ? Math.min(100, (view.costUsd / view.maxCostUsd) * 100) : 0;
   return (
     <aside className="pg-rail" aria-label="Progress">
       <div className="pg-pr">
@@ -210,11 +209,7 @@ function Rail({ view, owner, repo, number, elapsed, quietMs }: { view: ProgressV
         {view.costUsd !== undefined && (
           <div className="pg-meter pg-meter--grow">
             <span>spent</span>
-            <b>
-              ${view.costUsd.toFixed(2)}
-              {view.maxCostUsd !== undefined && <small> / max ${Number(view.maxCostUsd.toFixed(2))}</small>}
-            </b>
-            {view.maxCostUsd !== undefined && <i className="pg-bar"><i style={{ width: `${pct}%` }} /></i>}
+            <b>${view.costUsd.toFixed(2)}</b>
           </div>
         )}
       </div>
