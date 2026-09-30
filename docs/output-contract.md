@@ -62,7 +62,8 @@ a reviewer under time pressure, so:
 - `step.minor` — true for a step that exists only for completeness (a supporting
   one-liner); minor steps are listed in the summary, never shown as their own screen.
 - `narration` (the field that already existed) is written to be **heard**, not read:
-  plain language, no identifiers, 2–4 sentences. `say` is the short on-screen version
+  plain language, no identifiers, 2–4 sentences and at most 75 words, no self-corrections
+  ("— wait, actually …": only the final, checked statement). `say` is the short on-screen version
   of the same idea, not a duplicate of the narration.
 
 ## When to use `visual.map`
@@ -126,7 +127,8 @@ can't decode counts as "unknown", never as "identical".
 
 Warnings only, computed from a finished `Walkthrough` (optionally the prompt-hunk
 count, for the step-budget check). The codes in `CRITICAL_QUALITY_CODES` — identifiers
-in plain-language fields, process talk in narration, the three length limits,
+in plain-language fields, process talk in narration, the three length limits (narration: 4
+sentences and 75 words), `thinking-aloud` (the writer correcting itself mid-text),
 `refers-to-screenshot` and the diagram rules below — get one automatic `--resume` repair pass in the live pipeline,
 so they no longer need hand-trimming; the structural ones (step count, map share, …)
 stay plain warnings:

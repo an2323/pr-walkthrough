@@ -234,7 +234,10 @@ A highlight is \`{x, y, w, h, label, pair}\`, x/y/w/h as fractions (0..1) of the
   sees the plain frame; the words are in the walkthrough text.
 - **label**: at most 5 plain words a non-engineer understands ("Sidebar still open", "Menu opened") — no
   property names, numbers, comparisons or sentences. It says what is wrong when \`bugPresent\` and what is fixed
-  when not. The backend places the label itself, in empty space next to the box — do not try to.
+  when not. It describes only what THIS frame shows, never what would happen otherwise: before writing
+  "under"/"over"/"behind", check which element is on top at a point both cover (\`document.elementFromPoint\`)
+  — a menu drawn above an open panel is "Menu and panel both open", not "Menu under panel".
+  The backend places the label itself, in empty space next to the box — do not try to.
 - **pair**: the box for the SAME element on the other build has the same "pair" id (\`"pair": "sidebar"\` in both
   runs). Every pair has its OWN id; two different boxes on one screenshot never share one.
 - **An element the fix removes** (a panel that now closes by itself): on the build where it is gone, you cannot

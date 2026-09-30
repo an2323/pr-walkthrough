@@ -94,7 +94,8 @@ Use it for the *searches* in the list above, not for deciding what they mean:
   mechanical or supporting edits — imports and exports (incl. re-exports and index/
   barrel files), renames, type tweaks that only make the new code compile, new
   constants or variables that merely hold a value, formatting, lockfiles and
-  generated files. Put those in `skippedHunks` with a short reason.
+  generated files. Put those in `skippedHunks` with a short reason — this includes a
+  type or signature widened only so the new code can read a value (not a `minor` step).
   Judge by role, not by kind: if a changed value, import or config line IS the fix
   (e.g. a z-index or a flag that changes behaviour), it is core logic and gets a step.
 - Never explain tests. Hunks in test files (unit, integration, e2e, snapshots, test
@@ -144,7 +145,10 @@ Do not annotate imports, renames, types or boilerplate.
   voice reads it, and `retryOnFailure` comes out as noise. Bad: "Without the
   flag, `retryOnFailure` fires and re-sends the upload." Good: "Without that setting,
   a failed upload quietly tries again and the file is sent twice."
-  Count the sentences: more than 4 is too long. **Never mention how a claim was
+  Count the sentences: more than 4 is too long, and so is more than 75 words — keep
+  the point, drop the least essential detail. Write only the final, checked statement:
+  never correct yourself inside the text ("below the menu at 90 — wait, actually above
+  both…"); check each number against the code before you write it. **Never mention how a claim was
   checked** — no "ablation", "measurement confirms", "the backend verified", or any
   other reference to the analysis process itself. The listener hears a plain
   explanation of the change, not a report on how it was produced; evidence for a

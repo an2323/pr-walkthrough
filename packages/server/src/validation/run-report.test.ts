@@ -13,9 +13,15 @@ const load = (n: number): Walkthrough =>
   JSON.parse(readFileSync(path.join(HERE, `../api/__fixtures__/excalidraw-${n}.live.json`), "utf-8"));
 
 describe("reportWalkthrough", () => {
-  it.each([10295, 10943])("the accepted live result of #%i passes", (n) => {
-    const lines = reportWalkthrough(load(n));
+  it("the accepted live result of #10943 passes", () => {
+    const lines = reportWalkthrough(load(10943));
     expect(reportFailed(lines), formatReport(lines)).toBe(false);
+  });
+
+  it("the live #10295 run fails on exactly what the comparison with the reference found", () => {
+    const failed = reportWalkthrough(load(10295)).filter((l) => !l.ok && l.level === "fail");
+    expect(failed.map((l) => l.check)).toEqual(["no critical quality warnings"]);
+    expect(failed[0].detail).toBe("s1: narration-too-long; s3: thinking-aloud; s6: narration-too-long");
   });
 
   it("fails a silent screenshot gap", () => {

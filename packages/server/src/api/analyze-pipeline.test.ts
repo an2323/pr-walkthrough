@@ -199,6 +199,17 @@ const { assembleDraft } = await import("../analyzer/assemble.js");
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 /** What Bob's analysis returns: the fixture without anything the backend adds later. */
+/** First sentences up to 60 words, with any "— wait, actually …" clause removed. */
+function cleanNarration(text: string): string {
+  const sentences = text.replace(/\s*—\s*wait,[^.]*\./gi, ".").split(/(?<=[.?!])\s+/);
+  const out: string[] = [];
+  for (const sn of sentences) {
+    if ((out.join(" ") + " " + sn).split(/\s+/).length > 60) break;
+    out.push(sn);
+  }
+  return out.join(" ") || sentences[0];
+}
+
 function bobDraft(mut?: (d: Walkthrough) => void): Record<string, unknown> {
   const d = clone(FIXTURE) as Partial<Walkthrough> & Record<string, unknown>;
   delete d.hunks;
@@ -209,6 +220,9 @@ function bobDraft(mut?: (d: Walkthrough) => void): Record<string, unknown> {
   for (const s of d.steps!) {
     delete s.evidence;
     if (s.visual?.type === "symptoms") s.visual.items = s.visual.items.map((i) => (typeof i === "string" ? i : i.text));
+    // A clean answer under today's rules: the recorded #10295 run broke two of them (a self-correction
+    // in s3, two steps over 75 words) — run-report.test.ts keeps that recording as the failing case.
+    s.narration = cleanNarration(s.narration ?? "");
   }
   d.meta = { analyzer: "bob-shell", generatedAt: "2026-09-29T00:00:00Z", language: "en" } as Walkthrough["meta"];
   mut?.(d as Walkthrough);

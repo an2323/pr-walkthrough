@@ -31,6 +31,8 @@ export const CRITICAL_QUALITY_CODES = new Set([
   "headline-too-long",
   "say-too-long",
   "narration-too-long",
+  // The model's own second thoughts ("… 90 — wait, actually above both …") read aloud by the voice.
+  "thinking-aloud",
   "refers-to-screenshot",
   // Diagram rules (see analyzer-prompt.md → Visuals): a diagram that breaks them is worse than none.
   "visual-label-identifier",
@@ -56,6 +58,17 @@ const CAMEL_OR_PASCAL = /\b[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*\b|\b[A-Z][a-z0-9]+[A-
 const CODE_FILE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|scss|css|json|py|go|rs|java|rb|kt|swift|yml|yaml|md)\b/i;
 const SNAKE_CASE = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b/;
 /** Narration must state a conclusion, never how it was checked (ST12's evidence loop). */
+/**
+ * The model correcting itself mid-sentence. Seen on a live #10295 run: "below the context menu at 90 —
+ * wait, actually above both context menu and top bar". Plain prose never needs these; the voice reads
+ * them out verbatim.
+ */
+const THINKING_ALOUD =
+  /(?:[—–,;:.(]\s*|^)(?:wait|hmm+|oops|er|um)\b|\bwait,? actually\b|\bactually,? (?:no|wait)\b|\b(?:I mean|let me (?:check|re-?check|see|think|correct)|scratch that|on second thought|correction:)/i;
+
+/** Narration is listened to: past this many words a step drags (the reference steps run 40–65). */
+const NARRATION_MAX_WORDS = 75;
+
 const PROCESS_WORDS = /\b(ablation|the measurement|measurement confirms|the backend (verified|confirmed)|verification confirms)\b/i;
 const PATH_SEGMENT = /\b[\w.-]+\/[\w.-]+\b/;
 /**
@@ -241,6 +254,9 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       if (SCREENSHOT_REF.test(text)) {
         warn("refers-to-screenshot", `${field} refers to a screenshot ("${text}") — screenshots are optional, the text must stand without them.`);
       }
+      if (THINKING_ALOUD.test(text)) {
+        warn("thinking-aloud", `${field} contains the writer correcting itself — state only the final, correct fact: "${text}"`);
+      }
     }
   }
 
@@ -273,8 +289,12 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
         warn("identifier-in-narration", `Step ${step.id}'s narration looks like it contains an identifier or file name — TTS will read it aloud: "${step.narration}"`, step.id);
       }
       const sentences = sentenceCount(step.narration);
+      const nWords = wordCount(step.narration);
       if (sentences > 4) {
         warn("narration-too-long", `Step ${step.id}'s narration has ${sentences} sentences (limit 4).`, step.id);
+      } else if (nWords > NARRATION_MAX_WORDS) {
+        // Four long sentences are still a minute of audio: the word limit catches what the count can't.
+        warn("narration-too-long", `Step ${step.id}'s narration is ${nWords} words (limit ${NARRATION_MAX_WORDS}) — keep the point, drop the least essential detail.`, step.id);
       }
       // ST12 evidence loop (bob-revise.ts): narration must read like every other
       // step's — the listener isn't told how a claim was checked.
@@ -294,6 +314,9 @@ export function checkQuality(walkthrough: Walkthrough): QualityWarning[] {
       );
     }
     for (const [field, text] of spoken) {
+      if (text && THINKING_ALOUD.test(text)) {
+        warn("thinking-aloud", `Step ${step.id}'s ${field} contains the writer correcting itself ("${text.match(THINKING_ALOUD)?.[0].trim()}") — state only the final, correct fact: "${text}"`, step.id);
+      }
       if (text && SCREENSHOT_REF.test(text)) {
         warn("refers-to-screenshot", `Step ${step.id}'s ${field} refers to a screenshot ("${text}") — screenshots are optional, the text must stand without them.`, step.id);
       }
