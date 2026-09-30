@@ -292,7 +292,7 @@ describe('the ablation is its own row', () => {
     t = 0;
     const v = deriveProgressView(ok());
     expect(ids(v).slice(-3)).toEqual(['ablation', 'facts', 'voice']);
-    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ label: 'Checking which changes are needed', status: 'pending' });
+    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ label: 'Finding the critical changes', status: 'pending' });
     expect(ids(deriveProgressView([stage('clone'), planEst(0)]))).not.toContain('ablation');
   });
 

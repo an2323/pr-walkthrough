@@ -247,7 +247,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     { id: 'read', label: 'Reading the code', status: 'pending' },
     { id: 'check', label: 'Checking the story', status: 'pending' },
     { id: 'shots', label: 'Screenshots', status: shotsStatus ?? 'pending' },
-    { id: 'ablation', label: 'Checking which changes are needed', status: 'pending' },
+    { id: 'ablation', label: 'Finding the critical changes', status: 'pending' },
     { id: 'facts', label: 'Fact-checking the explanation', status: 'pending' },
     { id: 'voice', label: 'Recording the narration', status: 'pending' },
   ];
