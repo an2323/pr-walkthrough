@@ -26,7 +26,59 @@ export interface ValidationResult {
  *
  * On success, attaches `hunks` and `coverage` to produce the full `Walkthrough`.
  */
+/** "…line 7: quoted lines 6 and 7 of X are not adjacent in the file…" (line-numbers.ts). */
+const GAP = /^step (\S+) beat (\d+) block (\d+) line (\d+): quoted lines.*not adjacent/;
+const UNCOVERED = /^uncovered hunks: (.+)$/;
+
+/**
+ * Two failures have one correct mechanical fix, so they never cost a paid repair or a failed run:
+ *  - stitched code (two quoted lines not adjacent in the file) → an "elided" line between them;
+ *  - a hunk the walkthrough left out → listed in skippedHunks, saying so plainly.
+ * Applied only when EVERY remaining error is one of these. Returns what was fixed, or undefined.
+ */
+function mechanicalFixes(draft: WalkthroughDraft, errors: string[]): string[] | undefined {
+  if (errors.length === 0 || !errors.every((e) => GAP.test(e) || UNCOVERED.test(e))) return undefined;
+  const fixed: string[] = [];
+  const gaps = errors
+    .map((e) => GAP.exec(e))
+    .filter((m): m is RegExpExecArray => !!m)
+    .sort((a, b) => Number(b[4]) - Number(a[4])); // later lines first, so earlier indices stay valid
+  for (const [, stepId, bi, ci, li] of gaps) {
+    const lines = draft.steps.find((s) => s.id === stepId)?.beats?.[Number(bi)]?.code?.[Number(ci)]?.lines;
+    if (!lines) return undefined;
+    lines.splice(Number(li), 0, { kind: "elided", text: "…" } as (typeof lines)[number]);
+    fixed.push(`elided line in ${stepId} beat ${bi} block ${ci} before line ${li}`);
+  }
+  for (const e of errors) {
+    const m = UNCOVERED.exec(e);
+    if (!m) continue;
+    // A new array: the draft may share its skippedHunks with a caller's object.
+    const skipped = [...(draft.skippedHunks ?? [])];
+    for (const hunkId of m[1].split(", ").map((x) => x.trim()).filter(Boolean)) {
+      if (skipped.some((s) => s.hunkId === hunkId)) continue;
+      skipped.push({ hunkId, reason: "Not explained in this walkthrough — the analysis left this change out." });
+      fixed.push(`${hunkId} listed as not explained`);
+    }
+    draft.skippedHunks = skipped;
+  }
+  return fixed;
+}
+
 export async function validate(
+  draft: WalkthroughDraft,
+  input: AnalyzerInput,
+  workspace: RepoWorkspace,
+  opts: { mechanicalFix?: boolean } = {}
+): Promise<ValidationResult> {
+  const result = await validateOnce(draft, input, workspace);
+  if (result.valid || opts.mechanicalFix === false) return result;
+  const fixed = mechanicalFixes(draft, result.errors);
+  if (!fixed) return result;
+  console.log(`[validate] fixed mechanically:\n  ${fixed.join("\n  ")}`);
+  return validateOnce(draft, input, workspace);
+}
+
+async function validateOnce(
   draft: WalkthroughDraft,
   input: AnalyzerInput,
   workspace: RepoWorkspace

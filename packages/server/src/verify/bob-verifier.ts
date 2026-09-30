@@ -311,7 +311,7 @@ async function runBobVerifier(
     "run", "--format", "stream-json",
     ...(resumeTaskId ? ["--resume", resumeTaskId] : ["--mode", MODE_SLUG]),
     "--workspace", workspace, "--max-cost", String(maxCost),
-    "--max-turns", "40", "--disable-mcp", "--disable-subagents", "--trust", "--accept-license",
+    "--max-turns", "60", "--disable-mcp", "--disable-subagents", "--trust", "--accept-license",
     // `--resume` does not read a follow-up from stdin (it silently replays the old transcript at
     // $0); the message must be the trailing positional argument.
     ...(resumeTaskId ? [prompt] : []),
@@ -320,7 +320,7 @@ async function runBobVerifier(
   const cmd = bobCommand();
   const env = scrubbedEnv({ ...(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {}), ...cmd.env });
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: workspace, env, detached: true, timeout: 600_000 });
+    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: workspace, env, detached: true, timeout: Number(process.env.BOB_TIMEOUT_MS ?? 900_000) });
     let stdout = "";
     const live = new NdjsonBuffer();
     child.stdout.on("data", (d: Buffer) => {

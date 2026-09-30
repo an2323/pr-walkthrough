@@ -186,7 +186,7 @@ describe("validate — verbatim failure", () => {
         }),
       };
 
-      const result = await validate(mutated, input, workspace);
+      const result = await validate(mutated, input, workspace, { mechanicalFix: false });
 
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
@@ -215,7 +215,7 @@ describe("validate — coverage failure", () => {
         }),
       };
 
-      const result = await validate(mutated, input, workspace);
+      const result = await validate(mutated, input, workspace, { mechanicalFix: false });
 
       expect(result.valid).toBe(false);
       expect(
@@ -226,6 +226,17 @@ describe("validate — coverage failure", () => {
     },
     60_000
   );
+
+  it("by default a left-out hunk is listed as not explained instead of failing the run", async () => {
+    const mutated: WalkthroughDraft = {
+      ...goldenDraft,
+      steps: goldenDraft.steps.map((s) => (s.id === "s2" || s.id === "s10" ? { ...s, hunkIds: [] } : s)),
+    };
+    const result = await validate(mutated, input, workspace);
+    expect(result.errors).toEqual([]);
+    expect(result.walkthrough!.skippedHunks.find((h) => h.hunkId === "app/scenes/Document/components/ChangesNavigation.tsx#1")?.reason).toMatch(/left this change out/);
+    expect(goldenDraft.skippedHunks.some((h) => h.hunkId === "app/scenes/Document/components/ChangesNavigation.tsx#1")).toBe(false);
+  }, 60_000);
 
   it("computeCoverage reports uncoveredHunkIds correctly", () => {
     const mutated: WalkthroughDraft = {

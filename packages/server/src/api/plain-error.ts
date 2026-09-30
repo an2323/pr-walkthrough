@@ -12,6 +12,8 @@ export function plainJobError(raw: string): string {
   if (/Budget guard/i.test(r)) return "The spending limit for analyses on this server has been reached. Nothing was run.";
   if (/no walkthrough found/i.test(r))
     return "Bob finished, but its answer couldn't be read as a walkthrough. The raw answer is kept on the server for recovery.";
+  if (/^Validation failed/i.test(r) && /not found in (base|head|diff) file/.test(r))
+    return "Bob's walkthrough quoted code that isn't in this PR, even after one automatic repair. Nothing was saved — try again, or try another PR.";
   if (/^Validation failed/i.test(r))
     return `Bob's walkthrough didn't pass the checks, even after one automatic repair (${r.replace(/^Validation failed:\s*/i, "").slice(0, 140)}).`;
   if (/nothing to rehearse with/i.test(r)) return r;

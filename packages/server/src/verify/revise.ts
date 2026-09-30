@@ -142,7 +142,7 @@ markdown fence, omit hunks/coverage/pr.`;
 }
 
 /** $0 stitch fix: insert an elided line where the validator reported a gap. */
-const STITCH = /^step (\S+) beat (\d+) block (\d+) line (\d+):/;
+const STITCH = /^step (\S+) beat (\d+) block (\d+) line (\d+): quoted lines.*not adjacent/;
 
 export function tryMechanicalStitchFix(draft: Record<string, unknown>, errors: string[]): boolean {
   if (errors.length === 0 || !errors.every((e) => STITCH.test(e))) return false;

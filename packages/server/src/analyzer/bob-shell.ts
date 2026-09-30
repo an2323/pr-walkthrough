@@ -154,6 +154,9 @@ export async function fillPrompt(pr: PullRequestMeta, hunks: Hunk[]): Promise<st
   return template.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
 }
 
+/** One Bob process at most this long (a PR at the 2000-line cap can take over 10 min to analyse). */
+const BOB_TIMEOUT_MS = Number(process.env.BOB_TIMEOUT_MS ?? 900_000);
+
 /** Bob's "out of Bobcoins" message (trial ended / plan exhausted). */
 export function outOfCredits(text: string): boolean {
   return /bobcoins?|trial|out of credits|usage limit|upgrade|unlock more/i.test(text) && /trial|credit|coins|limit/i.test(text);
@@ -256,7 +259,9 @@ export function runBob(
     "run", "--format", "stream-json",
     ...(opts.resumeTaskId ? ["--resume", opts.resumeTaskId] : ["--mode", MODE_SLUG]),
     "--workspace", repoPath, "--max-cost", maxCost,
-    "--max-turns", process.env.MAX_TURNS ?? "40",
+    // 40 was nearly reached on #10295 (41 tool calls); a bigger PR would stop without an answer.
+    // Money stays bounded by --max-cost.
+    "--max-turns", process.env.MAX_TURNS ?? "60",
     "--disable-mcp", "--trust", "--accept-license",
     ...(subagentsEnabled ? [] : ["--disable-subagents"]),
     ...(opts.resumeTaskId ? [prompt] : []),
@@ -268,7 +273,7 @@ export function runBob(
     // our database password or service keys: only its own API key and what a process needs to run.
     const cmd = bobCommand();
     const env = scrubbedEnv({ ...(process.env.BOB_API_KEY ? { BOB_API_KEY: process.env.BOB_API_KEY } : {}), ...cmd.env });
-    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: repoPath, env, timeout: 600_000 });
+    const child = spawn(cmd.bin, [...cmd.preArgs, ...args], { cwd: repoPath, env, timeout: BOB_TIMEOUT_MS });
     let stdout = "";
     let stderr = "";
     // Only used to drive `opts.onEvent` live — the final `events` array below
