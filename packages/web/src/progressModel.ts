@@ -34,6 +34,8 @@ export type PaneView = 'files' | 'reproducing' | 'outcome';
 
 export interface ProgressView {
   pr?: ProgressEventOf<'plan'>['pr'];
+  /** How long this run should take, from the plan event (absent on older runs). */
+  estimate?: NonNullable<ProgressEventOf<'plan'>['estimate']>;
   steps: StepView[];
   files: FileView[];
   scenario: string[];
@@ -93,8 +95,28 @@ export function plainStageLabel(label: string): string {
 
 /** The server labels each ablation build "… (3 of 10, about a minute each)". */
 export function ablationProgress(label: string | undefined): { k: number; n: number } | undefined {
+  if (scenarioProgress(label)) return undefined; // same "(k of n)" tail, a different stage
   const m = label === undefined ? null : /\((\d+) of (\d+)(?:, [^)]*)?\)\s*$/.exec(label);
   return m ? { k: Number(m[1]), n: Number(m[2]) } : undefined;
+}
+
+/** The verifier replays Bob's script once per scenario: "Trying "<title>" on the old and the new version (2 of 3)". */
+export function scenarioProgress(label: string | undefined): { k: number; n: number } | undefined {
+  const m = label === undefined ? null : /^Trying ".*" on the old and the new version \((\d+) of (\d+)\)\s*$/.exec(label);
+  return m ? { k: Number(m[1]), n: Number(m[2]) } : undefined;
+}
+
+/** A tool call said for a reader: the file names and commands of Bob's test scripts mean nothing on the screen. */
+export function plainTool(tool: string, target: string): string {
+  switch (tool) {
+    case 'write_file':
+    case 'write_to_file':
+      return /\.(c|m)?js\b|\.ts\b/.test(target) ? 'Writing a test script' : 'Writing a file';
+    case 'execute_command':
+      return /\bnode\b/.test(target) ? 'Trying it in the app' : 'Running a command';
+    default:
+      return target;
+  }
 }
 
 /** How much of the walkthrough text is usually written when a run is about to finish (a bar needs a guess). */
@@ -182,7 +204,13 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
 
   // The ablation takes 2 builds per changed hunk, about a minute each: say which build it is on, and how long is left.
   const running = !done && lastStage && lastStage.stage === 'shots' ? ablationProgress(lastStage.label) : undefined;
+  const replaying = !done && lastStage && lastStage.stage === 'shots' ? scenarioProgress(lastStage.label) : undefined;
   let shotsProgress: StepView['progress'];
+  if (replaying) {
+    shotsProgress = replaying.n > 1 ? { done: replaying.k - 1, total: replaying.n } : { indeterminate: true };
+    shotsDetail = `Trying the scenario on the old and the new version${replaying.n > 1 ? ` — ${replaying.k} of ${replaying.n}` : ''}`;
+    shotsStatus = 'current';
+  }
   if (running) {
     shotsProgress = { done: running.k - 1, total: running.n };
     const left = running.n - running.k + 1;
@@ -192,6 +220,8 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   // What follows the ablation is known, so name it while it is still ahead: the fact check and the voice-over.
   const ablationSeen = stages.some((s) => s.stage === 'shots' && (ablationProgress(s.label) !== undefined || /^Measured \d+ change/.test(s.label)));
   const expectAfter = !done && (outcome?.code === 'ok' || ablationSeen);
+  // The narration is recorded on every run, screenshots or not: the plan says so from the first second.
+  const showVoice = seen.has('voicing') || (!done && (plan?.voice ? plan.voice.planned : expectAfter));
 
   const base: StepView[] = [
     { id: 'checkout', label: 'Checked out the PR', status: 'pending' },
@@ -217,7 +247,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     // Old recordings have no screenshot row unless a screenshot stage ran; the voice row exists only when voicing ran.
     if (st.id === 'shots' && shotsStatus === undefined) continue;
     if (st.id === 'facts' && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
-    if (st.id === 'voice' && !seen.has('voicing') && !expectAfter) continue;
+    if (st.id === 'voice' && !showVoice) continue;
     const idx = order.indexOf(st.id);
     const row = { ...st };
     if (st.id === 'shots') {
@@ -247,13 +277,24 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   });
 
   // --- feed and pane -------------------------------------------------------------------------
-  const feed = inShots
-    ? stages.filter((s) => s.stage === 'app' || s.stage === 'shots').map((s) => feedLabel(s.label)).slice(-FEED_SIZE)
-    : tools.map((t) => t.target).slice(-FEED_SIZE);
+  // While the app is driven the log mixes the backend's stages with Bob's own tool calls, in plain words.
+  const firstShots = events.findIndex((e) => e.kind === 'stage' && (e.stage === 'app' || e.stage === 'shots'));
+  const shotsLog: string[] = [];
+  if (inShots) {
+    events.slice(Math.max(0, firstShots)).forEach((e) => {
+      if (e.kind === 'stage' && (e.stage === 'app' || e.stage === 'shots')) shotsLog.push(feedLabel(e.label));
+      else if (e.kind === 'tool') {
+        const line = plainTool(e.tool, e.target);
+        if (shotsLog[shotsLog.length - 1] !== line) shotsLog.push(line);
+      }
+    });
+  }
+  const feed = inShots ? shotsLog.slice(-FEED_SIZE) : tools.map((t) => t.target).slice(-FEED_SIZE);
   const pane: PaneView = outcome ? 'outcome' : inShots && !done ? 'reproducing' : 'files';
 
   return {
     ...(plan ? { pr: plan.pr } : {}),
+    ...(plan?.estimate ? { estimate: plan.estimate } : {}),
     steps,
     files,
     scenario: scenarioEvent?.lines ?? [],

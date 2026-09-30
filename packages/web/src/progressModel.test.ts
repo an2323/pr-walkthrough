@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ProgressEvent } from '@pr-walkthrough/shared';
 
-import { ablationProgress, deriveProgressView, plainStageLabel } from './progressModel';
+import { ablationProgress, deriveProgressView, plainStageLabel, plainTool, scenarioProgress } from './progressModel';
 
 let t = 0;
 const at = (e: Record<string, unknown>): ProgressEvent => ({ ...e, t: (t += 1000) }) as ProgressEvent;
@@ -230,5 +230,54 @@ describe('the long waits say what they are doing and what is left', () => {
     expect(w(25_000).detail).toBe('Bob is writing the walkthrough — about 25,000 of ~50,000 characters');
     expect(w(61_000).progress).toEqual({ indeterminate: true });
     expect(w(61_000).detail).toBe('Bob is still writing — 61,000 characters so far');
+  });
+});
+
+describe('narration, the estimate and the screenshot stage are visible from the start', () => {
+  const planWith = (extra: Record<string, unknown>) =>
+    at({ kind: 'plan', pr: { title: 'fix', additions: 3, deletions: 1, files: 1 }, shots: { planned: true }, ...extra });
+
+  it('the narration row is there from the first second when the plan says so, for runs without screenshots too', () => {
+    t = 0;
+    const v = deriveProgressView([stage('clone'), planWith({ voice: { planned: true } })]);
+    expect(v.steps.at(-1)).toMatchObject({ id: 'voice', label: 'Recording the narration', status: 'pending' });
+    // …while the ablation and the fact check still wait for the screenshot verdict
+    expect(v.steps.map((s) => s.id)).not.toContain('facts');
+    const noShots = deriveProgressView([stage('clone'), at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: false, reason: 'r' }, voice: { planned: true } })]);
+    expect(noShots.steps.map((s) => s.id)).toContain('voice');
+  });
+
+  it('no narration row when the server will not record one', () => {
+    t = 0;
+    const v = deriveProgressView([stage('clone'), planWith({ voice: { planned: false } }), stage('shots'), outcome('ok', 'ok')]);
+    expect(v.steps.map((s) => s.id)).not.toContain('voice');
+  });
+
+  it('passes the estimate on', () => {
+    t = 0;
+    const estimate = { minMinutes: 16, maxMinutes: 29, ablationBuilds: 10, coldInstall: true };
+    expect(deriveProgressView([planWith({ estimate })]).estimate).toEqual(estimate);
+    expect(deriveProgressView([planWith({})]).estimate).toBeUndefined();
+  });
+
+  it('each scenario replay is a counted row', () => {
+    t = 0;
+    expect(scenarioProgress('Trying "Open the menu" on the old and the new version (2 of 3)')).toEqual({ k: 2, n: 3 });
+    expect(scenarioProgress('Testing "a#1" alone (2 of 3, about a minute each)')).toBeUndefined();
+    const v = deriveProgressView([stage('clone'), planWith({}), stage('shots', 'Trying "Open the menu" on the old and the new version (2 of 3)')]);
+    const row = v.steps.find((s) => s.id === 'shots')!;
+    expect(row).toMatchObject({ status: 'current', progress: { done: 1, total: 3 }, detail: 'Trying the scenario on the old and the new version — 2 of 3' });
+  });
+
+  it("Bob's own tool calls in the screenshot stage are said in plain words", () => {
+    expect(plainTool('write_file', 'Writing repro.cjs')).toBe('Writing a test script');
+    expect(plainTool('execute_command', 'Running `node repro.cjs --base`')).toBe('Trying it in the app');
+    expect(plainTool('read_file', 'Reading src/a.ts')).toBe('Reading src/a.ts');
+    t = 0;
+    const v = deriveProgressView([
+      stage('clone'), planWith({}), tool('Reading before.ts'),
+      stage('shots', 'Bob is reproducing the change'), tool('Writing repro.cjs', 'write_file'), tool('Running `node repro.cjs`', 'execute_command'), tool('Reading src/a.ts'),
+    ]);
+    expect(v.feed).toEqual(['Bob is reproducing the change', 'Writing a test script', 'Trying it in the app', 'Reading src/a.ts']);
   });
 });

@@ -213,6 +213,12 @@ function Rail({ view, owner, repo, number, elapsed, quietMs }: { view: ProgressV
           </div>
         )}
       </div>
+      {view.estimate && !view.done && (
+        <p className="pg-est">
+          about {view.estimate.minMinutes}–{view.estimate.maxMinutes} min for this PR
+          {view.estimate.coldInstall && <small>First run for this version installs the app (+3–5 min).</small>}
+        </p>
+      )}
       <ol className="pg-steps">
         {view.steps.map((s) => <Step key={s.id} step={s} />)}
       </ol>
