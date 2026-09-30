@@ -54,13 +54,14 @@ export function plainNoShotsReason(raw: string): string {
  */
 export function shotsOutcomeCode(raw: string): ShotsOutcomeCode {
   const r = raw.trim();
-  if (/no app recipe/i.test(r)) return "no-recipe";
+  // Works on a raw reason AND on the plain sentence plainNoShotsReason made of it (a saved walkthrough keeps the sentence).
+  if (/no app recipe|isn't set up for automatic screenshots/i.test(r)) return "no-recipe";
   if (/turned off|VERIFY_SHOTS/i.test(r)) return "unavailable";
-  if (/non-visual change/i.test(r)) return "non-visual";
-  if (/base\/head sha/i.test(r)) return "unavailable";
-  if (/no credits left/i.test(r)) return "unavailable";
-  if (/screenshot tool|BOB_API_KEY/i.test(r)) return "unavailable";
-  if (/warm-up|dev server|didn't start|could not start|timed out waiting|install failed|only [\d.]+ GB free|\b(yarn|npm|pnpm)\b[^:]*\b(exited|timed out)\b/i.test(r)) return "app-failed";
+  if (/non-visual change|nothing to see in the running app/i.test(r)) return "non-visual";
+  if (/base\/head sha|commits to compare weren't available/i.test(r)) return "unavailable";
+  if (/no credits left|out of credits/i.test(r)) return "unavailable";
+  if (/screenshot tool|BOB_API_KEY|couldn't be captured/i.test(r)) return "unavailable";
+  if (/warm-up|dev server|didn't start|could not start|couldn't be started|timed out waiting|install failed|only [\d.]+ GB free|\b(yarn|npm|pnpm)\b[^:]*\b(exited|timed out)\b/i.test(r)) return "app-failed";
   if (/repro|not trusted|did not write|could not|couldn't|failed|error|timed? ?out|browser|install/i.test(r)) return "not-reproduced";
   return "non-visual";
 }

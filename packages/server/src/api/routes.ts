@@ -26,6 +26,7 @@ import { splitSentences, sentenceHash, generateSentenceAudio, OUTRO_STEP_ID, OUT
 import { listRecentWalkthroughs, loadRehearsal, loadWalkthrough } from "../storage.js";
 import { fetchPRMeta, parsePRUrl } from "../github/client.js";
 import { buildPreview, PreviewError } from "./preview.js";
+import { enrichRecording } from "./recording-enrich.js";
 import { resolveRecipe } from "../verify/recipes.js";
 import { resolveTarget, postComment, type CommentAnchor } from "../github/review.js";
 import { createJob, getJob, subscribeJob, findActiveJob, countJobsSince } from "./jobs.js";
@@ -415,6 +416,12 @@ router.get(
       res.status(500).json({ error: `Could not read recording: ${String(err)}` });
       return;
     }
+
+    // A recording made before the structured events existed plays on the current screen too: what it
+    // lacks (the PR, the files, the scenario, the frames, the verdict) is read from that run's walkthrough.
+    const finished = await loadWalkthrough(owner, repo, num).catch(() => null);
+    const appCanRun = !!(await resolveRecipe(owner, repo).catch(() => undefined));
+    events = enrichRecording(events, finished, appCanRun);
 
     const requestedSpeed = Number(req.query["speed"]);
     const totalMs = events.length > 0 ? events[events.length - 1].t : 0;

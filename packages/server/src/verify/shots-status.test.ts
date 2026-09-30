@@ -124,3 +124,22 @@ describe("shotsOutcomeCode", () => {
     expect(plainNoShotsReason("repro.cjs failed on BASE: Timeout")).toMatch(/couldn't be reproduced/);
   });
 });
+
+describe("shotsOutcomeCode on the plain sentence", () => {
+  it("gives the same code for a raw reason and for the sentence a saved walkthrough keeps", () => {
+    for (const raw of [
+      "no app recipe for acme/widgets",
+      "screenshots turned off (VERIFY_SHOTS=0)",
+      "title suggests a non-visual change (perf: cache) and no UI files in the diff",
+      "walkthrough has no base/head SHA",
+      "no credits left for the screenshot tool",
+      "BOB_API_KEY is not set",
+      "yarn install timed out after 600s",
+      "dev server didn't start on 127.0.0.1:5173",
+      "repro.cjs failed on BASE: Timeout 30000ms exceeded",
+      "Bob did not write repro.cjs",
+    ]) {
+      expect(shotsOutcomeCode(plainNoShotsReason(raw)), raw).toBe(shotsOutcomeCode(raw));
+    }
+  });
+});
