@@ -382,7 +382,7 @@ async function runPipeline(
 
             const recipe = recipeFor(owner, repo);
             if (process.env.VERIFY_ABLATION !== "0" && recipe && walkthrough.pr.baseSha) {
-              emit({ kind: "stage", t: elapsed(), stage: "shots", label: "Testing which changes fix the bug" });
+              emit({ kind: "stage", t: elapsed(), stage: "ablation", label: "Testing which changes fix the bug" });
               try {
                 const ablation = await runAblation({
                   mainPath: path.join(GIT_CACHE_DIR, `${owner}__${repo}`),
@@ -393,7 +393,7 @@ async function runPipeline(
                   recipe,
                   reproPath: vr.reproPath,
                   ...(vr.scenarios ? { scenarios: vr.scenarios } : {}),
-                  onProgress: (msg) => emit({ kind: "stage", t: elapsed(), stage: "shots", label: msg }),
+                  onProgress: (msg) => emit({ kind: "stage", t: elapsed(), stage: "ablation", label: msg }),
                 });
                 // A table of only "broken" runs says nothing — don't present it as a measurement.
                 if (ablation && ablationHasSignal(ablation)) {
@@ -411,7 +411,7 @@ async function runPipeline(
                   emit({
                     kind: "stage",
                     t: elapsed(),
-                    stage: "shots",
+                    stage: "ablation",
                     label: `Measured ${ablation.units.length} change(s) against the running app`,
                   });
 

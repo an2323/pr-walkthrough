@@ -205,6 +205,18 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
     expect(calls).toBe(0);
   });
 
+  it("the same label on both builds sends the scenario to repair (#10682 'AI badge' twice)", async () => {
+    const same = wideScript().replace('label: base ? "wrong" : "fixed"', 'label: "AI badge"');
+    const o = await setup({ "a.cjs": same }, [{ id: "a", file: "a.cjs", title: "A" }]);
+    const prompts: string[] = [];
+    await confirmScenariosWithRepair(o, async (p) => {
+      prompts.push(p);
+      await writeFile(path.join(o.verifyDir, "a.cjs"), wideScript());
+    });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/labels are the same on both builds \("ai badge"\)/);
+  });
+
   it("gives ONE repair covering all problems at once, then re-confirms", async () => {
     const broken = `console.log(JSON.stringify({ bugPresent: true, measure: {}, highlights: [] }));`;
     const o = await setup(

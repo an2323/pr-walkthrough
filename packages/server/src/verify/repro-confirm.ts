@@ -149,6 +149,24 @@ export interface ScenariosOptions {
   onProgress?: (label: string) => void;
 }
 
+/**
+ * A pair whose labels read the same on both builds ("AI badge" / "AI badge" on #10682, "Menu trigger
+ * button" twice on #12053) tells the reader nothing — the label is where the difference is named.
+ * The prompt says so; Bob didn't follow it twice, so it is checked here.
+ */
+export function sameLabelsOnBothBuilds(r: ScenarioResult): string[] | undefined {
+  if (!r.outcome.ok || !r.visible) return undefined;
+  const labels = (side: unknown) =>
+    ((side as { highlights?: { label?: unknown }[] } | undefined)?.highlights ?? [])
+      .map((h) => (typeof h.label === "string" ? h.label.trim().toLowerCase() : ""))
+      .filter(Boolean)
+      .sort();
+  const before = labels(r.outcome.before);
+  const after = labels(r.outcome.after);
+  if (before.length === 0 || before.join("|") !== after.join("|")) return undefined;
+  return before;
+}
+
 const PHONE_ONLY = /\b(mobile|phones?|small screens?|narrow screens?|touch)\b/i;
 
 /**
@@ -283,6 +301,15 @@ export async function confirmScenariosWithRepair(
   let results = await confirmScenarios(o);
   const allProblems = (rs: ScenarioResult[]) => {
     const p = scenarioProblems(rs, o.symptomTexts);
+    for (const r of rs) {
+      const same = sameLabelsOnBothBuilds(r);
+      if (same)
+        p.push(
+          `- "${r.scenario.id}" (${r.scenario.file}) — ${r.scenario.title}: its labels are the same on both builds ` +
+            `(${same.map((l) => `"${l}"`).join(", ")}). A label names what is wrong on BASE ("Badge stuck to the text") ` +
+            `and what is fixed on HEAD ("Badges aligned right") — at most 5 plain words, different on the two builds.`
+        );
+    }
     const desktop = missingDesktopScenario(rs, o.symptomTexts);
     return desktop ? [...p, desktop] : p;
   };
