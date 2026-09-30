@@ -42,6 +42,13 @@ export type ProgressEvent =
       t: number;
       pr: { title: string; additions: number; deletions: number; files: number };
       shots: { planned: boolean; reason?: string };
+      /** Narration will be recorded at the end (a voice is configured on this server). */
+      voice?: { planned: boolean };
+      /**
+       * How long this run will take, from what is known at the start: screenshots or not, how many
+       * ablation builds, whether the app still has to be installed. Minutes, a range.
+       */
+      estimate?: { minMinutes: number; maxMinutes: number; ablationBuilds: number; coldInstall: boolean };
     }
   /** The changed files (after the diff is parsed); `skipped` = only mechanical hunks, hidden from Bob. */
   | { kind: "files"; t: number; files: { path: string; additions: number; deletions: number; skipped: boolean }[] }

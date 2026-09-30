@@ -145,6 +145,8 @@ export interface ScenariosOptions {
   fallbackTitle?: string;
   /** The walkthrough's symptom texts: a scenario tied to one must measure the visible claims it makes. */
   symptomTexts?: string[];
+  /** One plain line per scenario as it is tried (the screen otherwise sits silent for minutes). */
+  onProgress?: (label: string) => void;
 }
 
 const PHONE_ONLY = /\b(mobile|phones?|small screens?|narrow screens?|touch)\b/i;
@@ -192,7 +194,8 @@ export function unmeasuredClaims(r: ScenarioResult, symptomTexts: string[] = [])
 export async function confirmScenarios(o: ScenariosOptions): Promise<ScenarioResult[]> {
   const scenarios = await loadScenarios(o.verifyDir, o.fallbackTitle);
   const out: ScenarioResult[] = [];
-  for (const scenario of scenarios) {
+  for (const [k, scenario] of scenarios.entries()) {
+    o.onProgress?.(`Trying "${scenario.title}" on the old and the new version (${k + 1} of ${scenarios.length})`);
     const beforePng = path.join(o.frameDir, `${scenario.id}-before.png`);
     const afterPng = path.join(o.frameDir, `${scenario.id}-after.png`);
     const outcome = await confirmRepro({

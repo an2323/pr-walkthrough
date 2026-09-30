@@ -17,16 +17,52 @@ export function shotsNotPlannedReason(canVerifyRepo: boolean, verifyShotsOff: bo
   return undefined;
 }
 
+/** Ablation builds per changed unit: each alone + all but it; units are capped (verify/ablation.ts). */
+const MAX_ABLATION_UNITS = 5;
+
+/**
+ * Minutes a run will take, from our own runs (Sep 29–30): analysis 2–5, a cold app install 3–5
+ * (warm ≈1), app start 1–1.5, the screenshot verifier 2–5 incl. a repair, ablation ~45–60 s per
+ * build, fact check 0.5–1.5, narration 0.3–1. #12053 cold, 10 builds: 21 min; #10295 warm: 18.
+ */
+export function estimateRun(o: { shotsPlanned: boolean; ablationUnits: number; coldInstall: boolean; voice: boolean }): {
+  minMinutes: number;
+  maxMinutes: number;
+  ablationBuilds: number;
+  coldInstall: boolean;
+} {
+  let lo = 2;
+  let hi = 5;
+  let builds = 0;
+  if (o.shotsPlanned) {
+    lo += o.coldInstall ? 3 : 0.5;
+    hi += o.coldInstall ? 5 : 1;
+    lo += 1 + 2 + 0.5; // app start, verifier, fact check
+    hi += 1.5 + 5 + 1.5;
+    builds = o.ablationUnits >= 2 ? 2 * Math.min(o.ablationUnits, MAX_ABLATION_UNITS) : 0;
+    lo += builds * 0.75;
+    hi += builds;
+  }
+  if (o.voice) {
+    lo += 0.3;
+    hi += 1;
+  }
+  return { minMinutes: Math.round(lo), maxMinutes: Math.ceil(hi), ablationBuilds: builds, coldInstall: o.shotsPlanned && o.coldInstall };
+}
+
 export function planEvent(
   t: number,
   pr: { title: string; additions: number; deletions: number; filesChanged: number },
-  notPlannedReason: string | undefined
+  notPlannedReason: string | undefined,
+  extra: { voice?: boolean; estimate?: ReturnType<typeof estimateRun> } = {}
 ): ProgressEventOf<"plan"> {
   return {
     kind: "plan",
     t,
     pr: { title: pr.title, additions: pr.additions, deletions: pr.deletions, files: pr.filesChanged },
     shots: notPlannedReason === undefined ? { planned: true } : { planned: false, reason: notPlannedReason },
+    ...(extra.voice !== undefined ? { voice: { planned: extra.voice } } : {}),
+    ...(extra.estimate ? { estimate: extra.estimate } : {}),
   };
 }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Hunk } from "@pr-walkthrough/shared";
 
-import { planEvent, filesEvent, scenarioEvent, skippedOutcome, confirmedEvents, shotsNotPlannedReason } from "./progress-events.js";
+import { estimateRun, planEvent, filesEvent, scenarioEvent, skippedOutcome, confirmedEvents, shotsNotPlannedReason } from "./progress-events.js";
 import { IDENTICAL_FRAMES_NOTE } from "../verify/shots-status.js";
 
 const hunk = (file: string, i: number, added: number, removed: number): Hunk => ({ id: `${file}#${i}`, file, header: "@@", added, removed });
@@ -67,5 +67,32 @@ describe("outcomes", () => {
     const evs = confirmedEvents(7, undefined, IDENTICAL_FRAMES_NOTE);
     expect(evs).toHaveLength(1);
     expect(evs[0]).toMatchObject({ kind: "outcome", code: "identical", message: IDENTICAL_FRAMES_NOTE });
+  });
+});
+
+describe("estimateRun", () => {
+  it("matches our real runs within its range", () => {
+    // #12053: cold install, 5 units → 10 builds, took 21 min.
+    const cold = estimateRun({ shotsPlanned: true, ablationUnits: 5, coldInstall: true, voice: true });
+    expect(cold.ablationBuilds).toBe(10);
+    expect(cold.minMinutes).toBeLessThanOrEqual(21);
+    expect(cold.maxMinutes).toBeGreaterThanOrEqual(21);
+    // #10295: warm, 4 units, 18 min.
+    const warm = estimateRun({ shotsPlanned: true, ablationUnits: 4, coldInstall: false, voice: true });
+    expect(warm.minMinutes).toBeLessThanOrEqual(18);
+    expect(warm.maxMinutes).toBeGreaterThanOrEqual(18);
+  });
+
+  it("a repo without screenshots is text and voice only", () => {
+    const e = estimateRun({ shotsPlanned: false, ablationUnits: 5, coldInstall: true, voice: true });
+    expect(e).toEqual({ minMinutes: 2, maxMinutes: 6, ablationBuilds: 0, coldInstall: false });
+  });
+
+  it("the plan carries voice and the estimate", () => {
+    const est = estimateRun({ shotsPlanned: true, ablationUnits: 1, coldInstall: false, voice: true });
+    expect(est.ablationBuilds).toBe(0);
+    const e = planEvent(1, { title: "t", additions: 1, deletions: 1, filesChanged: 1 }, undefined, { voice: true, estimate: est });
+    expect(e.voice).toEqual({ planned: true });
+    expect(e.estimate).toEqual(est);
   });
 });

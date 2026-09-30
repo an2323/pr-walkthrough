@@ -25,13 +25,13 @@ import { answerOf, qualityRepairBob } from "../analyzer/bob-shell.js";
 import { assembleDraft, backendEvidenceOf, carryBackendEvidence } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
-import { ablationHasSignal, runAblation, verdictForStep } from "../verify/ablation.js";
+import { ablationHasSignal, logicUnits, runAblation, verdictForStep } from "../verify/ablation.js";
 import { recipeFor, resolveRecipe } from "../verify/recipes.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
 import { markVerified, plainNoShotsReason, recordNoShots, recordShotsNote } from "../verify/shots-status.js";
-import { confirmedEvents, emitAll, filesEvent, outcomeEvent, planEvent, scenarioEvent, shotsNotPlannedReason, skippedOutcome } from "./progress-events.js";
+import { confirmedEvents, emitAll, estimateRun, filesEvent, outcomeEvent, planEvent, scenarioEvent, shotsNotPlannedReason, skippedOutcome } from "./progress-events.js";
 import { validate, checkQuality, criticalQualityWarnings } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 import { blobsEnabled, uploadBlob, uploadDir } from "../blobs.js";
@@ -149,12 +149,26 @@ async function runPipeline(
     await resolveRecipe(owner, repo);
     // Tell the screen up front whether screenshots are planned for this repository — it is known now.
     const canShots = process.env.VERIFY_SHOTS !== "0" && canVerify(`${owner}/${repo}`);
-    emit(planEvent(elapsed(), pr, shotsNotPlannedReason(canVerify(`${owner}/${repo}`), process.env.VERIFY_SHOTS === "0", `${owner}/${repo}`)));
+    const notPlanned = shotsNotPlannedReason(canVerify(`${owner}/${repo}`), process.env.VERIFY_SHOTS === "0", `${owner}/${repo}`);
     const repoUrl = `https://github.com/${owner}/${repo}`;
     const workspace = await prepareWorkspace(repoUrl, pr.headSha!, pr.baseSha!, number, GIT_CACHE_DIR);
     const diff = await workspace.diff();
     const hunks = parseHunks(diff);
     const { skipped } = classifyHunks(hunks);
+    // The plan, sent once the diff is known (seconds in): every stage this run will have, and how long.
+    {
+      const recipe = recipeFor(owner, repo);
+      const installed = (sha: string | undefined) =>
+        !!recipe && !!sha && existsSync(path.join(GIT_CACHE_DIR, `${owner}__${repo}`, "wt", sha, recipe.installedMarker));
+      const voice = voicingConfigured();
+      const estimate = estimateRun({
+        shotsPlanned: canShots,
+        ablationUnits: logicUnits(hunks, skipped).length,
+        coldInstall: !(installed(pr.baseSha) && installed(pr.headSha)),
+        voice,
+      });
+      emit(planEvent(elapsed(), pr, notPlanned, { voice, estimate }));
+    }
     emit(filesEvent(elapsed(), hunks, skipped));
 
     emit({
