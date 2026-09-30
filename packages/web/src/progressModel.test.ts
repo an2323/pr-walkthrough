@@ -202,7 +202,7 @@ describe('the long waits say what they are doing and what is left', () => {
     const v = deriveProgressView([...okRun(), build(1, 4)]);
     const tail = v.steps.slice(-3);
     expect(tail.map((s) => [s.id, s.status])).toEqual([['shots', 'current'], ['facts', 'pending'], ['voice', 'pending']]);
-    expect(tail[1].label).toBe('Checking the text against the running app');
+    expect(tail[1].label).toBe('Fact-checking the explanation');
     expect(tail[2].label).toBe('Recording the narration');
   });
 
@@ -324,5 +324,16 @@ describe('the ablation is its own row', () => {
     t = 0;
     const v = deriveProgressView([...ok(), at({ kind: 'done', walkthroughUrl: '/x', durationMs: 5000 })]);
     expect(ids(v)).not.toContain('ablation');
+  });
+});
+
+describe('the fact check is its own stage', () => {
+  const ok = () => [stage('clone'), at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: true } }), stage('shots'), outcome('ok', 'ok')];
+  it('stage "factcheck" is the row, its verdict stays as the detail', () => {
+    t = 0;
+    const running = deriveProgressView([...ok(), stage('factcheck', 'Fact-checking the explanation — comparing what the text says with what the app actually did')]);
+    expect(running.steps.find((s) => s.id === 'facts')).toMatchObject({ label: 'Fact-checking the explanation', status: 'current' });
+    const after = deriveProgressView([...ok(), stage('factcheck', 'Fact-checking the explanation'), stage('factcheck', 'Fixed 2 statement(s) the app contradicted'), stage('voicing', 'Recording the narration')]);
+    expect(after.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'done', detail: 'Fixed 2 statement(s) the app contradicted' });
   });
 });

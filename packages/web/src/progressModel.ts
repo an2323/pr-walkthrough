@@ -154,6 +154,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   const lastStage = last(stages);
   const labelOf = (stage: string): string | undefined => last(stages.filter((s) => s.stage === stage))?.label;
 
+  // Newer servers send stage "factcheck"; older ones sent it as "repairing" with this label.
   const isFactCheck = (label: string) => /^Checking the text/.test(label);
   const inShots = seen.has('app') || seen.has('shots');
   const planned = plan ? plan.shots.planned : undefined;
@@ -172,6 +173,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
       case 'app':
       case 'shots': return 'shots';
       case 'ablation': return 'ablation';
+      case 'factcheck': return 'facts';
       case 'voicing': return 'voice';
       default: return undefined;
     }
@@ -246,7 +248,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     { id: 'check', label: 'Checking the story', status: 'pending' },
     { id: 'shots', label: 'Screenshots', status: shotsStatus ?? 'pending' },
     { id: 'ablation', label: 'Checking which changes are needed', status: 'pending' },
-    { id: 'facts', label: 'Checking the text against the running app', status: 'pending' },
+    { id: 'facts', label: 'Fact-checking the explanation', status: 'pending' },
     { id: 'voice', label: 'Recording the narration', status: 'pending' },
   ];
   const detail: Partial<Record<StepView['id'], string | undefined>> = {
@@ -255,6 +257,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     read: writing ? writingDetail(writing.chars) : undefined,
     check: !inShots ? labelOf('repairing') ?? labelOf('validating') : undefined,
     voice: labelOf('voicing'),
+    facts: labelOf('factcheck'),
   };
   const writingBar: StepView['progress'] | undefined = writing
     ? writing.chars < TYPICAL_WRITING_CHARS ? { done: writing.chars, total: TYPICAL_WRITING_CHARS } : { indeterminate: true }
@@ -264,7 +267,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     // Old recordings have no screenshot row unless a screenshot stage ran; the voice row exists only when voicing ran.
     if (st.id === 'shots' && shotsStatus === undefined) continue;
     if (st.id === 'ablation' && !showAblation) continue;
-    if (st.id === 'facts' && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
+    if (st.id === 'facts' && !seen.has('factcheck') && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
     if (st.id === 'voice' && !showVoice) continue;
     const idx = order.indexOf(st.id);
     const row = { ...st };
@@ -274,6 +277,8 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     } else if (done || idx < currentIdx) {
       row.status = 'done';
       if (st.id === 'diff' && detail.diff) row.detail = detail.diff;
+      // The fact check ends with a verdict in words ("Fixed 2 statements…" / "The explanation matches…").
+      if (st.id === 'facts' && detail.facts && /^(Fixed|The explanation matches|Fact check skipped)/.test(detail.facts)) row.detail = detail.facts;
     } else if (idx === currentIdx) {
       row.status = 'current';
       if (detail[st.id]) row.detail = detail[st.id];
