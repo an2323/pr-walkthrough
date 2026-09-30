@@ -17,8 +17,8 @@ const tmp = async () => {
   return d;
 };
 
-function solidPng(rgba: [number, number, number, number]): Buffer {
-  const w = 20, h = 20, stride = w * 4;
+function solidPng(rgba: [number, number, number, number], w = 20, h = 20): Buffer {
+  const stride = w * 4;
   const raw = Buffer.alloc((stride + 1) * h);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set(rgba, y * (stride + 1) + 1 + x * 4);
   const chunk = (t: string, b: Buffer) => {
@@ -36,6 +36,10 @@ function solidPng(rgba: [number, number, number, number]): Buffer {
 }
 const WHITE = solidPng([255, 255, 255, 255]).toString("base64");
 const DARK = solidPng([30, 30, 30, 255]).toString("base64");
+/** Desktop-proportioned frames (the 20×20 ones count as phone-sized). */
+const WIDE_WHITE = solidPng([255, 255, 255, 255], 800, 500).toString("base64");
+const WIDE_DARK = solidPng([30, 30, 30, 255], 800, 500).toString("base64");
+const wideScript = () => script(WIDE_DARK).replace(`"${WHITE}"`, `"${WIDE_WHITE}"`);
 
 /** A script whose BASE screenshot is white and HEAD screenshot is `headPng` (base64). */
 const script = (headPng: string) => `
@@ -177,9 +181,27 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
   });
 
   it("a symptom text without a stacking claim asks for nothing extra", async () => {
-    const o = await setup({ "a.cjs": script(DARK) }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    const o = await setup({ "a.cjs": wideScript() }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
     let calls = 0;
     await confirmScenariosWithRepair({ ...o, symptomTexts: ["The picker shrinks to one button"] }, async () => void calls++);
+    expect(calls).toBe(0);
+  });
+
+  it("all scenarios on a phone while a symptom isn't phone-only → one repair asks for a desktop scenario (#10295)", async () => {
+    const o = await setup({ "a.cjs": script(DARK) }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    const prompts: string[] = [];
+    await confirmScenariosWithRepair({ ...o, symptomTexts: ["Toolbar buttons appear on top of the open sidebar panel — measured onTop"] }, async (p) => {
+      prompts.push(p);
+      await writeFile(path.join(o.verifyDir, "a.cjs"), wideScript());
+    });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/desktop viewport/);
+  });
+
+  it("phone-only symptoms may be shown on phone frames", async () => {
+    const o = await setup({ "a.cjs": script(DARK).replace("measure: { u }", "measure: { u, onTop: 1 }") }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    let calls = 0;
+    await confirmScenariosWithRepair({ ...o, symptomTexts: ["On phones the menu sits on top of the sidebar"] }, async () => void calls++);
     expect(calls).toBe(0);
   });
 

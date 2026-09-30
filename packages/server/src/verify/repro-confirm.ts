@@ -11,13 +11,14 @@
  * outputs; anything else (Bob declined with skip.json, budget, no task) does not.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readFile as readFileAsync } from "node:fs/promises";
 
 import { comparePngs } from "../shots/png-diff.js";
+import { isPhoneFrame } from "../shots/frames.js";
 import { runRepro, type ReproResult } from "./ablation.js";
 import { loadScenarios, type Scenario } from "./scenarios.js";
 
@@ -146,6 +147,28 @@ export interface ScenariosOptions {
   symptomTexts?: string[];
 }
 
+const PHONE_ONLY = /\b(mobile|phones?|small screens?|narrow screens?|touch)\b/i;
+
+/**
+ * Every confirmed scenario was captured on a phone although some symptom isn't phone-only: the start
+ * screen then shows a narrow phone pair instead of the desktop change (#10295, twice, although the
+ * prompt said to keep the desktop viewport). Returns the one problem line, or nothing.
+ */
+export function missingDesktopScenario(results: ScenarioResult[], symptomTexts: string[] = []): string | undefined {
+  const ok = results.filter((r) => r.outcome.ok && existsSync(r.beforePng));
+  if (ok.length === 0 || symptomTexts.length === 0) return undefined;
+  const desktopClaims = symptomTexts.filter((t) => !PHONE_ONLY.test(t));
+  if (desktopClaims.length === 0) return undefined;
+  if (!ok.every((r) => isPhoneFrame(readFileSync(r.beforePng)))) return undefined;
+  return (
+    `- Every scenario runs at a phone-sized viewport, but these symptoms are not about phones: ` +
+    desktopClaims.map((t) => `"${t}"`).join("; ") +
+    `. Keep (or add) one scenario at the app's normal desktop viewport that shows the change there — its ` +
+    `screenshots are the main before/after pair. Phone-only claims are measured on an extra phone-sized page ` +
+    `inside a script, never by moving a whole scenario to a phone.`
+  );
+}
+
 /** A symptom text that says which of two things is drawn over the other. */
 const STACKING_CLAIM = /\b(on top of|covers?|covering|covered|behind|underneath|under|above|over(?:lap)?s?|hides?|hidden)\b/i;
 /** A measurement that says which element is on top (any reasonable key name, or an elementFromPoint result). */
@@ -255,7 +278,12 @@ export async function confirmScenariosWithRepair(
   repair?: (prompt: string) => Promise<void>
 ): Promise<{ results: ScenarioResult[]; repaired: boolean; flaky: string[] }> {
   let results = await confirmScenarios(o);
-  let problems = scenarioProblems(results, o.symptomTexts);
+  const allProblems = (rs: ScenarioResult[]) => {
+    const p = scenarioProblems(rs, o.symptomTexts);
+    const desktop = missingDesktopScenario(rs, o.symptomTexts);
+    return desktop ? [...p, desktop] : p;
+  };
+  let problems = allProblems(results);
   const flaky: string[] = [];
   if (problems.length > 0) {
     await logProblems(o, "first check", problems);
@@ -270,14 +298,14 @@ export async function confirmScenariosWithRepair(
       }
       return r;
     });
-    problems = scenarioProblems(results, o.symptomTexts);
+    problems = allProblems(results);
     if (flaky.length > 0) console.warn(`[verify] passed on a second check (flaky): ${flaky.join(", ")}`);
   }
   if (problems.length === 0 || !repair) return { results, repaired: false, flaky };
   await logProblems(o, "sent to repair", problems);
   await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }));
   results = await confirmScenarios(o);
-  const left = scenarioProblems(results, o.symptomTexts);
+  const left = allProblems(results);
   if (left.length > 0) await logProblems(o, "after repair", left);
   return { results, repaired: true, flaky };
 }
