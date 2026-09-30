@@ -53,9 +53,10 @@ export function enrichRecording(events: ProgressEvent[], wt: Walkthrough | null,
   // The screenshot verdict goes where the verifier reported it; with no such stage, before the end.
   const verdictAt = stageIndex(events, (s) => (s.stage === "shots" || s.stage === "app") && VERIFIER_DONE.test(s.label));
   const v = wt.verification;
+  // A walkthrough with frames but no verification record predates that record: the frames prove the repro.
   const verdict: ProgressEvent[] | undefined =
-    v?.status === "passed"
-      ? confirmedEvents(0, wt.shots, v.shotsNote)
+    v?.status === "passed" || (!v && wt.shots)
+      ? confirmedEvents(0, wt.shots, v?.shotsNote)
       : v?.skipReason
         ? [skippedOutcome(0, v.skipReason, { alreadyPlain: true })]
         : undefined;

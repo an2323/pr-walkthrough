@@ -62,6 +62,14 @@ describe("enrichRecording", () => {
     expect(out.find((e) => e.kind === "outcome")).toMatchObject({ code: "identical", message: "Same in a still." });
   });
 
+  it("a walkthrough with frames but no verification record (an older run) still gets its frames and an ok verdict", () => {
+    const w = wt({ verification: undefined });
+    const out = enrichRecording(base(), w, true);
+    expect(out.find((e) => e.kind === "frames")).toMatchObject({ before: "before-annotated.png" });
+    expect(out.find((e) => e.kind === "outcome")).toMatchObject({ code: "ok" });
+    expect(out.find((e) => e.kind === "scenario")).toBeUndefined();
+  });
+
   it("a recording that already has a plan is returned untouched", () => {
     const events = enrichRecording(base(), wt(), true);
     expect(enrichRecording(events, wt(), true)).toBe(events);

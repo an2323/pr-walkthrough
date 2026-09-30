@@ -194,9 +194,12 @@ async function main(): Promise<void> {
   await click('button:has-text("Next")');
   await sleep(700);
   mark("vo1");
+  // The cursor follows what the voice is saying: the stacking diagram first, then the code.
+  void glide(W * 0.27, H * 0.64, 70).then(() => glide(W * 0.36, H * 0.68, 50));
   await sleep(vo1.seconds * 1000 + 350);
   if (vo2) {
     mark("vo2");
+    void glide(W * 0.62, H * 0.56, 70).then(() => glide(W * 0.66, H * 0.74, 60));
     await sleep(vo2.seconds * 1000 + 350);
   }
   await caption("Paste a PR. Get the proof. <b>Understand the fix.</b>");
@@ -224,7 +227,7 @@ async function main(): Promise<void> {
   const draw = captions.map((c, i) => {
     const f = path.join(work, `caption-${i}.txt`);
     writeFileSync(f, c.text);
-    return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=34:fontcolor=0xf4f4f4:x=(w-text_w)/2:y=${1080 - BAR}+(${BAR}-text_h)/2:enable='between(t,${c.start.toFixed(2)},${(c.end ?? total).toFixed(2)})'`;
+    return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=34:fontcolor=0xf4f4f4:x=(w-text_w)/2:y=${1080 - BAR}+(${BAR}-text_h)/2:enable='gte(t,${c.start.toFixed(2)})*lt(t,${(c.end ?? total).toFixed(2)})'`;
   });
   const vf = [`fps=30`, `scale=1920:${1080 - BAR}:flags=lanczos`, `pad=1920:1080:0:0:color=0x141414`, `drawbox=x=0:y=${1080 - BAR}:w=1920:h=2:color=0x333a42:t=fill`, ...draw].join(",");
   sh("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", vf, "-t", total.toFixed(2), "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", video]);
