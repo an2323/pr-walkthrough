@@ -119,9 +119,18 @@ export async function checkVerbatim(
           const quoted = block.lines.filter((l) => l.kind !== "elided").map((l) => l.text.trimEnd());
           if (quoted.length > 0 && quoted.some((t) => !own.has(t))) {
             const otherLines = await getLines(block.file, other);
+            const baseLines = await getLines(block.file, "base");
+            const headLines = await getLines(block.file, "head");
+            const real = block.lines.filter((l) => l.kind !== "elided");
+            // A block with removed/added lines IS a diff: removed lines from BASE, the rest from HEAD.
+            const isDiff = real.some((l) => l.kind === "removed" || l.kind === "added") &&
+              real.every((l) => (l.kind === "removed" ? baseLines : headLines).has(l.text.trimEnd()));
             if (quoted.every((t) => otherLines.has(t))) {
               snapped.push(`step ${step.id} beat ${bi} block ${ci}: quoted from ${other}, labelled ${block.revision} → relabelled`);
               block.revision = other;
+            } else if (isDiff) {
+              snapped.push(`step ${step.id} beat ${bi} block ${ci}: removed/added lines labelled ${block.revision} → relabelled diff`);
+              (block as { revision: string }).revision = "diff";
             }
           }
         }

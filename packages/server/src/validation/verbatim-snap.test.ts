@@ -72,3 +72,21 @@ describe("checkVerbatim relabels a block quoted from the other revision", () => 
     expect(r.errors.length + r.snapped.length).toBeGreaterThan(0);
   });
 });
+
+describe("checkVerbatim relabels a diff-shaped block", () => {
+  it("removed+added lines labelled head become a diff block (#12053 s5)", async () => {
+    const draft = {
+      steps: [{ id: "s5", beats: [{ code: [{ file: "D.tsx", revision: "head", lines: [
+        { kind: "removed", text: "  }, [callbacksRef, open]);" },
+        { kind: "added", text: "  }, [callbacksRef, open, menuNode]);" },
+        { kind: "context", text: "  return null;" },
+      ] }] }] }],
+    } as never;
+    const ws = { readFile: async (_f: string, rev: "base" | "head") => (rev === "base" ? BASE : HEAD) } as never;
+    const r = await checkVerbatim(draft, ws);
+    expect(r.errors).toEqual([]);
+    const d = draft as unknown as { steps: { beats: { code: { revision: string }[] }[] }[] };
+    expect(d.steps[0].beats[0].code[0].revision).toBe("diff");
+  });
+});
+
