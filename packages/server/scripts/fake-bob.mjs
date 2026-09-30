@@ -18,6 +18,7 @@
  *   verifier=skip       the verifier declines in plain words (skip.json)
  *   verifier=none       writes nothing → "no scenario script"
  *   quality=nojson      the quality repair answers with prose → draft kept, warning stays
+ *   factcheck=fix       the fact check corrects plain.problem (default: answers NO_CHANGES)
  *   slow=<ms>           delay between deltas (default 2) — to watch the progress screen
  */
 
@@ -56,7 +57,9 @@ const stage = resume
       ? "repair"
       : /critical quality checks/.test(followUp)
         ? "quality"
-        : "revise"
+        : /^Fact check against the running app/.test(followUp)
+          ? "factcheck"
+          : "revise"
   : mode === "pr-verifier"
     ? "verifier"
     : "analysis";
@@ -113,6 +116,11 @@ async function analysis() {
     wt.steps[1].headline = "This headline is much too long for the reader and the voice to follow";
   }
   if (first && plan.analysis === "invalid" && wt.steps?.[0]) delete wt.steps[0].narration;
+  if (stage === "factcheck" && plan.factcheck !== "fix") {
+    await say("NO_CHANGES");
+    return finish();
+  }
+  if (stage === "factcheck" && wt.plain) wt.plain.problem = `${wt.plain.problem.replace(/\.$/, "")} (checked against the running app).`;
   if (stage === "quality" && plan.quality === "nojson") {
     await say("Sorry, I could not rewrite it.");
     return finish();

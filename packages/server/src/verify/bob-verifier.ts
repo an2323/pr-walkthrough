@@ -55,6 +55,7 @@ import { recipeFor, resolveRecipe, type AppRecipe } from "./recipes.js";
 import { confirmScenariosWithRepair } from "./repro-confirm.js";
 import { changedRegion, comparePngs } from "../shots/png-diff.js";
 import { listSymptomTexts } from "./symptom-shots.js";
+import type { ScenarioFact } from "./fact-check.js";
 import { IDENTICAL_FRAMES_NOTE, NO_FRAMES_NOTE } from "./shots-status.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -107,6 +108,8 @@ export type VerifyResult =
       symptomSrcs?: Map<number, string>;
       /** The repro's own measurements at BASE and HEAD — reused by the revise step instead of re-running the app. */
       measures?: { base: unknown; head: unknown };
+      /** What every confirmed scenario measured on BASE and HEAD — the facts the prose is checked against. */
+      facts?: ScenarioFact[];
       /** Every confirmed scenario (one per user-visible problem), scripts persisted next to `reproPath`. */
       scenarios?: { id: string; title: string; path: string }[];
     }
@@ -637,6 +640,13 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       ...(symptomSrcs ? { symptomSrcs } : {}),
       measures: { base: (first.before as { measure?: unknown }).measure, head: (first.after as { measure?: unknown }).measure },
       scenarios: passing.map((r) => ({ id: r.scenario.id, title: r.scenario.title, path: path.join(persistDir, r.scenario.file) })),
+      facts: passing.map((r) => ({
+        id: r.scenario.id,
+        title: r.scenario.title,
+        ...(r.scenario.symptomIndex !== undefined ? { symptomIndex: r.scenario.symptomIndex } : {}),
+        base: (r.outcome.before as { measure?: unknown } | undefined)?.measure,
+        head: (r.outcome.after as { measure?: unknown } | undefined)?.measure,
+      })),
     };
   } catch (err) {
     // Whatever broke (install, dev server, warm-up, Bob's process, the filesystem) — report it

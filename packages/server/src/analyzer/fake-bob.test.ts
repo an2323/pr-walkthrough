@@ -101,4 +101,16 @@ describe("fake-bob", () => {
     expect(files).toEqual(["a.cjs", "scenarios.json"]);
     expect(existsSync(path.join(ws, ".walkthrough", "verify", "pw.cjs"))).toBe(false);
   });
+  it("fact check: NO_CHANGES by default, a corrected problem with factcheck=fix", async () => {
+    const dir = answersDir();
+    const ask = (plan: string) =>
+      withRehearsal({ answersDir: dir, plan }, () =>
+        runBob("Fact check against the running app. The backend ran …", dir, "5", { resumeTaskId: "fake-analysis-1" })
+      );
+    const quiet = await ask("slow=0");
+    expect(findWalkthroughInEvents(quiet.events)).toBeUndefined();
+    expect(quiet.stdout).toContain("NO_CHANGES");
+    const fixed = findWalkthroughInEvents((await ask("factcheck=fix,slow=0")).events) as { plain: { problem: string } };
+    expect(fixed.plain.problem).toMatch(/checked against the running app/);
+  });
 });

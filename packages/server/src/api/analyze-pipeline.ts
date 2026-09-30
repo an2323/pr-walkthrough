@@ -35,6 +35,7 @@ import { validate, checkQuality, criticalQualityWarnings } from "../validation/i
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 import { blobsEnabled, uploadBlob, uploadDir } from "../blobs.js";
 import { voiceWalkthrough, voicingConfigured } from "../tts/voice-stage.js";
+import { factCheck, type ScenarioFact } from "../verify/fact-check.js";
 
 const GIT_CACHE_DIR = process.env.GIT_CACHE_DIR ?? "/tmp/pr-walkthrough-repos";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -185,6 +186,8 @@ async function runPipeline(
     let walkthrough: Walkthrough = result.walkthrough;
     // Per-symptom frames from the verifier; kept here so every later rewrite by Bob can re-attach them.
     let symptomSrcs: Map<number, string> | undefined;
+    // Measured BASE/HEAD facts of every confirmed scenario (for the fact check).
+    let scenarioFacts: ScenarioFact[] = [];
     // Quality-repair spend that is NOT already inside `meta.run.costUsd` (a failed resume still costs).
     let qualityOrphanCost = 0;
 
@@ -329,6 +332,7 @@ async function runPipeline(
             markVerified(walkthrough);
             if (vr.shots) walkthrough.shots = vr.shots;
             if (vr.shotsNote) recordShotsNote(walkthrough, vr.shotsNote);
+            scenarioFacts = vr.facts ?? [];
             if (vr.symptomSrcs && vr.symptomSrcs.size > 0) {
               symptomSrcs = vr.symptomSrcs;
               attachSymptomShots(walkthrough, vr.symptomSrcs);
@@ -496,6 +500,44 @@ async function runPipeline(
         process.env.VERIFY_SHOTS === "0" ? "screenshots turned off (VERIFY_SHOTS=0)" : `no app recipe for ${walkthrough.pr.repo}`
       );
       await saveWalkthrough(walkthrough);
+    }
+
+    // Fact check: the prose against what the running app measured (only after a confirmed repro).
+    if (process.env.VERIFY_FACTCHECK !== "0" && scenarioFacts.length > 0 && walkthrough.verification?.status === "passed") {
+      emit({ kind: "stage", t: elapsed(), stage: "repairing", label: "Checking the text against the running app" });
+      try {
+        const fc = await factCheck({
+          walkthrough,
+          facts: scenarioFacts,
+          repoPath: workspace.repoPath,
+          prLabel: `${owner}/${repo}#${number}`,
+          onEvent: (raw) => createProgressNormalizer(started, emit).handle(raw, Date.now()),
+        });
+        // The resume's cost is the analysis task's new cumulative total, like the quality repair's.
+        if (fc.sessionCost !== undefined && fc.sessionCost > 0) {
+          if (walkthrough.meta.run) walkthrough.meta.run = { ...walkthrough.meta.run, costUsd: Math.max(walkthrough.meta.run.costUsd ?? 0, fc.sessionCost) };
+          else qualityOrphanCost += fc.costUsd;
+        }
+        if (fc.status === "ok") {
+          console.log(`[analyze-pipeline] fact check corrected: ${fc.changed.join(", ")}`);
+          const run = walkthrough.meta.run;
+          walkthrough = fc.walkthrough;
+          if (run) walkthrough.meta.run = run;
+          emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Corrected ${fc.changed.length} sentence(s) to match the running app` });
+          await repairQuality();
+          await saveWalkthrough(walkthrough);
+          qualityWarnings = checkQuality(walkthrough);
+        } else {
+          emit({
+            kind: "stage",
+            t: elapsed(),
+            stage: "repairing",
+            label: fc.status === "unchanged" ? "Text matches the running app" : `Fact check skipped: ${fc.reason.slice(0, 100)}`,
+          });
+        }
+      } catch (err) {
+        console.warn("[analyze-pipeline] fact check failed:", err instanceof Error ? err.message : err);
+      }
     }
 
     // Voice last: the text is final now. A rehearsal only voices with plan tts=on (it costs characters).

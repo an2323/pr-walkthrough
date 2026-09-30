@@ -43,6 +43,9 @@ interface World {
   ablation: Ablation | undefined | Error;
   contradicts: boolean;
   revise: ((wt: Walkthrough) => unknown) | Error;
+  /** Fact check answer; undefined = "text matches" at $0. */
+  factCheck?: ((wt: Walkthrough) => unknown) | Error;
+  factCheckCalls: number;
   /** Narration voice outcome; undefined = voice not configured. */
   voice?: "ok" | "failed";
   // --- observed ---
@@ -180,6 +183,19 @@ vi.mock("../verify/revise.js", () => ({
   },
 }));
 
+vi.mock("../verify/fact-check.js", () => ({
+  factCheck: async ({ walkthrough }: { walkthrough: Walkthrough }) => {
+    w.world.factCheckCalls++;
+    const f = w.world.factCheck;
+    if (f instanceof Error) throw f;
+    const prev = walkthrough.meta.run?.costUsd ?? 0;
+    if (!f) return { status: "unchanged", costUsd: 0, sessionCost: prev };
+    const out = f(walkthrough) as { costUsd: number };
+    w.world.spent += out.costUsd;
+    return { ...out, sessionCost: prev + out.costUsd };
+  },
+}));
+
 vi.mock("../tts/voice-stage.js", () => ({
   voicingConfigured: () => !!w.world.voice,
   voiceWalkthrough: async () =>
@@ -257,6 +273,7 @@ function verifierOk(cost = 0.66): unknown {
     symptomSrcs: SYMPTOM_SRCS,
     measures: { base: {}, head: {} },
     scenarios: [{ id: "sidebar-zindex", title: "t", path: "/x.cjs" }],
+    facts: [{ id: "sidebar-mobile-menu", title: "Menu closes the sidebar", symptomIndex: 1, base: { inMenu: true }, head: { sidebarStillVisible: false } }],
   };
 }
 
@@ -299,6 +316,7 @@ function world(over: Partial<World>): World {
     ledger: 0,
     qualityRepairCalls: 0,
     verifierCalls: 0,
+    factCheckCalls: 0,
     ...over,
   };
 }
@@ -498,6 +516,31 @@ describe("runAnalyzeJob — every path ends in a trustworthy result", () => {
     const wt = expectFinishedCleanly(final, wd);
     expect(wd.verifierCalls).toBe(0);
     expect(wt.verification?.skipReason).toMatch(/turned off/);
+  });
+
+  it("fact check corrects a sentence → frames, verdicts kept, cost counted, still no critical warnings", async () => {
+    const { final, world: wd } = await run({
+      factCheck: (prev) => {
+        const out = JSON.parse(JSON.stringify(prev)) as Walkthrough;
+        out.plain!.problem = "Opening the main menu left the sidebar open at the same time.";
+        return { status: "ok", walkthrough: out, changed: ["plain.problem"], costUsd: 0.15 };
+      },
+    });
+    const wt = expectFinishedCleanly(final, wd);
+    expectEvidenceKept(wt);
+    expect(wt.plain!.problem).toMatch(/at the same time/);
+    expect(wd.factCheckCalls).toBe(1);
+  });
+
+  it("fact check only runs after a confirmed repro", async () => {
+    const { final, world: wd } = await run({ verifier: { status: "skipped", reason: "repro not trusted", costUsd: 0.4 } });
+    expectFinishedCleanly(final, wd);
+    expect(wd.factCheckCalls).toBe(0);
+  });
+
+  it("fact check throws → run still finishes with the unchecked text", async () => {
+    const { final, world: wd } = await run({ factCheck: new Error("bob exited") });
+    expectEvidenceKept(expectFinishedCleanly(final, wd));
   });
 
   it("voice recorded as the last stage before done", async () => {
