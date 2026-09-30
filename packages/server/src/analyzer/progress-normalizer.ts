@@ -95,7 +95,7 @@ function shortenPath(p: string): string {
 export interface RunSpend {
   /** Latest cumulative cost per Bob task ("analysis", "verifier"). */
   tasks: Map<string, number>;
-  /** The run's planned maximum across all stages. */
+  /** Optional cap to show next to the total (the live pipeline shows none). */
   maxUsd?: number;
 }
 

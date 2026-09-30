@@ -168,13 +168,9 @@ async function runPipeline(
     });
 
     // One running total for the progress screen, across the analysis task and the verifier task.
-    const spend: RunSpend = {
-      tasks: new Map(),
-      maxUsd:
-        Number(process.env.MAX_COST ?? 8) + QUALITY_REPAIR_MAX_COST +
-        Number(process.env.VERIFY_MAX_COST ?? 2) + Number(process.env.VERIFY_REPAIR_MAX_COST ?? 1) +
-        Number(process.env.FACTCHECK_MAX_COST ?? 0.6),
-    };
+    // No "max" is shown: the sum of per-stage caps is not a real bound (retries, revise, repairs),
+    // and a true bound (~$18) only alarms while runs cost $1–4.
+    const spend: RunSpend = { tasks: new Map() };
     const normalizer = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
     emit({ kind: "stage", t: elapsed(), stage: "analyzing", label: "Bob is analyzing the PR" });
 
