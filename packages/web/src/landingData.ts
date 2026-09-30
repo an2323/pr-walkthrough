@@ -18,3 +18,6 @@ export const SUGGESTED_PRS: SuggestedPr[] = [
   { url: 'https://github.com/excalidraw/excalidraw/pull/11286', label: '#11286 duplicate lasso item', size: '+30 −7' },
   { url: 'https://github.com/excalidraw/excalidraw/pull/10880', label: '#10880 left-menu spacing', size: '+1 −1' },
 ];
+
+/** Walkthroughs shown first under "Already analysed", in this order; the rest follow, newest first. */
+export const PINNED_WALKTHROUGHS: string[] = ['excalidraw/excalidraw#10295', 'excalidraw/excalidraw#12053'];

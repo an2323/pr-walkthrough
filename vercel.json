@@ -2,15 +2,23 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm build:static",
+  "buildCommand": "pnpm --filter @pr-walkthrough/shared build && VITE_API_BASE=https://130-61-220-249.sslip.io pnpm --filter @pr-walkthrough/web build",
   "outputDirectory": "packages/web/dist",
   "rewrites": [
-    { "source": "/((?!data/|assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!data/|assets/).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/data/audio/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
     }
   ]
 }

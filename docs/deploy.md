@@ -1,21 +1,17 @@
 # Deploy: live analysis on a VM (GCP or Oracle) + Supabase
 
-## Do not touch the existing Vercel demo
+## Front end on Vercel, everything else on the VM (cut over Sep 30)
 
-Until the live stack is tested end-to-end and you explicitly decide to cut over:
+| What | Where |
+|------|-------|
+| `pr-walkthrough-bob.vercel.app` (the URL the judges have) | Vercel project `pr-walkthrough`: the **live** web build (`vercel.json` → `VITE_API_BASE=https://130-61-220-249.sslip.io`), no static export |
+| API, analysis, screenshots, audio | the VM (`https://130-61-220-249.sslip.io`), called cross-origin — `CORS_ORIGINS` in `deploy/.env.production` lists the judges' domain and this project's preview URLs |
+| Live work | branch `live-backend` |
 
-| What | Status |
-|------|--------|
-| `pr-walkthrough-bob.vercel.app` | **leave alone** — static hackathon demo |
-| `master` / production Vercel project | **do not redeploy**, do not change env vars |
-| Live work | branch `live-backend` only |
-| Live public URL | VM at `https://<ip-with-dashes>.sslip.io` (Caddy + Let's Encrypt) |
+`deploy/deploy.sh` ships the VM only. The Vercel front end is deployed with the Vercel CLI from the same
+checkout: `vercel deploy` (preview, check it) → `vercel deploy --prod` (the judges' URL). The previous
+production deployment stays available: `vercel rollback` restores it in seconds.
 
-`deploy/deploy.sh` uploads the **local working tree to the VM**. It never runs
-`vercel`, never pushes to `master`, and never rebuilds the static export.
-
-When (and only when) live is proven: either keep both URLs, or point a new Vercel
-project / alias at a non-static build. Do not overwrite the current project until then.
 
 ```
 browser ──https──▶ Caddy (VM) ──▶ viewer (live build, same container stack)

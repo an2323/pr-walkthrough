@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import apiRouter from "./api/routes.js";
+import { corsAllowed } from "./api/cors.js";
 import { findActiveJob } from "./api/jobs.js";
 import { failStaleJobRows } from "./storage.js";
 import { ensureSchema, startKeepAlive, databaseUrl } from "./db.js";
@@ -16,16 +17,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 
 // Behind Caddy in production: trust X-Forwarded-* for req.protocol / req.ip.
 app.set("trust proxy", true);
-
-/** Localhost always; extra origins via CORS_ORIGINS (comma-separated, or "*"). */
-function corsAllowed(origin: string): boolean {
-  if (!origin) return true;
-  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
-  const raw = process.env.CORS_ORIGINS?.trim();
-  if (!raw) return false;
-  if (raw === "*") return true;
-  return raw.split(",").map((s) => s.trim()).filter(Boolean).includes(origin);
-}
 
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? "";

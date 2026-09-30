@@ -12,7 +12,7 @@ import type { Walkthrough } from '@pr-walkthrough/shared';
 import { STATIC, walkthroughUrl, shotUrl, apiUrl } from './staticMode';
 import { parsePRUrl } from './prUrl';
 import { track } from './track';
-import { EXCALIDRAW_UI_FIXES_URL, SUGGESTED_PRS } from './landingData';
+import { EXCALIDRAW_UI_FIXES_URL, SUGGESTED_PRS, PINNED_WALKTHROUGHS } from './landingData';
 import './Landing.css';
 
 /** GET /api/preview — mirrors PrPreview in the server. */
@@ -112,9 +112,13 @@ function useCards(): CardData[] | null {
       return () => { cancelled = true; };
     }
 
-    fetch(apiUrl('/api/recent?limit=9'))
+    fetch(apiUrl('/api/recent?limit=24'))
       .then((r) => (r.ok ? (r.json() as Promise<RecentWalkthrough[]>) : []))
-      .then(async (list) => {
+      .then(async (all) => {
+        // Pinned ones first in their fixed order, then the rest newest first (the API's order).
+        const key = (r: RecentWalkthrough) => `${r.owner}/${r.repo}#${r.number}`;
+        const pinned = PINNED_WALKTHROUGHS.map((k) => all.find((r) => key(r) === k)).filter((r): r is RecentWalkthrough => !!r);
+        const list = [...pinned, ...all.filter((r) => !PINNED_WALKTHROUGHS.includes(key(r)))].slice(0, 9);
         // "Watch the run" only where a recording exists; one cheap probe per card.
         const replay = await Promise.all(
           list.map((r) => fetch(apiUrl(`/api/runs/${r.owner}/${r.repo}/${r.number}`), { method: 'HEAD' }).then((x) => x.ok).catch(() => false))
