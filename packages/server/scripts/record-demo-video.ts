@@ -14,10 +14,13 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { chromium, type Page } from "playwright";
+
+import { generateSentenceAudio } from "../src/tts/elevenlabs.js";
 
 // ---- arguments -------------------------------------------------------------------------------
 const arg = (name: string, fallback: string): string => {
@@ -28,9 +31,17 @@ const SITE = arg("site", "https://130-61-220-249.sslip.io").replace(/\/$/, "");
 const CUT = Number(arg("cut", "45")) <= 30 ? 25 : 45;
 const OUT = path.resolve(arg("out", "docs/video/out"));
 const MUSIC = arg("music", "").split(",").filter(Boolean); // mp3 paths
+// Presenter voice: ElevenLabs "Sarah" (a different voice from the site's narration), or --voice say (macOS), or --voice off.
+const VOICE_KIND = arg("voice", "eleven");
+const VOICE_ID = arg("voice-id", "EXAVITQu4vr4xnSDxMaL");
+const SAY_VOICE = arg("say-voice", "Daniel (Enhanced)");
+const VO_ON = VOICE_KIND !== "off";
+const ENV_FILE = arg("env", "");
+if (ENV_FILE) process.loadEnvFile(path.resolve(ENV_FILE));
+const VOICE_CACHE = path.join(OUT, "voice-cache");
 const PR = { owner: "excalidraw", repo: "excalidraw", number: 10295 };
-const PASTE = arg("paste", "https://github.com/excalidraw/excalidraw/pull/11680");
-const REPLAY_SECONDS = CUT === 25 ? 7 : 16; // how long the recorded run takes on screen
+const PASTE = arg("paste", `https://github.com/${PR.owner}/${PR.repo}/pull/${PR.number}`);
+const REPLAY_SECONDS = CUT === 25 ? 10 : 18; // long enough for one spoken line per phase // how long the recorded run takes on screen
 const W = 1280;
 const H = 666; // the page; the 81 px under it (at 1920×1080) is the caption bar
 const SCALE = 1.5;
@@ -43,16 +54,6 @@ mkdirSync(path.join(work, "frames"), { recursive: true });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: ["ignore", "pipe", "pipe"] }).toString();
-
-// ---- narration clips (the ones the viewer plays) --------------------------------------------
-async function clip(stepId: string, sentence: number): Promise<{ file: string; seconds: number }> {
-  const file = path.join(work, `vo-${stepId}-${sentence}.mp3`);
-  const res = await fetch(`${SITE}/api/audio/${PR.owner}/${PR.repo}/${PR.number}/${stepId}/${sentence}.mp3`);
-  if (!res.ok) throw new Error(`no narration for ${stepId}/${sentence}: HTTP ${res.status}`);
-  writeFileSync(file, Buffer.from(await res.arrayBuffer()));
-  const seconds = Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).trim());
-  return { file, seconds };
-}
 
 // ---- in-page overlay: caption pill + cursor --------------------------------------------------
 const OVERLAY = `
@@ -80,6 +81,23 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: SCALE, reducedMotion: "no-preference" });
   await context.addInitScript(OVERLAY);
+  await context.addInitScript(`(() => {
+    const plays = (window.__plays = []);
+    const orig = HTMLMediaElement.prototype.play;
+    window.__stopAfter = Infinity; window.__ended = 0; window.__stoppedAt = 0;
+    HTMLMediaElement.prototype.play = function () {
+      plays.push({ src: this.currentSrc || this.src, at: Date.now() });
+      if (!this.__hooked) {
+        this.__hooked = true;
+        // capture phase: runs before the viewer's own "ended" handler, so the next sentence never starts
+        this.addEventListener('ended', () => {
+          window.__ended++;
+          if (window.__ended >= window.__stopAfter && !window.__stoppedAt) { window.__stoppedAt = Date.now(); document.querySelector('.listen')?.click(); }
+        }, true);
+      }
+      return orig.apply(this, arguments);
+    };
+  })();`);
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
 
@@ -106,6 +124,45 @@ async function main(): Promise<void> {
     if (html) captions.push({ start: t, end: null, text: html.replace(/<[^>]+>/g, "") });
   };
 
+  // ---- presenter voice: a different voice from the site's narration; lines queue up, never overlap each other,
+  //      and never start while the site's own narration is playing ---------------------------------
+  const presenter: { file: string; at: number; text: string }[] = [];
+  const cache = new Map<string, { file: string; seconds: number }>();
+  const synth = async (text: string): Promise<{ file: string; seconds: number }> => {
+    const hit = cache.get(text);
+    if (hit) return hit;
+    let file: string;
+    if (VOICE_KIND === "say") {
+      const base = path.join(work, `say-${cache.size}`);
+      sh("say", ["-v", SAY_VOICE, "-r", "172", "-o", `${base}.aiff`, text]);
+      sh("ffmpeg", ["-y", "-i", `${base}.aiff`, "-ar", "44100", "-ac", "1", `${base}.wav`]);
+      file = `${base}.wav`;
+    } else {
+      const key = process.env.ELEVENLABS_API_KEY;
+      if (!key) throw new Error("ELEVENLABS_API_KEY is not set (pass --env /path/to/.env)");
+      mkdirSync(VOICE_CACHE, { recursive: true });
+      // cached by voice + text: a re-run never pays for a line it already has
+      file = path.join(VOICE_CACHE, `${createHash("sha256").update(VOICE_ID).update("\0").update(text).digest("hex").slice(0, 16)}.mp3`);
+      await generateSentenceAudio(text, VOICE_ID, key, file);
+    }
+    const seconds = Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).trim());
+    const made = { file, seconds };
+    cache.set(text, made);
+    return made;
+  };
+  let voiceFreeAt = 0; // seconds since t0: the earliest the presenter may speak again
+  const ttsBusy = { until: 0 }; // seconds since t0: the site's narration is playing until then
+  /** Caption + spoken line at the same moment; returns when the line ends (seconds since t0). */
+  const narrate = async (text: string, spoken = true): Promise<number> => {
+    await caption(text);
+    if (!VO_ON || !spoken) return now();
+    const clip = await synth(text);
+    const at = Math.max(now(), voiceFreeAt, ttsBusy.until);
+    presenter.push({ file: clip.file, at, text });
+    voiceFreeAt = at + clip.seconds + 0.25;
+    return at + clip.seconds;
+  };
+
   const glide = async (x: number, y: number, steps = 30) => { await page.mouse.move(x, y, { steps }); };
   const center = async (sel: string) => {
     const el = page.locator(sel).first();
@@ -122,9 +179,44 @@ async function main(): Promise<void> {
     await page.mouse.up();
   };
 
-  // ---- narration clips first (so the script knows how long each step must stay) ------------
-  const vo1 = await clip("s2", 0);
-  const vo2 = CUT === 45 ? await clip("s2", 1) : null;
+  // ---- how fast the recorded run is replayed (it took ~18 minutes) ------------------------
+  const probe = await (await fetch(`${SITE}/api/runs/${PR.owner}/${PR.repo}/${PR.number}/events?speed=1000000`)).text();
+  const lastEvent = probe.split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6)) as { t: number }).at(-1);
+  const speed = Math.max(1, Math.round((lastEvent?.t ?? 1_000_000) / 1000 / REPLAY_SECONDS));
+
+  // ---- the ANALYSE click is staged: the pasted PR is shown as a new one, POST /api/analyze answers with a job,
+  //      and that job's event stream IS the recorded real run, replayed at `speed`. Everything else is the site. ----
+  let staged = true;
+  const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/api/config", (r) => r.fulfill(json({ liveAnalysis: true, accessCodeRequired: false, dailyLimit: 20, usedToday: 3 })));
+  await page.route("**/api/preview*", (r) =>
+    staged
+      ? r.fulfill(json({ owner: PR.owner, repo: PR.repo, number: PR.number, analysed: false, title: "fix: close floating sidebar on main menu open", additions: 19, deletions: 7, files: 5, screenshots: { available: true } }))
+      : r.continue()
+  );
+  await page.route(`**/api/walkthroughs/${PR.owner}/${PR.repo}/${PR.number}`, (r) =>
+    staged && r.request().method() === "HEAD" ? r.fulfill({ status: 404 }) : r.continue()
+  );
+  await page.route("**/api/analyze", (r) => r.fulfill(json({ jobId: "demo" }, 202)));
+  await page.route("**/api/jobs/demo/events", (r) =>
+    r.continue({ url: `${SITE}/api/runs/${PR.owner}/${PR.repo}/${PR.number}/events?speed=${speed}` })
+  );
+
+  // The presenter's lines are made (or fetched from the cache) BEFORE the clock starts, so none arrives late.
+  if (VO_ON) {
+    const lines = [
+      "Bob reads the whole PR — and runs it.",
+      "Paste a PR. See what you'll get before you start.",
+      "Press Analyse. Bob starts on the PR.",
+      "Bob reads the diff and the code around it.",
+      "Then he runs it — old commit and new commit.",
+      "Same clicks, both versions: the proof.",
+      "Done. The screenshots come from the running app.",
+      "And then it explains every change, read aloud.",
+      "Paste a PR. Get the proof. Understand the fix.",
+    ];
+    for (const l of lines) await synth(l);
+  }
 
   // ---- go --------------------------------------------------------------------------------
   await page.goto(SITE + "/", { waitUntil: "networkidle" });
@@ -134,78 +226,70 @@ async function main(): Promise<void> {
   mark("landing");
 
   // 1 — the page
-  await caption("Bob reads the whole PR — <b>and runs it</b>.");
-  await sleep(CUT === 45 ? 3400 : 2200);
+  const l1 = await narrate("Bob reads the whole PR — and runs it.");
+  await sleep(Math.max(CUT === 45 ? 3400 : 2400, (l1 - now()) * 1000 + 300));
 
-  // 2 — paste a PR (45 s cut only): the page says what you will get before you press anything
-  if (CUT === 45) {
-    await caption("Paste a PR. <b>See what you'll get</b> before you start.");
-    await click('input[aria-label="GitHub PR URL"]');
-    await page.keyboard.type(PASTE, { delay: 32 });
-    await page.locator(".lp-pv--ok, .lp-pv--part, .lp-pv--bad, .lp-pv--done").first().waitFor({ timeout: 15000 }).catch(() => {});
-    mark("preview");
-    await sleep(2600);
-    await page.fill('input[aria-label="GitHub PR URL"]', "");
-    await sleep(300);
-  }
+  // 2 — paste a PR: the page says what you will get before you press anything
+  const l2 = await narrate("Paste a PR. See what you'll get before you start.", CUT === 45);
+  await click('input[aria-label="GitHub PR URL"]');
+  await page.keyboard.type(PASTE, { delay: 32 });
+  await page.locator(".lp-pv--ok, .lp-pv--part, .lp-pv--bad, .lp-pv--done").first().waitFor({ timeout: 15000 }).catch(() => {});
+  mark("preview");
+  await sleep(Math.max(CUT === 45 ? 2600 : 1800, (l2 - now()) * 1000 + 300));
 
-  // 3 — to the finished analyses, press "Watch the run" on #10295
-  await caption(null);
-  await page.evaluate(() => document.getElementById("analysed")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  await sleep(1100);
-  const watch = `article:has-text("#${PR.number}") a:has-text("Watch the run")`;
-  await page.locator(watch).first().waitFor({ timeout: 10000 });
-  await click(watch);
+  // 3 — press Analyse
+  const l3 = await narrate("Press Analyse. Bob starts on the PR.");
+  await sleep(Math.max(0, (Math.min(l3, now() + 1.6) - now()) * 1000));
+  await click("button:has-text('Analyse')");
+  mark("analyse");
 
   // 4 — the real run, played back: captions follow what the screen is doing
-  await page.waitForURL(/progress/, { timeout: 15000 }).catch(() => {});
-  // the replay pace is set by ?speed= (the recorded run took ~18 minutes)
-  const url = new URL(page.url());
-  const probe = await (await fetch(`${SITE}/api/runs/${PR.owner}/${PR.repo}/${PR.number}/events?speed=1000000`)).text();
-  const last = probe.split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6)) as { t: number }).at(-1);
-  const speed = Math.max(1, Math.round((last?.t ?? 1_000_000) / 1000 / REPLAY_SECONDS));
-  url.searchParams.set("speed", String(speed));
-  await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  await page.waitForURL(/progress/, { timeout: 15000 });
   mark("progress");
-
   const phase = async (): Promise<string> => (await page.locator(".pg-pane-head h3").first().textContent().catch(() => "")) ?? "";
   const spoken = new Set<string>();
-  const say = async (key: string, html: string) => { if (!spoken.has(key)) { spoken.add(key); await caption(html); mark(`caption:${key}`); } };
+  const say = async (key: string, text: string, voiced = true) => { if (!spoken.has(key)) { spoken.add(key); await narrate(text, voiced); mark(`caption:${key}`); } };
   const deadline = Date.now() + 70_000;
   while (Date.now() < deadline) {
     if (await page.locator(".pg-done").count()) break;
     const h = await phase();
-    if (/What changed/.test(h)) await say("read", "Bob <b>reads</b> the diff and the code around it.");
-    else if (/Reproducing/.test(h)) await say("run", "Then he <b>runs it</b> — old commit and new commit.");
-    else if (/Reproduced|fix holds/.test(h)) await say("proof", "Same clicks, both versions: <b>the proof</b>.");
+    if (/What changed/.test(h)) await say("read", "Bob reads the diff and the code around it.", CUT === 45);
+    else if (/Reproducing/.test(h)) await say("run", "Then he runs it — old commit and new commit.");
+    else if (/Reproduced|fix holds/.test(h)) await say("proof", "Same clicks, both versions: the proof.");
     await sleep(200);
   }
   mark("done");
-  await caption("Done — the screenshots come from the running app.");
-  await sleep(CUT === 45 ? 1600 : 900);
+  const l7 = await narrate("Done. The screenshots come from the running app.", CUT === 45);
+  staged = false;
+  await page.waitForURL(new RegExp(`/${PR.owner}/${PR.repo}/${PR.number}$`), { timeout: 15000 });
+  await page.waitForLoadState("networkidle");
 
-  // 5 — the finished walkthrough: one step, read aloud
-  await page.goto(`${SITE}/${PR.owner}/${PR.repo}/${PR.number}`, { waitUntil: "networkidle" });
+  // 5 — the finished walkthrough, read aloud by the site itself: press "Listen" and let it play (Auto mode)
   mark("viewer");
-  await caption("…and <b>explains every change</b>, read aloud.");
-  await sleep(CUT === 45 ? 2300 : 1500);
-  await click('button:has-text("Start")');
-  await sleep(CUT === 45 ? 1800 : 1000); // the first step: the symptoms
-  await click('button:has-text("Next")');
+  const l8 = await narrate("And then it explains every change, read aloud.");
+  await sleep(Math.max(1200, (Math.max(l7, l8) - now()) * 1000 + 350)); // the presenter finishes before the site starts talking
+  await click(".listen");
   await sleep(700);
-  mark("vo1");
-  // The cursor follows what the voice is saying: the stacking diagram first, then the code.
-  void glide(W * 0.27, H * 0.64, 70).then(() => glide(W * 0.36, H * 0.68, 50));
-  await sleep(vo1.seconds * 1000 + 350);
-  if (vo2) {
-    mark("vo2");
-    void glide(W * 0.62, H * 0.56, 70).then(() => glide(W * 0.66, H * 0.74, 60));
-    await sleep(vo2.seconds * 1000 + 350);
+  mark("listen");
+  // Let the site's own narration play for N sentences, then the page itself presses Pause right as the Nth one
+  // ends (see the init script) — so the button ends in a true "Resume" state and no further sentence starts.
+  await page.evaluate((n) => { (window as unknown as { __stopAfter: number }).__stopAfter = n; }, CUT === 45 ? 2 : 1);
+  const listenAt = Date.now();
+  let stoppedAt = 0;
+  while (Date.now() - listenAt < 45_000) {
+    stoppedAt = (await page.evaluate(() => (window as unknown as { __stoppedAt: number }).__stoppedAt)) as number;
+    if (stoppedAt) break;
+    await sleep(120);
   }
-  await caption("Paste a PR. Get the proof. <b>Understand the fix.</b>");
-  await sleep(CUT === 45 ? 1800 : 1200);
+  if (!stoppedAt) throw new Error("the site's narration did not finish in time");
+  ttsBusy.until = (stoppedAt - t0) / 1000;
+  await sleep(500); // the Resume state is on screen
+  const l9 = await narrate("Paste a PR. Get the proof. Understand the fix.");
+  await sleep(Math.max(1200, (l9 - now()) * 1000 + 500));
   mark("end");
   const total = now();
+  // What the site actually played (and when), so the mix puts each clip exactly where the page started it.
+  const played = (await page.evaluate(() => (window as unknown as { __plays?: { src: string; at: number }[] }).__plays ?? [])) as { src: string; at: number }[];
 
   await cdp.send("Page.stopScreencast");
   await sleep(300);
@@ -232,12 +316,32 @@ async function main(): Promise<void> {
   const vf = [`fps=30`, `scale=1920:${1080 - BAR}:flags=lanczos`, `pad=1920:1080:0:0:color=0x141414`, `drawbox=x=0:y=${1080 - BAR}:w=1920:h=2:color=0x333a42:t=fill`, ...draw].join(",");
   sh("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", vf, "-t", total.toFixed(2), "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", video]);
   const vdur = Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video]).trim());
-  writeFileSync(path.join(OUT, `timeline-${CUT}.json`), JSON.stringify({ total, videoSeconds: vdur, marks, captions, vo1: vo1.seconds, vo2: vo2?.seconds ?? null, speed }, null, 2));
+  writeFileSync(path.join(OUT, `timeline-${CUT}.json`), JSON.stringify({ total, videoSeconds: vdur, marks, captions, played, presenter, speed }, null, 2));
   console.log(`video: ${video}  (${vdur.toFixed(1)} s, ${frames.length} frames)`);
 
   // ---- mix: narration over music, music ducked under the voice -----------------------------
-  const voIn: { file: string; at: number }[] = [{ file: vo1.file, at: marks["vo1"]! }];
-  if (vo2) voIn.push({ file: vo2.file, at: marks["vo2"]! });
+  if (played.length === 0) throw new Error("the page played no narration — nothing to mix (is ELEVENLABS_* set, or the site's TTS cached?)");
+  const voIn: { file: string; at: number }[] = [];
+  for (const line of presenter) {
+    voIn.push({ file: line.file, at: line.at });
+    console.log(`${line.at.toFixed(1).padStart(5)}s  presenter: ${line.text}`);
+  }
+  for (const [i, pl] of played.entries()) {
+    const res = await fetch(pl.src);
+    if (!res.ok) throw new Error(`cannot fetch ${pl.src}: HTTP ${res.status}`);
+    const file = path.join(work, `vo-${i}.mp3`);
+    writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+    voIn.push({ file, at: (pl.at - t0) / 1000 });
+    console.log(`${((pl.at - t0) / 1000).toFixed(1).padStart(5)}s  narration: ${pl.src.split("/api/audio/")[1] ?? pl.src}`);
+  }
+  // No two voices at once: the presenter and the site's narration must never overlap.
+  {
+    const dur = (f: string) => Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).trim());
+    const spans = voIn.map((v) => ({ file: path.basename(v.file), a: v.at, b: v.at + dur(v.file) })).sort((x, y) => x.a - y.a);
+    const clashes = spans.flatMap((x, i) => (spans[i + 1] && spans[i + 1]!.a < x.b - 0.05 ? [`${x.file} (${x.a.toFixed(1)}–${x.b.toFixed(1)}) overlaps ${spans[i + 1]!.file} (from ${spans[i + 1]!.a.toFixed(1)})`] : []));
+    if (clashes.length > 0) throw new Error(`voices overlap:\n${clashes.join("\n")}`);
+    console.log(`voices: ${spans.length} clips, no overlap; last ends at ${spans.at(-1)!.b.toFixed(1)} s of ${vdur.toFixed(1)} s`);
+  }
   MUSIC.forEach((music, idx) => {
     const name = path.basename(music).replace(/\.mp3$/i, "").slice(0, 28);
     const outFile = path.join(OUT, `demo-${CUT}s-track${idx + 1}.mp4`);
