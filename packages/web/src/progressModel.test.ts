@@ -281,3 +281,48 @@ describe('narration, the estimate and the screenshot stage are visible from the 
     expect(v.feed).toEqual(['Bob is reproducing the change', 'Writing a test script', 'Trying it in the app', 'Reading src/a.ts']);
   });
 });
+
+describe('the ablation is its own row', () => {
+  const planEst = (ablationBuilds: number) =>
+    at({ kind: 'plan', pr: { title: 'fix', additions: 3, deletions: 1, files: 1 }, shots: { planned: true }, estimate: { minMinutes: 16, maxMinutes: 29, ablationBuilds, coldInstall: false } });
+  const ok = () => [stage('clone'), planEst(10), stage('shots'), outcome('ok', 'The bug reproduced.')];
+  const ids = (v: ReturnType<typeof deriveProgressView>) => v.steps.map((s) => s.id);
+
+  it('is named up front when the plan counts builds, between the screenshots and the fact check', () => {
+    t = 0;
+    const v = deriveProgressView(ok());
+    expect(ids(v).slice(-3)).toEqual(['ablation', 'facts', 'voice']);
+    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ label: 'Checking which changes are needed', status: 'pending' });
+    expect(ids(deriveProgressView([stage('clone'), planEst(0)]))).not.toContain('ablation');
+  });
+
+  it('counts its builds; the screenshots row keeps the verdict', () => {
+    t = 0;
+    const v = deriveProgressView([...ok(), stage('ablation', 'Testing "a#1" alone (3 of 10, about a minute each)')]);
+    expect(v.steps.find((s) => s.id === 'ablation')).toMatchObject({ status: 'current', progress: { done: 2, total: 10 }, detail: 'Build 3 of 10, about 8 min left' });
+    expect(v.steps.find((s) => s.id === 'shots')).toMatchObject({ status: 'done', detail: 'The bug reproduced.' });
+    expect(v.feed.at(-1)).toBe('Testing which changes fix the bug (3 of 10)');
+  });
+
+  it('is done once the fact check starts, and a revision after it belongs to it', () => {
+    t = 0;
+    const revising = deriveProgressView([...ok(), stage('ablation', 'Measured 5 change(s) against the running app'), stage('repairing', 'Revising the explanation from measured evidence')]);
+    expect(status(revising, 'ablation')).toBe('current');
+    expect(revising.steps.find((s) => s.id === 'ablation')?.detail).toBe('Revising the explanation from measured evidence');
+    const later = deriveProgressView([...ok(), stage('ablation'), stage('repairing', 'Checking the text against the running app')]);
+    expect(['ablation', 'facts'].map((id) => status(later, id))).toEqual(['done', 'current']);
+  });
+
+  it('old recordings (labels under "shots") keep the old handling and get no ablation row', () => {
+    t = 0;
+    const v = deriveProgressView([...ok(), stage('shots', 'Testing "a#1" alone (3 of 10, about a minute each)')]);
+    expect(ids(v)).not.toContain('ablation');
+    expect(v.steps.find((s) => s.id === 'shots')?.progress).toEqual({ done: 2, total: 10 });
+  });
+
+  it('a finished run shows no ablation row if none ran', () => {
+    t = 0;
+    const v = deriveProgressView([...ok(), at({ kind: 'done', walkthroughUrl: '/x', durationMs: 5000 })]);
+    expect(ids(v)).not.toContain('ablation');
+  });
+});
