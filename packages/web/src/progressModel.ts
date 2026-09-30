@@ -11,11 +11,13 @@ import type { ProgressEvent, ProgressEventOf, ShotsOutcomeCode } from '@pr-walkt
 export type StepStatus = 'done' | 'current' | 'pending' | 'skipped' | 'warn';
 
 export interface StepView {
-  id: 'checkout' | 'diff' | 'read' | 'check' | 'shots' | 'voice';
+  id: 'checkout' | 'diff' | 'read' | 'check' | 'shots' | 'facts' | 'voice';
   label: string;
   status: StepStatus;
   /** One short line under the label. */
   detail?: string;
+  /** A bar under the detail: known progress (`done` of `total`), or only "alive" (`indeterminate`). */
+  progress?: { done: number; total: number } | { indeterminate: true };
 }
 
 export type FileStatus = 'todo' | 'reading' | 'read' | 'hidden';
@@ -63,6 +65,13 @@ function of<K extends ProgressEvent['kind']>(events: ProgressEvent[], kind: K): 
   return events.filter((e): e is ProgressEventOf<K> => e.kind === kind);
 }
 
+/** The analysis text is one long answer: say it is being written, and about how far along it is. */
+function writingDetail(chars: number): string {
+  return chars < TYPICAL_WRITING_CHARS
+    ? `Bob is writing the walkthrough — about ${chars.toLocaleString('en-US')} of ~${TYPICAL_WRITING_CHARS.toLocaleString('en-US')} characters`
+    : `Bob is still writing — ${chars.toLocaleString('en-US')} characters so far`;
+}
+
 function basename(p: string): string {
   return p.slice(p.lastIndexOf('/') + 1);
 }
@@ -80,6 +89,21 @@ export function plainStageLabel(label: string): string {
   if (/^Testing\b/.test(label)) return 'Testing which changes fix the bug';
   if (/^Measured \d+ change/.test(label)) return 'Measured which changes fix the bug';
   return label;
+}
+
+/** The server labels each ablation build "… (3 of 10, about a minute each)". */
+export function ablationProgress(label: string | undefined): { k: number; n: number } | undefined {
+  const m = label === undefined ? null : /\((\d+) of (\d+)(?:, [^)]*)?\)\s*$/.exec(label);
+  return m ? { k: Number(m[1]), n: Number(m[2]) } : undefined;
+}
+
+/** How much of the walkthrough text is usually written when a run is about to finish (a bar needs a guess). */
+export const TYPICAL_WRITING_CHARS = 50_000;
+
+/** The log line for a stage: the ablation's file path is dropped, its count ("3 of 10") is kept. */
+function feedLabel(label: string): string {
+  const a = ablationProgress(label);
+  return a ? `${plainStageLabel(label)} (${a.k} of ${a.n})` : label;
 }
 
 const OUTCOME_STATUS: Record<ShotsOutcomeCode, StepStatus> = {
@@ -108,20 +132,21 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   const lastStage = last(stages);
   const labelOf = (stage: string): string | undefined => last(stages.filter((s) => s.stage === stage))?.label;
 
+  const isFactCheck = (label: string) => /^Checking the text/.test(label);
   const inShots = seen.has('app') || seen.has('shots');
   const planned = plan ? plan.shots.planned : undefined;
 
   // Order the pipeline runs in. `repairing` belongs to whatever is being repaired (the story before the
   // screenshots, the text after them) and must never move the screen backwards.
-  const order: StepView['id'][] = ['checkout', 'diff', 'read', 'check', 'shots', 'voice'];
-  const stageStep = (stage: string): StepView['id'] | undefined => {
+  const order: StepView['id'][] = ['checkout', 'diff', 'read', 'check', 'shots', 'facts', 'voice'];
+  const stageStep = (stage: string, s: { label: string }): StepView['id'] | undefined => {
     switch (stage) {
       case 'clone': return 'checkout';
       case 'hunks': return 'diff';
       case 'analyzing': return 'read';
       case 'validating':
       case 'saving': return 'check';
-      case 'repairing': return inShots ? 'shots' : 'check';
+      case 'repairing': return inShots ? (isFactCheck(s.label) ? 'facts' : 'shots') : 'check';
       case 'app':
       case 'shots': return 'shots';
       case 'voicing': return 'voice';
@@ -130,7 +155,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
   };
   let currentIdx = -1;
   for (const s of stages) {
-    const step = stageStep(s.stage);
+    const step = stageStep(s.stage, s);
     if (step) currentIdx = Math.max(currentIdx, order.indexOf(step));
   }
 
@@ -141,7 +166,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     shotsStatus = OUTCOME_STATUS[outcome.code];
     shotsDetail = outcome.message;
     // Work that still belongs to the screenshot stage after the verdict (measuring, revising, checking the text).
-    const busy = !done && lastStage && (lastStage.stage === 'shots' || lastStage.stage === 'repairing');
+    const busy = !done && lastStage && (lastStage.stage === 'shots' || (lastStage.stage === 'repairing' && !isFactCheck(lastStage.label)));
     if (busy && outcome.code === 'ok') shotsDetail = plainStageLabel(lastStage.label);
   } else if (planned === false) {
     shotsStatus = 'skipped';
@@ -155,36 +180,56 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     shotsDetail = 'planned — this app can be started';
   }
 
+  // The ablation takes 2 builds per changed hunk, about a minute each: say which build it is on, and how long is left.
+  const running = !done && lastStage && lastStage.stage === 'shots' ? ablationProgress(lastStage.label) : undefined;
+  let shotsProgress: StepView['progress'];
+  if (running) {
+    shotsProgress = { done: running.k - 1, total: running.n };
+    const left = running.n - running.k + 1;
+    shotsDetail = `Testing which changes fix the bug — build ${running.k} of ${running.n}, about ${left} min left`;
+    shotsStatus = 'current'; // the verdict is in, but the row is still working: keep it pulsing
+  }
+  // What follows the ablation is known, so name it while it is still ahead: the fact check and the voice-over.
+  const ablationSeen = stages.some((s) => s.stage === 'shots' && (ablationProgress(s.label) !== undefined || /^Measured \d+ change/.test(s.label)));
+  const expectAfter = !done && (outcome?.code === 'ok' || ablationSeen);
+
   const base: StepView[] = [
     { id: 'checkout', label: 'Checked out the PR', status: 'pending' },
     { id: 'diff', label: 'Split the diff', status: 'pending' },
     { id: 'read', label: 'Reading the code', status: 'pending' },
     { id: 'check', label: 'Checking the story', status: 'pending' },
     { id: 'shots', label: 'Screenshots', status: shotsStatus ?? 'pending' },
-    { id: 'voice', label: 'Recording the voice-over', status: 'pending' },
+    { id: 'facts', label: 'Checking the text against the running app', status: 'pending' },
+    { id: 'voice', label: 'Recording the narration', status: 'pending' },
   ];
   const detail: Partial<Record<StepView['id'], string | undefined>> = {
     checkout: labelOf('clone'),
     diff: labelOf('hunks'),
-    read: writing ? `Writing the walkthrough… ${writing.chars.toLocaleString()} chars` : undefined,
+    read: writing ? writingDetail(writing.chars) : undefined,
     check: !inShots ? labelOf('repairing') ?? labelOf('validating') : undefined,
     voice: labelOf('voicing'),
   };
+  const writingBar: StepView['progress'] | undefined = writing
+    ? writing.chars < TYPICAL_WRITING_CHARS ? { done: writing.chars, total: TYPICAL_WRITING_CHARS } : { indeterminate: true }
+    : undefined;
   const steps: StepView[] = [];
   for (const st of base) {
     // Old recordings have no screenshot row unless a screenshot stage ran; the voice row exists only when voicing ran.
     if (st.id === 'shots' && shotsStatus === undefined) continue;
-    if (st.id === 'voice' && !seen.has('voicing')) continue;
+    if (st.id === 'facts' && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
+    if (st.id === 'voice' && !seen.has('voicing') && !expectAfter) continue;
     const idx = order.indexOf(st.id);
     const row = { ...st };
     if (st.id === 'shots') {
       if (shotsDetail) row.detail = shotsDetail;
+      if (shotsProgress) row.progress = shotsProgress;
     } else if (done || idx < currentIdx) {
       row.status = 'done';
       if (st.id === 'diff' && detail.diff) row.detail = detail.diff;
     } else if (idx === currentIdx) {
       row.status = 'current';
       if (detail[st.id]) row.detail = detail[st.id];
+      if (st.id === 'read' && writingBar) row.progress = writingBar;
     }
     steps.push(row);
   }
@@ -203,7 +248,7 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
 
   // --- feed and pane -------------------------------------------------------------------------
   const feed = inShots
-    ? stages.filter((s) => s.stage === 'app' || s.stage === 'shots').map((s) => s.label).slice(-FEED_SIZE)
+    ? stages.filter((s) => s.stage === 'app' || s.stage === 'shots').map((s) => feedLabel(s.label)).slice(-FEED_SIZE)
     : tools.map((t) => t.target).slice(-FEED_SIZE);
   const pane: PaneView = outcome ? 'outcome' : inShots && !done ? 'reproducing' : 'files';
 

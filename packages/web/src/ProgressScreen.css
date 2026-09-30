@@ -95,6 +95,10 @@
 .pg-step--skipped .pg-dot { border-style: dashed; border-color: var(--faint); color: var(--faint); }
 .pg-step--warn { color: var(--ink); }
 .pg-step--warn .pg-dot { background: var(--warn); border-color: var(--warn); color: #2b2100; }
+.pg-stepbar { display: block; height: 4px; margin-top: 7px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.pg-stepbar > i { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width .6s; }
+.pg-stepbar--alive > i { width: 35%; animation: pg-slide 1.5s ease-in-out infinite; }
+@keyframes pg-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 @keyframes pg-pulse { 50% { box-shadow: 0 0 0 8px rgba(120, 169, 255, .04); } }
 
 .pg-why {
@@ -106,6 +110,7 @@
   color: var(--muted);
   line-height: 1.45;
 }
+.pg-why--calm { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .pg-why--quiet { border: 0; padding: 4px 0 0; color: var(--faint); }
 
 /* ---- pane ---- */

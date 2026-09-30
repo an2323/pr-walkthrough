@@ -179,8 +179,8 @@ export function LandingPage() {
       <Analysed cards={cards} />
 
       <p className="lp-numbers">
-        <span><b>~10 min</b> per new PR</span>
-        <span><b>under $2</b> each</span>
+        <span><b>15–25 min</b> per new PR</span>
+        <span><b>about $2–5</b> each</span>
       </p>
 
       <footer className="lp-footer">
@@ -315,7 +315,7 @@ function PrInput() {
       </div>
       {error && <p className="lp-error" role="alert">{error}</p>}
       {pv.kind === 'idle' && !STATIC && (
-        <p className="lp-micro">New analysis: ~10 min. Already analysed PRs open instantly.</p>
+        <p className="lp-micro">New analysis: about 15–25 minutes. Already analysed PRs open instantly.</p>
       )}
       {STATIC && <p className="lp-micro">Demo: finished walkthroughs below open here; new PRs need a local/server build.</p>}
       <PreviewLine pv={pv} />
@@ -364,7 +364,7 @@ function PreviewLine({ pv }: { pv: PreviewState }) {
         ) : (
           <span className="lp-pv-warn">○ Walkthrough only — {p.screenshots.reason ?? "screenshots aren't set up for this repository."}</span>
         )}
-        <span>~10 min · under $2</span>
+        <span>15–25 min · about $2–5</span>
       </span>
     </div>
   );
@@ -381,13 +381,13 @@ function TryIntro() {
   );
 }
 
-/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (~10 min). */
+/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (15–25 min). */
 function Suggested({ onPick }: { onPick: (url: string) => void }) {
   return (
     <div className="lp-suggest">
       {SUGGESTED_PRS.length > 0 && (
         <>
-          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 10 minutes)</span></p>
+          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 15–25 minutes)</span></p>
           <div className="lp-picks">
             {SUGGESTED_PRS.map((p) => (
               <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
@@ -452,7 +452,7 @@ function Analysed({ cards }: { cards: CardData[] | null }) {
         <h2>Already analysed</h2>
         <span className="lp-badge">⚡ opens instantly · no waiting</span>
       </div>
-      <p className="lp-analysed-lead">Skip the ten minutes. Open a finished one — newest first, including runs by other visitors.</p>
+      <p className="lp-analysed-lead">Skip the wait. Open a finished one — newest first, including runs by other visitors.</p>
       {cards === null ? (
         <p className="lp-quiet">Loading…</p>
       ) : (

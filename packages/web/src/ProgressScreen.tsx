@@ -22,6 +22,8 @@ import './ProgressScreen.css';
 
 /** Static build only — mirrors REPLAY_TARGET_MS in the server's replay route. */
 const STATIC_REPLAY_TARGET_MS = 20_000;
+/** No new event for this long (a live run): say calmly that it is still working. */
+const QUIET_AFTER_MS = 60_000;
 /** How long the finished state stays before the viewer opens (the button opens it at once). */
 const AUTO_NAVIGATE_MS = 3500;
 
@@ -167,7 +169,7 @@ export function ProgressScreen({ owner, repo, number }: Props) {
       </header>
       {connectionLost && <p className="pg-lost">Lost connection to the server — retrying…</p>}
       <div className="pg-grid">
-        <Rail view={view} owner={owner} repo={repo} number={number} elapsed={elapsed} />
+        <Rail view={view} owner={owner} repo={repo} number={number} elapsed={elapsed} quietMs={isReplay || view.done ? 0 : Math.max(0, now - lastEventAtRef.current)} />
         <main className="pg-pane">
           {view.done && (
             <div className="pg-done">
@@ -190,7 +192,7 @@ export function ProgressScreen({ owner, repo, number }: Props) {
 // Rail
 // ---------------------------------------------------------------------------------------------
 
-function Rail({ view, owner, repo, number, elapsed }: { view: ProgressView; owner: string; repo: string; number: number; elapsed: number }) {
+function Rail({ view, owner, repo, number, elapsed, quietMs }: { view: ProgressView; owner: string; repo: string; number: number; elapsed: number; quietMs: number }) {
   const pct = view.costUsd !== undefined && view.maxCostUsd ? Math.min(100, (view.costUsd / view.maxCostUsd) * 100) : 0;
   return (
     <aside className="pg-rail" aria-label="Progress">
@@ -210,7 +212,7 @@ function Rail({ view, owner, repo, number, elapsed }: { view: ProgressView; owne
             <span>spent</span>
             <b>
               ${view.costUsd.toFixed(2)}
-              {view.maxCostUsd !== undefined && <small> / max ${view.maxCostUsd}</small>}
+              {view.maxCostUsd !== undefined && <small> / max ${Number(view.maxCostUsd.toFixed(2))}</small>}
             </b>
             {view.maxCostUsd !== undefined && <i className="pg-bar"><i style={{ width: `${pct}%` }} /></i>}
           </div>
@@ -219,6 +221,13 @@ function Rail({ view, owner, repo, number, elapsed }: { view: ProgressView; owne
       <ol className="pg-steps">
         {view.steps.map((s) => <Step key={s.id} step={s} />)}
       </ol>
+      {quietMs > QUIET_AFTER_MS && !view.steps.some((st) => st.status === 'current' && st.progress && 'total' in st.progress) && (
+        <p className="pg-why pg-why--calm" role="status">
+          {view.steps.find((st) => st.status === 'current')?.id === 'read'
+            ? 'Still writing — long answers take a few minutes.'
+            : 'Still working — this step takes a few minutes. Nothing is stuck.'}
+        </p>
+      )}
       {view.shots.planned && !view.done && !view.shots.outcome && (
         <p className="pg-why">Screenshots are a bonus: if they don't work out, you still get the full walkthrough.</p>
       )}
@@ -229,12 +238,24 @@ function Rail({ view, owner, repo, number, elapsed }: { view: ProgressView; owne
 
 const MARK: Record<StepView['status'], string> = { done: '✓', current: '', pending: '', skipped: '–', warn: '!' };
 
+/** A known fraction fills the bar; otherwise it just moves, so a long step never looks frozen. */
+function StepBar({ progress }: { progress: NonNullable<StepView['progress']> }) {
+  if ('indeterminate' in progress) return <i className="pg-stepbar pg-stepbar--alive" role="progressbar" aria-label="Working"><i /></i>;
+  const pct = Math.max(3, Math.min(100, (progress.done / progress.total) * 100));
+  return (
+    <i className="pg-stepbar" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+      <i style={{ width: `${pct}%` }} />
+    </i>
+  );
+}
+
 function Step({ step }: { step: StepView }) {
   return (
     <li className={`pg-step pg-step--${step.status}`}>
       <span className="pg-dot" aria-hidden="true">{MARK[step.status]}</span>
       <span className="pg-step-label">{step.label}</span>
       {step.detail && <small>{step.detail}</small>}
+      {step.progress && <StepBar progress={step.progress} />}
     </li>
   );
 }
