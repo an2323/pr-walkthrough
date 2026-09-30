@@ -10,6 +10,52 @@ export interface VerbatimResult {
   valid: boolean;
   /** "step s1 beat 0 block 0 line 3: expected '...' not found in base file Foo.tsx" */
   errors: string[];
+  /** Quotes replaced by the real line they were a near-miss of (see `nearestLine`). */
+  snapped: string[];
+}
+
+/** Edit distance, stopping early once it exceeds `max`. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, cur[j]);
+    }
+    if (rowMin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * The one real line a quote is a near-miss of — or undefined. Seen live on #12053: Bob quoted
+ * "}, [callbacksRef, open, menuNode];" for "}, [callbacksRef, open, menuNode]);" (one dropped
+ * parenthesis), twice, through its own repair; the byte-exact check threw the whole walkthrough away.
+ * Only a tiny difference (≤ 2 characters, or 5% of a long line), the same indentation, and a single
+ * closest candidate qualify — anything less certain stays an error.
+ */
+export function nearestLine(needle: string, lines: Iterable<string>): string | undefined {
+  const max = Math.max(2, Math.floor(needle.length * 0.05));
+  const indent = needle.match(/^\s*/)![0];
+  let best: string | undefined;
+  let bestD = max + 1;
+  let tie = false;
+  for (const l of lines) {
+    if (!l.trim() || !l.startsWith(indent) || /^\s/.test(l.slice(indent.length)) !== /^\s/.test(needle.slice(indent.length))) continue;
+    const d = editDistance(needle, l, max);
+    if (d < bestD) {
+      bestD = d;
+      best = l;
+      tie = false;
+    } else if (d === bestD && l !== best) {
+      tie = true;
+    }
+  }
+  return best !== undefined && bestD <= max && !tie ? best : undefined;
 }
 
 /**
@@ -24,6 +70,7 @@ export async function checkVerbatim(
   workspace: RepoWorkspace
 ): Promise<VerbatimResult> {
   const errors: string[] = [];
+  const snapped: string[] = [];
 
   // Cache file contents keyed by "revision:file" to avoid redundant git reads.
   const fileCache = new Map<string, Set<string>>();
@@ -85,6 +132,14 @@ export async function checkVerbatim(
           const needle = line.text.trimEnd();
 
           if (!lineSet.has(needle)) {
+            // A near-miss of exactly one real line is corrected to it (mutates the draft, like
+            // line-numbers.ts does): the walkthrough then quotes the real code.
+            const real = nearestLine(needle, lineSet);
+            if (real !== undefined) {
+              snapped.push(`step ${step.id} beat ${bi} block ${ci} line ${li}: ${JSON.stringify(needle)} → ${JSON.stringify(real)}`);
+              line.text = real;
+              continue;
+            }
             errors.push(
               `step ${step.id} beat ${bi} block ${ci} line ${li}: ` +
                 `expected ${JSON.stringify(line.text)} not found in ` +
@@ -96,5 +151,6 @@ export async function checkVerbatim(
     }
   }
 
-  return { valid: errors.length === 0, errors };
+  if (snapped.length > 0) console.log(`[verbatim] corrected ${snapped.length} near-miss quote(s):\n  ${snapped.join("\n  ")}`);
+  return { valid: errors.length === 0, errors, snapped };
 }
