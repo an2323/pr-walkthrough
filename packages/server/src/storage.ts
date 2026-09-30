@@ -8,7 +8,7 @@
  * Production never writes new analyses into the git tree.
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -130,7 +130,7 @@ export interface WalkthroughSummary {
  */
 export async function listRecentWalkthroughs(limit = 12): Promise<WalkthroughSummary[]> {
   const pool = getPool();
-  if (!pool) return [];
+  if (!pool) return listRecentFromFiles(limit);
   await ensureSchema();
   const { rows } = await pool.query<{
     owner: string; repo: string; number: number; updated_at: Date;
@@ -154,6 +154,51 @@ export async function listRecentWalkthroughs(limit = 12): Promise<WalkthroughSum
     ...(r.thumb ? { thumb: r.thumb } : {}),
     ...(r.cost ? { costUsd: Number(r.cost) } : {}),
   }));
+}
+
+/**
+ * Without a database (local dev, the cached demo) the finished walkthroughs are the files under
+ * data/walkthroughs/{owner}/{repo}/{number}.json — newest first by file time, so the landing is not empty.
+ */
+export async function listRecentFromFiles(
+  limit = 12,
+  dir: string = path.join(ROOT, "data/walkthroughs")
+): Promise<WalkthroughSummary[]> {
+  const found: { owner: string; repo: string; number: number; file: string; mtime: Date }[] = [];
+  const dirs = async (d: string): Promise<string[]> =>
+    existsSync(d) ? (await readdir(d, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name) : [];
+  for (const owner of await dirs(dir)) {
+    for (const repo of await dirs(path.join(dir, owner))) {
+      const repoDir = path.join(dir, owner, repo);
+      for (const name of await readdir(repoDir)) {
+        const m = /^(\d+)\.json$/.exec(name);
+        if (!m) continue;
+        const file = path.join(repoDir, name);
+        found.push({ owner, repo, number: Number(m[1]), file, mtime: (await stat(file)).mtime });
+      }
+    }
+  }
+  found.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  const out: WalkthroughSummary[] = [];
+  for (const f of found.slice(0, Math.max(1, Math.min(50, limit)))) {
+    try {
+      const wt = JSON.parse(await readFile(f.file, "utf-8")) as Walkthrough;
+      const cost = wt.meta?.run?.costUsd;
+      out.push({
+        owner: f.owner,
+        repo: f.repo,
+        number: f.number,
+        updatedAt: f.mtime.toISOString(),
+        ...(wt.plain?.title ? { title: wt.plain.title } : {}),
+        ...(wt.plain?.problem ? { problem: wt.plain.problem } : {}),
+        ...(wt.shots?.before?.src ? { thumb: wt.shots.before.src } : {}),
+        ...(cost !== undefined ? { costUsd: cost } : {}),
+      });
+    } catch {
+      // an unreadable file is simply not listed
+    }
+  }
+  return out;
 }
 
 /** Job rows created since `since`, or null without a database. */

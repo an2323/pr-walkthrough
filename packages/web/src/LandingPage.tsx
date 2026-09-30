@@ -1,39 +1,32 @@
 /**
  * LandingPage — shown at "/" when no PR URL is present in the path.
  *
- * Layout follows docs/prototypes/landing-variants.html board Variant2a:
- * centered hero, layered rotated Before/After shot cards, example cards,
- * how-it-works, footer. Cards show real numbers from each walkthrough JSON.
+ * Top to bottom: what the product is (a real step of a real walkthrough), a place to paste a PR — with a live
+ * line saying what you will get before you press the button — the proof that Bob runs the PR before and after,
+ * and the walkthroughs that are already finished (open instantly). Copy lives here; the facts it states come
+ * from the server (/api/preview, /api/recent, /api/config) or from landingData.ts.
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Walkthrough } from '@pr-walkthrough/shared';
 import { STATIC, walkthroughUrl, shotUrl, apiUrl } from './staticMode';
+import { parsePRUrl } from './prUrl';
+import { EXCALIDRAW_UI_FIXES_URL, HERO_PR, HERO_STEP, PROOF_CAPTIONS, SUGGESTED_PRS } from './landingData';
+import './Landing.css';
 
-interface ExampleCard {
+/** GET /api/preview — mirrors PrPreview in the server. */
+interface PrPreview {
   owner: string;
   repo: string;
   number: number;
-  primary?: boolean;
-  /** Whether a recorded analysis run exists at data/events/{owner}/{repo}/{number}.ndjson (ST6c). */
-  hasReplay?: boolean;
+  analysed: boolean;
+  title?: string;
+  additions?: number;
+  deletions?: number;
+  files?: number;
+  screenshots: { available: boolean; reason?: string };
+  tooBig?: string;
 }
-
-const EXAMPLES: ExampleCard[] = [
-  {
-    owner: 'excalidraw',
-    repo: 'excalidraw',
-    number: 10295,
-    primary: true,
-    hasReplay: true,
-  },
-  {
-    owner: 'excalidraw',
-    repo: 'excalidraw',
-    number: 8340,
-    hasReplay: true,
-  },
-];
 
 /** GET /api/recent — one finished walkthrough on this server. */
 interface RecentWalkthrough {
@@ -55,95 +48,241 @@ interface ServerConfig {
   usedToday: number;
 }
 
+interface CardData {
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  problem?: string;
+  thumb?: string;
+  costUsd?: number;
+  analysedAt?: string;
+  hasReplay: boolean;
+  screenshots: boolean;
+}
+
+type PreviewState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'notPr' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; preview: PrPreview };
+
 const ACCESS_CODE_KEY = 'prw-access-code';
 
-/** Hero stack always uses #10295's before/after shots (Variant2a demo focus). */
-const HERO = { owner: 'excalidraw', repo: 'excalidraw', number: 10295 };
-
-function parsePRUrl(raw: string): { owner: string; repo: string; number: number } | null {
-  const trimmed = raw.trim().replace(/\/$/, '');
-  const m = trimmed.match(
-    /(?:https?:\/\/github\.com\/)?([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/
-  );
-  if (m) return { owner: m[1], repo: m[2], number: parseInt(m[3], 10) };
-  const s = trimmed.match(/^([^/\s]+)\/([^/\s#]+)#(\d+)$/);
-  if (s) return { owner: s[1], repo: s[2], number: parseInt(s[3], 10) };
-  return null;
-}
-
-function cardHref(c: { owner: string; repo: string; number: number }): string {
-  return `/${c.owner}/${c.repo}/${c.number}`;
-}
-
-function apiHref(c: ExampleCard): string {
-  return walkthroughUrl(c.owner, c.repo, c.number);
-}
-
-function replayHref(c: ExampleCard): string {
-  return `/${c.owner}/${c.repo}/${c.number}/progress?replay=1`;
-}
-
-function fmtCost(usd?: number): string | null {
-  return usd === undefined ? null : `$${usd.toFixed(2)}`;
-}
-function fmtDuration(ms?: number): string | null {
-  if (ms === undefined) return null;
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-const HOW_IT_WORKS = [
-  { n: '1', t: 'Reads the PR', d: 'The diff, commit history and any file it needs.' },
-  { n: '2', t: 'Checks its own story', d: 'Runs the app to see which changes the fix needs.' },
-  { n: '3', t: 'Narrates it', d: 'Ordered by reasoning, evidence attached.' },
+/** Static demo build: no API, so the finished walkthroughs are the files it ships. */
+const STATIC_EXAMPLES = [
+  { owner: 'excalidraw', repo: 'excalidraw', number: 10295 },
+  { owner: 'excalidraw', repo: 'excalidraw', number: 8340 },
 ];
 
+const viewerPath = (c: { owner: string; repo: string; number: number }) => `/${c.owner}/${c.repo}/${c.number}`;
+
+function fmtDate(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function useCards(): CardData[] | null {
+  const [cards, setCards] = useState<CardData[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const done = (list: CardData[]) => { if (!cancelled) setCards(list); };
+
+    if (STATIC) {
+      Promise.all(
+        STATIC_EXAMPLES.map((c) =>
+          fetch(walkthroughUrl(c.owner, c.repo, c.number))
+            .then((r) => (r.ok ? (r.json() as Promise<Walkthrough>) : null))
+            .then((wt): CardData | null =>
+              wt
+                ? {
+                    ...c,
+                    title: wt.plain?.title ?? wt.pr.title,
+                    ...(wt.plain?.problem ? { problem: wt.plain.problem } : {}),
+                    ...(wt.shots?.before ? { thumb: wt.shots.before.src } : {}),
+                    ...(wt.meta.run?.costUsd !== undefined ? { costUsd: wt.meta.run.costUsd } : {}),
+                    hasReplay: true,
+                    screenshots: !!wt.shots,
+                  }
+                : null
+            )
+            .catch(() => null)
+        )
+      ).then((list) => done(list.filter((c): c is CardData => c !== null)));
+      return () => { cancelled = true; };
+    }
+
+    fetch(apiUrl('/api/recent?limit=9'))
+      .then((r) => (r.ok ? (r.json() as Promise<RecentWalkthrough[]>) : []))
+      .then(async (list) => {
+        // "Watch the run" only where a recording exists; one cheap probe per card.
+        const replay = await Promise.all(
+          list.map((r) => fetch(apiUrl(`/api/runs/${r.owner}/${r.repo}/${r.number}`), { method: 'HEAD' }).then((x) => x.ok).catch(() => false))
+        );
+        done(
+          list.map((r, i): CardData => ({
+            owner: r.owner,
+            repo: r.repo,
+            number: r.number,
+            title: r.title ?? `${r.owner}/${r.repo} #${r.number}`,
+            ...(r.problem ? { problem: r.problem } : {}),
+            ...(r.thumb ? { thumb: r.thumb } : {}),
+            ...(r.costUsd !== undefined ? { costUsd: r.costUsd } : {}),
+            analysedAt: r.updatedAt,
+            hasReplay: replay[i] ?? false,
+            screenshots: !!r.thumb,
+          }))
+        );
+      })
+      .catch(() => done([]));
+    return () => { cancelled = true; };
+  }, []);
+  return cards;
+}
+
 export function LandingPage() {
+  const cards = useCards();
+  return (
+    <div className="lp">
+      <nav className="lp-nav">
+        <span className="lp-brand">
+          <svg width="28" height="28" viewBox="0 0 30 30" aria-hidden="true">
+            <rect x="0.75" y="0.75" width="28.5" height="28.5" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5" />
+            <circle cx="10" cy="20" r="2.4" fill="var(--accent)" />
+            <circle cx="20" cy="10" r="2.4" fill="var(--good)" />
+            <path d="M10 20 L10 13 L20 13 L20 10" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          PR Walkthrough
+        </span>
+        <span className="lp-nav-links">
+          <a href="#analysed">Already analysed</a>
+          <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        </span>
+      </nav>
+
+      <header className="lp-hero">
+        <h1>Stop reverse-engineering pull requests.<br />Get a narrated walkthrough instead.</h1>
+        <p className="lp-sub">
+          Bob reads the whole repo and explains the PR step by step — what broke, why, and whether the fix holds.{' '}
+          <b>When the app can run, he runs it before and after and shows the difference.</b>
+        </p>
+        <HeroViewer />
+        <PrInput />
+      </header>
+
+      <ProofBand />
+      <Analysed cards={cards} />
+
+      <p className="lp-numbers">
+        <span><b>~10 min</b> per new PR</span>
+        <span><b>under $2</b> each</span>
+        <span><b>access code</b> for new analyses</span>
+      </p>
+
+      <footer className="lp-footer">
+        <span>MIT licensed · Analysed with IBM Bob</span>
+        <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">github.com/an2323/pr-walkthrough</a>
+      </footer>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hero: a real step of a real walkthrough (see landingData.ts), cropped and faded at the bottom.
+// ---------------------------------------------------------------------------------------------
+
+function HeroViewer() {
+  const s = HERO_STEP;
+  return (
+    <div className="lp-viewer-wrap" aria-label="A step of a real walkthrough">
+      <div className="lp-viewer">
+        <div className="lp-vtop">
+          <span><b>{s.repoLine}</b> · {s.prTitle}</span>
+          <span className="lp-phases"><span>DIAGRAM</span><span className="on">PROBLEM <i className="d" /><i className="d" /><i /></span><span>FIX</span></span>
+        </div>
+        <div className="lp-vbody">
+          <div>
+            <div className="lp-kick">{s.kicker}</div>
+            <h2>{s.headline}</h2>
+            <p className="lp-say">{s.say}</p>
+            <div className="lp-layers">
+              <div>
+                <small>BEFORE</small>
+                {s.layers.before.map((l) => <div key={l.name} className={`lp-layer lp-layer--${l.tone}`}><span>{l.name}</span><span>{l.z}</span></div>)}
+              </div>
+              <span className="lp-arrow">→</span>
+              <div>
+                <small>AFTER</small>
+                {s.layers.after.map((l) => <div key={l.name} className={`lp-layer lp-layer--${l.tone}`}><span>{l.name}</span><span>{l.z}</span></div>)}
+              </div>
+            </div>
+            <div className="lp-ask"><span><b>ASK?</b> {s.ask}</span><span className="lp-ask-btn">Ask</span></div>
+          </div>
+          <div className="lp-code">
+            <div className="lp-code-head"><span>styles.scss</span><span>+1 −1 · open file ↗</span></div>
+            {s.lines.map((l) => (
+              <div key={l.n}>
+                <div className={`lp-line${l.focus ? ' lp-line--focus' : ''}`}><i>{l.n}</i><span>{l.text}</span></div>
+                {'note' in l && l.note && <div className="lp-note">{l.note}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The input, with a live line saying what you will get.
+// ---------------------------------------------------------------------------------------------
+
+function PrInput() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
-  const [cards, setCards] = useState<Record<string, Walkthrough | null | undefined>>({});
-  const [hero, setHero] = useState<Walkthrough | null | undefined>(undefined);
-
-  useEffect(() => {
-    for (const card of EXAMPLES) {
-      const key = cardHref(card);
-      fetch(apiHref(card))
-        .then((res) => (res.ok ? res.json() : Promise.reject()))
-        .then((wt: Walkthrough) => {
-          setCards((prev) => ({ ...prev, [key]: wt }));
-          if (card.number === HERO.number) setHero(wt);
-        })
-        .catch(() => {
-          setCards((prev) => ({ ...prev, [key]: null }));
-          if (card.number === HERO.number) setHero(null);
-        });
-    }
-  }, []);
-
-  // Every finished analysis on this server, newest first — a run started here can always be found again.
-  const [recent, setRecent] = useState<RecentWalkthrough[]>([]);
-  useEffect(() => {
-    if (STATIC) return;
-    fetch(apiUrl('/api/recent?limit=12'))
-      .then((res) => (res.ok ? res.json() : []))
-      .then((list: RecentWalkthrough[]) => {
-        const shown = new Set(EXAMPLES.map(cardHref));
-        setRecent(list.filter((r) => !shown.has(cardHref(r))));
-      })
-      .catch(() => setRecent([]));
-  }, []);
-
   const [starting, setStarting] = useState(false);
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [accessCode, setAccessCode] = useState(() => localStorage.getItem(ACCESS_CODE_KEY) ?? '');
+  const [pv, setPv] = useState<PreviewState>({ kind: 'idle' });
+  const seq = useRef(0);
 
   useEffect(() => {
     if (STATIC) return;
     fetch(apiUrl('/api/config'))
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((c: ServerConfig) => setConfig(c))
       .catch(() => setConfig(null));
   }, []);
+
+  // Look the PR up as soon as the field holds something that looks like one (debounced; newest answer wins).
+  useEffect(() => {
+    if (STATIC) return;
+    const raw = input.trim();
+    if (!raw) { setPv({ kind: 'idle' }); return; }
+    const mine = ++seq.current;
+    if (!parsePRUrl(raw)) {
+      const id = setTimeout(() => { if (mine === seq.current) setPv({ kind: 'notPr' }); }, 700);
+      return () => clearTimeout(id);
+    }
+    setPv({ kind: 'loading' });
+    const id = setTimeout(() => {
+      fetch(apiUrl(`/api/preview?pr=${encodeURIComponent(raw)}`))
+        .then(async (r) => {
+          const body = await r.json().catch(() => ({}));
+          if (mine !== seq.current) return;
+          if (r.ok) setPv({ kind: 'ready', preview: body as PrPreview });
+          else setPv({ kind: 'error', message: (body as { error?: string }).error ?? "Couldn't look that up just now" });
+        })
+        .catch(() => { if (mine === seq.current) setPv({ kind: 'error', message: "Couldn't look that up just now" }); });
+    }, 350);
+    return () => clearTimeout(id);
+  }, [input]);
+
+  const preview = pv.kind === 'ready' ? pv.preview : null;
+  const analysed = !!preview?.analysed;
+  const blocked = !!preview?.tooBig;
 
   async function handleGo() {
     const parsed = parsePRUrl(input);
@@ -152,40 +291,31 @@ export function LandingPage() {
       return;
     }
     setError('');
-    const viewerPath = `/${parsed.owner}/${parsed.repo}/${parsed.number}`;
-    const progressReplay = `${viewerPath}/progress?replay=1`;
-
     setStarting(true);
 
-    // Prefer a recorded analysis replay when we already have the walkthrough —
-    // that's the demo path: paste URL → progress screen → viewer (not a skip
-    // straight into the finished walkthrough).
+    // A finished walkthrough opens at once — no analysis, no code needed.
     try {
-      const hasWalkthrough = await fetch(apiHref(parsed), { method: STATIC ? 'GET' : 'HEAD' });
-      if (hasWalkthrough.ok) {
-        if (STATIC) {
-          // Static build only ships PRs that have a recording when hasReplay is set on cards;
-          // probe the ndjson the same way ProgressScreen loads it.
-          const rec = await fetch(`/data/events/${parsed.owner}/${parsed.repo}/${parsed.number}.ndjson`, { method: 'HEAD' });
-          window.location.href = rec.ok ? progressReplay : viewerPath;
-          return;
-        }
-        const rec = await fetch(apiUrl(`/api/runs/${parsed.owner}/${parsed.repo}/${parsed.number}`), { method: 'HEAD' });
-        window.location.href = rec.ok ? progressReplay : viewerPath;
+      const has = await fetch(walkthroughUrl(parsed.owner, parsed.repo, parsed.number), { method: STATIC ? 'GET' : 'HEAD' });
+      if (has.ok) {
+        window.location.href = viewerPath(parsed);
         return;
       }
     } catch {
-      // fall through to live analyze
+      // fall through to a new analysis
     }
 
     if (STATIC) {
-      setError('This demo only opens finished walkthroughs below — live analysis needs a local/server build.');
+      setError('This demo only opens finished walkthroughs below — new analysis needs a local/server build.');
       setStarting(false);
       return;
     }
-
     if (config && !config.liveAnalysis) {
-      setError('Live analysis is turned off on this server — only finished walkthroughs open here.');
+      setError('New analysis is turned off on this server — only finished walkthroughs open here.');
+      setStarting(false);
+      return;
+    }
+    if (blocked) {
+      setError(preview!.tooBig!);
       setStarting(false);
       return;
     }
@@ -199,237 +329,217 @@ export function LandingPage() {
       const res = await fetch(apiUrl('/api/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prUrl: input.trim(),
-          ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}),
-        }),
+        body: JSON.stringify({ prUrl: input.trim(), ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}) as { error?: string });
         if (res.status === 401) localStorage.removeItem(ACCESS_CODE_KEY);
-        setError(
-          res.status === 401
-            ? 'Wrong access code.'
-            : body.error ?? `Could not start analysis (HTTP ${res.status})`
-        );
+        setError(res.status === 401 ? 'Wrong access code.' : body.error ?? `Could not start the analysis (HTTP ${res.status})`);
         setStarting(false);
         return;
       }
       if (accessCode.trim()) localStorage.setItem(ACCESS_CODE_KEY, accessCode.trim());
       const { jobId } = (await res.json()) as { jobId: string };
-      window.location.href = `${viewerPath}/progress?job=${jobId}`;
+      window.location.href = `${viewerPath(parsed)}/progress?job=${jobId}`;
     } catch {
-      setError('Could not reach the server to start analysis.');
+      setError('Could not reach the server to start the analysis.');
       setStarting(false);
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') void handleGo();
-  }
-
-  const beforeSrc = hero?.shots?.before?.src;
-  const afterSrc = hero?.shots?.after?.src;
+  const showAccess = !STATIC && !!config?.liveAnalysis && config.accessCodeRequired && !analysed;
+  const go = () => void handleGo();
 
   return (
-    <div className="landing landing-v2a">
-      <nav className="landing-nav">
-        <span className="landing-brand-row">
-          <svg className="landing-logo" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-            <rect x="0.75" y="0.75" width="28.5" height="28.5" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5" />
-            <circle cx="10" cy="20" r="2.4" fill="var(--accent)" />
-            <circle cx="20" cy="10" r="2.4" fill="var(--good)" />
-            <path d="M10 20 L10 13 L20 13 L20 10" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="landing-brand">PR Walkthrough</span>
-        </span>
-        <span className="landing-nav-links">
-          <a href="#how-it-works">How it works</a>
-          <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
-            GitHub ↗
-          </a>
-        </span>
-      </nav>
-
-      <div className="landing-hero landing-hero-v2a">
-        <h1 className="landing-title">
-          Stop reverse-engineering pull requests.<br />Get a narrated walkthrough instead.
-        </h1>
-        <p className="landing-sub landing-sub-centered">
-          A narrated tour of a pull request — what broke, why, and how the fix lands.
-        </p>
-
-        <div className="landing-input-row landing-input-centered">
-          <input
-            className="landing-input"
-            type="text"
-            placeholder="https://github.com/owner/repo/pull/123"
-            value={input}
-            onChange={(e) => { setInput(e.target.value); setError(''); }}
-            onKeyDown={handleKeyDown}
-            aria-label="GitHub PR URL"
-          />
-          <button className="v2btn primary" onClick={() => void handleGo()} disabled={starting}>
-            {starting ? 'Starting…' : 'Analyse →'}
-          </button>
-        </div>
-        {config?.liveAnalysis && config.accessCodeRequired && (
-          <div className="landing-input-row landing-input-centered landing-access-row">
-            <input
-              className="landing-input"
-              type="password"
-              placeholder="Access code (new analyses only)"
-              value={accessCode}
-              onChange={(e) => { setAccessCode(e.target.value); setError(''); }}
-              onKeyDown={handleKeyDown}
-              aria-label="Access code"
-              autoComplete="off"
-            />
-          </div>
-        )}
-        {error && <p className="landing-error landing-error-centered">{error}</p>}
-        {STATIC && (
-          <p className="landing-note landing-note-centered">
-            Demo: finished walkthroughs below open here; new PRs need a local/server build.
-          </p>
-        )}
+    <div className="lp-input-block">
+      <div className="lp-input-row">
+        <input
+          className="lp-input"
+          type="text"
+          placeholder="https://github.com/owner/repo/pull/123"
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setError(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') go(); }}
+          aria-label="GitHub PR URL"
+          autoComplete="off"
+        />
+        <button className={`v2btn primary${analysed ? ' lp-go--open' : ''}`} onClick={go} disabled={starting || blocked}>
+          {starting ? 'Starting…' : analysed ? 'Open now →' : 'Analyse →'}
+        </button>
       </div>
-
-      {(beforeSrc || afterSrc) && (
-        <div className="landing-stack" aria-hidden={false}>
-          {beforeSrc && (
-            <figure className="landing-stack-card landing-stack-before">
-              <span className="landing-stack-badge landing-stack-badge-bad">Before</span>
-              <div className="landing-stack-frame">
-                <img
-                  src={shotUrl(HERO.owner, HERO.repo, HERO.number, beforeSrc)}
-                  alt="Before: toolbar draws over the floating sidebar"
-                />
-              </div>
-              <figcaption>Toolbar draws over the sidebar</figcaption>
-            </figure>
-          )}
-          {afterSrc && (
-            <figure className="landing-stack-card landing-stack-after">
-              <span className="landing-stack-badge landing-stack-badge-good">After</span>
-              <div className="landing-stack-frame">
-                <img
-                  src={shotUrl(HERO.owner, HERO.repo, HERO.number, afterSrc)}
-                  alt="After: sidebar sits above the toolbar"
-                />
-              </div>
-              <figcaption>Sidebar sits on top</figcaption>
-            </figure>
-          )}
+      {showAccess && (
+        <div className="lp-input-row lp-input-row--access">
+          <input
+            className="lp-input"
+            type="password"
+            placeholder="Access code (new analyses only)"
+            value={accessCode}
+            onChange={(e) => { setAccessCode(e.target.value); setError(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') go(); }}
+            aria-label="Access code"
+            autoComplete="off"
+          />
         </div>
       )}
+      {error && <p className="lp-error" role="alert">{error}</p>}
+      {pv.kind === 'idle' && !STATIC && (
+        <p className="lp-micro">New analysis: ~10 min{config?.accessCodeRequired ? ', needs an access code' : ''}. Already analysed PRs open instantly.</p>
+      )}
+      {STATIC && <p className="lp-micro">Demo: finished walkthroughs below open here; new PRs need a local/server build.</p>}
+      <PreviewLine pv={pv} accessCodeRequired={!!config?.accessCodeRequired} />
+      {!STATIC && <Helper onPick={(u) => setInput(u)} />}
+    </div>
+  );
+}
 
-      <div className="landing-examples">
-        <h2 className="landing-examples-h">Try a walkthrough</h2>
-        <div className="landing-cards landing-cards-2">
-          {EXAMPLES.map((card) => {
-            const key = cardHref(card);
-            const wt = cards[key];
-            if (STATIC && wt === null) return null;
-            const cost = fmtCost(wt?.meta.run?.costUsd);
-            const dur = fmtDuration(wt?.meta.run?.durationMs);
-            const subagents = wt?.meta.run?.subagents;
-            const thumb = wt?.shots?.before;
+function PreviewLine({ pv, accessCodeRequired }: { pv: PreviewState; accessCodeRequired: boolean }) {
+  if (pv.kind === 'idle') return null;
+  if (pv.kind === 'loading') return <div className="lp-pv" aria-live="polite"><span className="lp-pv-quiet">Looking that up…</span></div>;
+  if (pv.kind === 'notPr') {
+    return (
+      <div className="lp-pv lp-pv--bad" aria-live="polite">
+        <b>That doesn't look like a pull request link</b>
+        <span>Paste something like github.com/owner/repo/pull/123.</span>
+      </div>
+    );
+  }
+  if (pv.kind === 'error') return <div className="lp-pv lp-pv--bad" aria-live="polite"><b>{pv.message}</b></div>;
+  const p = pv.preview;
+  if (p.analysed) {
+    return (
+      <div className="lp-pv lp-pv--done" aria-live="polite">
+        <b>{p.title ?? `${p.owner}/${p.repo} #${p.number}`}</b>
+        <span className="lp-pv-acc">⚡ Already analysed — opens instantly, free</span>
+      </div>
+    );
+  }
+  if (p.tooBig) {
+    return (
+      <div className="lp-pv lp-pv--bad" aria-live="polite">
+        <b>{p.title}</b>
+        <span>{p.tooBig}</span>
+      </div>
+    );
+  }
+  const size = p.additions !== undefined && p.deletions !== undefined ? `+${p.additions} −${p.deletions}` : null;
+  return (
+    <div className={`lp-pv ${p.screenshots.available ? 'lp-pv--ok' : 'lp-pv--part'}`} aria-live="polite">
+      <b>{p.title ?? `${p.owner}/${p.repo} #${p.number}`}</b>
+      <span className="lp-pv-line">
+        {size && <span>{size}{p.files !== undefined && ` · ${p.files} file${p.files === 1 ? '' : 's'}`}</span>}
+        {p.screenshots.available ? (
+          <span className="lp-pv-good">✓ Screenshots: yes — we can start this app</span>
+        ) : (
+          <span className="lp-pv-warn">○ Walkthrough only — {p.screenshots.reason ?? "screenshots aren't set up for this repository."}</span>
+        )}
+        <span>~10 min · under $2{accessCodeRequired ? ' · needs the access code' : ''}</span>
+      </span>
+    </div>
+  );
+}
+
+function Helper({ onPick }: { onPick: (url: string) => void }) {
+  return (
+    <div className="lp-helper">
+      <h3>Not sure what to paste?</h3>
+      <p>
+        <b>Best:</b> a visible UI-bug fix in Excalidraw — we can start that app, so you get before/after screenshots.{' '}
+        <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">Browse UI-fix PRs ↗</a>
+      </p>
+      {SUGGESTED_PRS.length > 0 && (
+        <div className="lp-picks">
+          {SUGGESTED_PRS.map((p) => (
+            <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
+              <i>●</i>{p.label}<small>{p.size}</small>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="lp-helper-quiet">
+        Any other public PR works too — you get the narrated walkthrough, without screenshots (for now they need an app we have set up).
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Proof: Bob runs the PR on both commits. The frames are the hero PR's own pair.
+// ---------------------------------------------------------------------------------------------
+
+function ProofBand() {
+  const [broken, setBroken] = useState(false);
+  const before = shotUrl(HERO_PR.owner, HERO_PR.repo, HERO_PR.number, 'before-annotated.png');
+  const after = shotUrl(HERO_PR.owner, HERO_PR.repo, HERO_PR.number, 'after-annotated.png');
+  if (broken) return null; // no frames on this server: show nothing rather than a broken picture
+  return (
+    <section className="lp-band" aria-labelledby="lp-proof-h">
+      <h2 id="lp-proof-h">Bob doesn't just read it. He runs it.</h2>
+      <p className="lp-band-lead">Same clicks on the old and the new commit — then he shows you what changed.</p>
+      <div className="lp-pair">
+        <figure className="lp-shot lp-shot--before">
+          <span className="lp-tag">Before</span>
+          <img src={before} alt="Before: the menu is open and the sidebar is still open" onError={() => setBroken(true)} />
+          <figcaption>{PROOF_CAPTIONS.before}</figcaption>
+        </figure>
+        <figure className="lp-shot lp-shot--after">
+          <span className="lp-tag">After</span>
+          <img src={after} alt="After: the menu is open and the sidebar closed by itself" onError={() => setBroken(true)} />
+          <figcaption>{PROOF_CAPTIONS.after}</figcaption>
+        </figure>
+      </div>
+      <p className="lp-band-note">
+        Screenshots need an app we can start — Excalidraw today.{' '}
+        <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">See UI-fix PRs to try ↗</a>
+        {' '}· other repos still get the full walkthrough.
+      </p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Already analysed: every finished walkthrough on this server, newest first.
+// ---------------------------------------------------------------------------------------------
+
+function Analysed({ cards }: { cards: CardData[] | null }) {
+  const list = useMemo(() => cards ?? [], [cards]);
+  if (cards !== null && list.length === 0) return null;
+  return (
+    <section className="lp-analysed" id="analysed">
+      <div className="lp-analysed-head">
+        <h2>Already analysed</h2>
+        <span className="lp-badge">⚡ opens instantly · no waiting</span>
+      </div>
+      <p className="lp-analysed-lead">Skip the ten minutes. Open a finished one — newest first, including runs by other visitors.</p>
+      {cards === null ? (
+        <p className="lp-quiet">Loading…</p>
+      ) : (
+        <div className="lp-cards">
+          {list.map((c) => {
+            const date = fmtDate(c.analysedAt);
             return (
-              <div className={`landing-card${card.primary ? ' landing-card-primary' : ''}`} key={key}>
-                {thumb && (
-                  <img className="landing-card-thumb" src={shotUrl(card.owner, card.repo, card.number, thumb.src)} alt="" />
+              <article className="lp-card" key={`${c.owner}/${c.repo}/${c.number}`}>
+                {c.thumb && (
+                  <a className="lp-card-thumb" href={viewerPath(c)} tabIndex={-1} aria-hidden="true">
+                    <img src={shotUrl(c.owner, c.repo, c.number, c.thumb)} alt="" loading="lazy" />
+                  </a>
                 )}
-                <div className="landing-card-title">
-                  {card.owner}/{card.repo} #{card.number}
-                  {wt?.plain?.title ? ` — ${wt.plain.title}` : ''}
+                <h3><a href={viewerPath(c)}>{c.title}</a></h3>
+                <p className="lp-card-ref">{c.owner}/{c.repo} #{c.number}</p>
+                {c.problem && <p className="lp-card-problem">{c.problem}</p>}
+                <div className="lp-card-meta">
+                  {c.screenshots && <span className="lp-badge">screenshots</span>}
+                  {c.costUsd !== undefined && <span className="lp-badge">${c.costUsd.toFixed(2)}</span>}
+                  {date && <span className="lp-card-date">analysed {date}</span>}
                 </div>
-                {wt === undefined ? (
-                  <div className="landing-card-desc">Loading…</div>
-                ) : wt === null ? (
-                  <div className="landing-card-desc landing-status unavailable">Not analysed yet</div>
-                ) : (
-                  <>
-                    <div className="landing-card-desc">{wt.plain?.problem}</div>
-                    <div className="landing-card-meta">
-                      {cost && <span>{cost}</span>}
-                      {dur && <span>{dur}</span>}
-                      {subagents !== undefined && <span>{subagents} sub-agent{subagents === 1 ? '' : 's'}</span>}
-                      {wt.shots?.by === 'bob-verifier' && <span className="landing-card-badge">screenshots from the running app</span>}
-                      {wt.verification?.ablation && <span className="landing-card-badge">evidence-checked</span>}
-                      {!wt.shots && <span className="landing-card-badge">no screenshots</span>}
-                    </div>
-                  </>
-                )}
-                <div className="landing-card-footer">
-                  {wt === undefined ? (
-                    <span className="landing-status loading">Checking…</span>
-                  ) : wt ? (
-                    <a className={`landing-card-link${card.primary ? ' landing-card-cta' : ''}`} href={key}>
-                      Open walkthrough →
-                    </a>
-                  ) : null}
-                  {card.hasReplay && (
-                    <a className="landing-card-link landing-card-link-secondary" href={replayHref(card)}>
-                      Watch the analysis →
-                    </a>
-                  )}
+                <div className="lp-card-links">
+                  <a href={viewerPath(c)}>Open walkthrough →</a>
+                  {c.hasReplay && <a className="lp-quiet-link" href={`${viewerPath(c)}/progress?replay=1`}>Watch the run</a>}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
-      </div>
-
-      {recent.length > 0 && (
-        <div className="landing-examples" id="recent">
-          <h2 className="landing-examples-h">Recent analyses</h2>
-          <div className="landing-cards landing-cards-2">
-            {recent.map((r) => {
-              const href = cardHref(r);
-              const cost = fmtCost(r.costUsd);
-              return (
-                <div className="landing-card" key={href}>
-                  {r.thumb && <img className="landing-card-thumb" src={shotUrl(r.owner, r.repo, r.number, r.thumb)} alt="" />}
-                  <div className="landing-card-title">
-                    {r.owner}/{r.repo} #{r.number}
-                    {r.title ? ` — ${r.title}` : ''}
-                  </div>
-                  {r.problem && <div className="landing-card-desc">{r.problem}</div>}
-                  <div className="landing-card-meta">
-                    {cost && <span>{cost}</span>}
-                    <span>{new Date(r.updatedAt).toLocaleString()}</span>
-                  </div>
-                  <div className="landing-card-footer">
-                    <a className="landing-card-link" href={href}>
-                      Open walkthrough →
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       )}
-
-      <div className="landing-how" id="how-it-works">
-        <h2 className="landing-examples-h">How it works</h2>
-        <div className="landing-how-steps">
-          {HOW_IT_WORKS.map((s) => (
-            <div className="landing-how-step" key={s.n}>
-              <div className="landing-how-t">{s.n} · {s.t}</div>
-              <div className="landing-how-d">{s.d}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <footer className="landing-footer">
-        <span>MIT licensed · Analysed with IBM Bob</span>
-        <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">
-          github.com/an2323/pr-walkthrough
-        </a>
-      </footer>
-    </div>
+    </section>
   );
 }
