@@ -13,6 +13,8 @@
  *                                                    costs at most the repair (VERIFY_REPAIR_MAX_COST, default $1)
  *
  *   … --factcheck                                    then the paid fact check (prose vs what the scenarios measured)
+ *   … --voice                                        record narration audio even if no text changed (it is
+ *                                                    recorded automatically whenever a revise/fact check rewrote it)
  *   … --reuse                                        $0: no Bob. Re-confirm the scenario scripts saved by an earlier run against the
  *                                                    live builds and rebuild all frames/crops/cards with the current code
  *
@@ -31,6 +33,7 @@ import { markVerified, recordNoShots, recordShotsNote } from "../src/verify/shot
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../src/verify/revise.js";
 import { checkQuality, criticalQualityWarnings } from "../src/validation/quality.js";
 import { factCheck } from "../src/verify/fact-check.js";
+import { voiceWalkthrough, voicingConfigured } from "../src/tts/voice-stage.js";
 import { prepareWorkspace } from "../src/git/workspace.js";
 import { blobsEnabled, uploadDir } from "../src/blobs.js";
 
@@ -55,6 +58,7 @@ if (resumeTask && !(spent >= 0)) throw new Error("--resume needs --spent <usd>: 
 
 let wt = await loadWalkthrough(owner, repo, Number(num));
 if (!wt) throw new Error(`No saved walkthrough for ${spec}`);
+const narrationBefore = JSON.stringify(wt.steps.map((s) => s.narration));
 
 const outDir = path.join(ROOT, "data/shots", owner, repo, apply ? num : `${num}-bob-trial`);
 console.log(`bob-verify-shots ${spec} → ${path.relative(ROOT, outDir)}${apply ? " (apply)" : " (trial)"}${resumeTask ? ` — resuming task ${resumeTask}` : ""}`);
@@ -177,6 +181,13 @@ if (flag("factcheck")) {
       console.log(`saved; critical quality warnings now: ${criticalQualityWarnings(checkQuality(wt)).map((w) => `${w.stepId}:${w.code}`).join(", ") || "none"}`);
     }
   }
+}
+
+// A revise or fact check rewrote narration: record the new sentences, as the pipeline's last stage does
+// (visitors never trigger paid audio — without this the rewritten sentences stay silent).
+if (apply && (flag("voice") || JSON.stringify(wt.steps.map((s) => s.narration)) !== narrationBefore) && voicingConfigured()) {
+  const voice = await voiceWalkthrough(wt, ROOT);
+  console.log(`narration: ${voice.status}${voice.status === "ok" ? ` (${voice.generated} new, ${voice.cached} reused)` : ` — ${voice.reason}`}`);
 }
 
 // The pipeline uploads a finished run's frames to Storage so they outlive the server; do the same.
