@@ -47,8 +47,12 @@ echo "→ uploading working tree to $NAME ($IP)"
 "${SCP[@]}" deploy/.env.production "ubuntu@$IP:~/app/deploy/.env"
 "${SSH[@]}" 'chmod 600 ~/app/deploy/.env'
 
-echo "→ building and starting containers (first build takes ~10–20 min)"
-"${SSH[@]}" 'cd ~/app && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps'
+echo "→ building containers (first build takes ~10–20 min; the running ones are untouched)"
+"${SSH[@]}" 'cd ~/app && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env build'
+# A run can start while the image builds; `up -d` recreates the api container and would kill it.
+refuse_if_busy || { echo "Image is built but not started; re-run deploy once the analysis finished."; exit 1; }
+echo "→ starting containers"
+"${SSH[@]}" 'cd ~/app && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps'
 
 # Every deploy leaves the previous image (2–4 GB) and build cache behind; the bootstrap prune only ever ran once.
 "${SSH[@]}" 'sudo docker image prune -f >/dev/null 2>&1; sudo docker builder prune -f --filter until=72h >/dev/null 2>&1; df -h / | tail -1'
