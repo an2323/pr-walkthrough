@@ -87,14 +87,14 @@ export function BottomBarV2({
 
   return (
     <footer className="v2bar">
-      <button
-        className="v2btn"
-        disabled={isStart}
-        onClick={onBack}
-        aria-label="Back"
-      >
-        ← Back
-      </button>
+      {isStart ? (
+        // Nothing before the start screen: "Back" leaves the PR and returns to the start page.
+        <a className="v2btn" href="/" aria-label="Home — all walkthroughs">← Home</a>
+      ) : (
+        <button className="v2btn" onClick={onBack} aria-label="Back">
+          ← Back
+        </button>
+      )}
 
       <div className="listen-cluster">
         <button

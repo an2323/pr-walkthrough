@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProgressEvent } from '@pr-walkthrough/shared';
 import { STATIC, recordingUrl, apiUrl, shotUrl } from './staticMode';
 import { deriveProgressView, type FileView, type ProgressView, type StepView } from './progressModel';
+import { BrandLink } from './BrandLink';
 import './ProgressScreen.css';
 
 /** Static build only — mirrors REPLAY_TARGET_MS in the server's replay route. */
@@ -161,7 +162,7 @@ export function ProgressScreen({ owner, repo, number }: Props) {
   return (
     <div className="pg">
       <header className="pg-head">
-        <a className="pg-brand" href="/">← PR Walkthrough</a>
+        <BrandLink className="pg-brand" />
         <span className="pg-ref">{owner}/{repo} <b>#{number}</b></span>
       </header>
       {connectionLost && <p className="pg-lost">Lost connection to the server — retrying…</p>}

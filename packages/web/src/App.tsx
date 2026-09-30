@@ -55,8 +55,9 @@ export default function App() {
 
   if (walkthroughState.status === 'error') {
     return (
-      <div style={{ padding: 40, color: 'var(--bad)' }}>
-        Error: {walkthroughState.message}
+      <div style={{ padding: 40 }}>
+        <p style={{ color: 'var(--bad)', marginTop: 0 }}>Error: {walkthroughState.message}</p>
+        <a className="v2btn" href="/">← Home</a>
       </div>
     );
   }

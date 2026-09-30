@@ -242,6 +242,7 @@ export function SummaryScreen({
               ← Back to start
             </button>
           )}
+          <a className="v2btn" href="/">Analyse another PR</a>
         </div>
       </div>
     </div>

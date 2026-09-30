@@ -5,6 +5,7 @@
 
 import type { Walkthrough, Step } from '@pr-walkthrough/shared';
 import type { PlainData } from './v2types';
+import { BrandLink } from './BrandLink';
 
 interface Props {
   walkthrough: Walkthrough;
@@ -63,6 +64,7 @@ export function TopBarV2({ walkthrough, plain, flow, screenIndex, onGo, onOpenMa
 
   return (
     <header className="v2top">
+      <BrandLink className="v2home" />
       <div className="v2pr">
         <b>{pr.repo}</b>
         <span> #{pr.number} · {pr.title}</span>

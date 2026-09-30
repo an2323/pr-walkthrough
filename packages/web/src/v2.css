@@ -35,6 +35,8 @@ html, body { height: 100%; }
 
 /* ---- Top bar ---- */
 .v2top { display: flex; align-items: center; gap: 20px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.v2home { display: flex; align-items: center; gap: 9px; flex: none; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; padding-right: 18px; border-right: 1px solid var(--line); }
+.v2home:hover { color: var(--accent); }
 .v2pr { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
 .v2pr b { color: var(--ink); font-weight: 500; }
 .v2chapters { display: flex; gap: 18px; flex: none; }
@@ -442,6 +444,8 @@ html, body { height: 100%; }
 
 /* ---- Responsive ---- */
 @media (max-width: 720px) {
+  .v2home span { display: none; }
+  .v2home { padding-right: 12px; }
   .v2top { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 16px; }
   .v2chapters { justify-content: space-between; }
   .v2top-right { justify-content: space-between; width: 100%; }
