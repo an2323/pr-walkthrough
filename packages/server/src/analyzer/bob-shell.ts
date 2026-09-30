@@ -493,6 +493,12 @@ export function findWalkthroughInEvents(events: unknown[]): Record<string, unkno
 export function normalizeDraft(draft: Record<string, unknown>): number {
   let fixed = 0;
   for (const step of (draft.steps as Record<string, unknown>[]) ?? []) {
+    // A step without code (symptom, decision) sometimes comes without `hunkIds` at all; empty is the
+    // only meaning it can have, and the schema then passes instead of costing a repair (seen live).
+    if (!Array.isArray(step.hunkIds)) {
+      step.hunkIds = [];
+      fixed++;
+    }
     const beats = (step.beats as { code?: { file: string; revision: string; lines?: Record<string, unknown>[] }[] }[]) ?? [];
     for (const beat of beats) {
       for (const block of beat.code ?? []) {
