@@ -15,7 +15,7 @@
 
 import type { Walkthrough } from "@pr-walkthrough/shared";
 
-import { findWalkthroughInEvents, runBob } from "../analyzer/bob-shell.js";
+import { answerOf, runBob } from "../analyzer/bob-shell.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { validateSchema } from "../validation/schema.js";
 
@@ -154,7 +154,7 @@ export async function factCheck(opts: {
   await assertBudget(FACTCHECK_MAX_COST);
   const run = await runBob(buildFactCheckPrompt(wt, facts), opts.repoPath, cap, { resumeTaskId: taskId, onEvent: opts.onEvent });
   const costUsd = Math.max(0, run.sessionCost - previous);
-  const answer = findWalkthroughInEvents(run.events);
+  const answer = answerOf(run);
   const base = {
     pr: opts.prLabel ?? `${wt.pr.repo}#${wt.pr.number}`,
     mode: "fact-check",

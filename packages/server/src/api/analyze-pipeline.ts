@@ -21,7 +21,7 @@ import { BobShellAnalyzer, createAnalyzer, CachedAnalyzer } from "../analyzer/in
 import { withRehearsal } from "../analyzer/bob-command.js";
 import { classifyHunks } from "../analyzer/classify-hunks.js";
 import { createProgressNormalizer } from "../analyzer/progress-normalizer.js";
-import { findWalkthroughInEvents, qualityRepairBob } from "../analyzer/bob-shell.js";
+import { answerOf, qualityRepairBob } from "../analyzer/bob-shell.js";
 import { assembleDraft, backendEvidenceOf, carryBackendEvidence } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
@@ -223,7 +223,7 @@ async function runPipeline(
           (raw) => repairEvents.handle(raw, Date.now())
         );
         const cost = Math.max(0, repairRun.sessionCost - previousCost);
-        const repaired = findWalkthroughInEvents(repairRun.events);
+        const repaired = answerOf(repairRun);
         const base = {
           pr: `${owner}/${repo}#${number}`,
           mode: "quality-repair",

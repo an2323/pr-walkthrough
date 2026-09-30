@@ -179,6 +179,26 @@ export interface BobRun {
   subagents: number;
   /** From a `{"type":"error",...}` event, if any — e.g. "The task reached the cost limit". */
   errorMessage?: string;
+  /**
+   * The stream reached its final `result` event. False when the process died or the connection to
+   * Bob's service dropped mid-answer (seen live on #12053: the JSON stopped mid-string after 5 min).
+   */
+  completed?: boolean;
+}
+
+/**
+ * The walkthrough in a Bob answer. From a stream that was cut off (no final result event — the process
+ * died or the connection dropped) only a WHOLE object that parses strictly is taken: the JSON repair is
+ * for a stray quote, and must never "close" an answer that simply stopped (#12053 live: Bob had written
+ * its whole answer, started it again, and the connection dropped mid-way through the second copy).
+ */
+export function answerOf(run: Pick<BobRun, "events" | "completed">): Record<string, unknown> | undefined {
+  if (run.completed === false) {
+    const whole = findWalkthroughInEvents(run.events, { strict: true });
+    console.warn(`[bob-shell] the answer was cut off (no final result event) — ${whole ? "using the complete object in it" : "nothing complete in it"}`);
+    return whole;
+  }
+  return findWalkthroughInEvents(run.events);
 }
 
 /**
@@ -315,7 +335,8 @@ export function runBob(
       // The service says so on stderr when the key has no credit left: the run just stops, with no
       // answer — without this it reads as "Bob returned nothing parseable".
       if (outOfCredits(stderr.slice(-2000))) summary.errorMessage = "Bob has no credits left: " + stderr.trim().split("\n").pop();
-      resolve({ code, stdout, stderr, ms: Date.now() - started, events, ...summary });
+      const completed = events.some((e) => !!e && typeof e === "object" && (e as { type?: unknown }).type === "result");
+      resolve({ code, stdout, stderr, ms: Date.now() - started, events, completed, ...summary });
     });
     child.stdin.end(opts.resumeTaskId ? "" : prompt);
   });
@@ -393,7 +414,7 @@ export function qualityRepairBob(
  * `predicate`, keeps scanning past objects that parse but don't satisfy it
  * (e.g. an unrelated tool-call payload that happens to appear earlier).
  */
-export function extractJsonObject(text: string, predicate?: (v: unknown) => boolean): unknown | undefined {
+export function extractJsonObject(text: string, predicate?: (v: unknown) => boolean, opts: { strict?: boolean } = {}): unknown | undefined {
   const cleaned = text.replace(/```(?:json)?/g, "");
   for (let start = cleaned.indexOf("{"); start !== -1; start = cleaned.indexOf("{", start + 1)) {
     let depth = 0, inStr = false, esc = false;
@@ -413,6 +434,7 @@ export function extractJsonObject(text: string, predicate?: (v: unknown) => bool
   }
   // Nothing parsed strictly. A long answer is prose-heavy JSON and usually breaks on
   // an unescaped quote inside a string — recover it locally instead of losing the run.
+  if (opts.strict) return undefined;
   for (let start = cleaned.indexOf("{"); start !== -1; start = cleaned.indexOf("{", start + 1)) {
     const parsed = parseRepairedJsonObject(cleaned, start);
     if (parsed !== undefined && (!predicate || predicate(parsed))) return parsed;
@@ -431,13 +453,13 @@ const isWalkthroughLike = (v: unknown): v is Record<string, unknown> =>
  * The shape of `bob run --format json` is not documented yet: collect every
  * string value in the envelope and look for the walkthrough inside them.
  */
-export function findWalkthrough(envelope: unknown): Record<string, unknown> | undefined {
+export function findWalkthrough(envelope: unknown, opts: { strict?: boolean } = {}): Record<string, unknown> | undefined {
   const stack: unknown[] = [envelope];
   while (stack.length) {
     const v = stack.pop();
     if (isWalkthroughLike(v)) return v;
     if (typeof v === "string" && v.includes('"steps"')) {
-      const parsed = extractJsonObject(v);
+      const parsed = extractJsonObject(v, undefined, opts);
       if (isWalkthroughLike(parsed)) return parsed;
     } else if (v && typeof v === "object") {
       stack.push(...Object.values(v as object));
@@ -460,7 +482,7 @@ const EVENT_METADATA_KEYS = new Set(["type", "role", "timestamp", "id"]);
  * fragment and corrupts the JSON completely (confirmed: it produced ~4x the
  * expected text length and no parseable object at all).
  */
-export function findWalkthroughInEvents(events: unknown[]): Record<string, unknown> | undefined {
+export function findWalkthroughInEvents(events: unknown[], opts: { strict?: boolean } = {}): Record<string, unknown> | undefined {
   // Confirmed by a real stream-json run: a "message" event with role "user"
   // echoes the FULL prompt back — including the golden example, which itself
   // has "steps" and "graph" keys. Searching all events indiscriminately would
@@ -468,7 +490,7 @@ export function findWalkthroughInEvents(events: unknown[]): Record<string, unkno
   const assistantEvents = events.filter(
     (e) => !!e && typeof e === "object" && (e as Record<string, unknown>)["role"] === "assistant"
   );
-  const direct = findWalkthrough(assistantEvents);
+  const direct = findWalkthrough(assistantEvents, opts);
   if (direct) return direct;
   const text = assistantEvents
     .map((e) =>
@@ -478,7 +500,7 @@ export function findWalkthroughInEvents(events: unknown[]): Record<string, unkno
         .join("")
     )
     .join("");
-  const found = extractJsonObject(text, isWalkthroughLike);
+  const found = extractJsonObject(text, isWalkthroughLike, opts);
   return isWalkthroughLike(found) ? found : undefined;
 }
 
@@ -562,16 +584,35 @@ export class BobShellAnalyzer implements Analyzer {
     await writeSidecar(repoPath, pr, diff, promptHunks);
     const prompt = await fillPrompt(pr, promptHunks);
     await assertBudget(Number(this.maxCost));
-    const run = await runBob(prompt, repoPath, this.maxCost, {
+    let run = await runBob(prompt, repoPath, this.maxCost, {
       onEvent,
       saveAs: `${pr.repo.replace("/", "__")}-${pr.number}-analysis`,
     });
+    // A dropped connection to Bob's service ends the stream without its result event: the answer is cut
+    // off and there is no session to resume. One fresh attempt; a second drop fails the run plainly.
+    if (!run.completed && !answerOf(run)) {
+      console.warn(`[bob-shell] analysis stream ended without a result (exit=${run.code}${run.stderr ? `, ${run.stderr.trim().split("\n").pop()}` : ""}) — retrying once`);
+      await recordSpend({
+        pr: pr.repo + "#" + pr.number, mode: "full", maxCost: Number(this.maxCost),
+        actualCost: run.sessionCost, durationSec: Math.round(run.ms / 1000),
+        toolCalls: run.toolCalls, subagents: run.subagents, repairs: 0,
+        valid: false, notes: "stream cut off (no result event) — cost unknown, retried",
+      });
+      await assertBudget(Number(this.maxCost));
+      run = await runBob(prompt, repoPath, this.maxCost, {
+        onEvent,
+        saveAs: `${pr.repo.replace("/", "__")}-${pr.number}-analysis-retry`,
+      });
+      if (!run.completed && !answerOf(run)) {
+        throw new Error(`Bob's service connection dropped before the answer finished, twice. ${run.stderr.trim().split("\n").pop() ?? ""}`);
+      }
+    }
     console.log(
       `[bob-shell] run finished in ${Math.round(run.ms / 1000)}s, exit=${run.code}, ` +
         `cost=$${run.sessionCost.toFixed(3)}, tools=${run.toolCalls}, subagents=${run.subagents}`
     );
 
-    let draft = findWalkthroughInEvents(run.events);
+    let draft = answerOf(run);
     if (!draft) {
       await recordSpend({
         pr: pr.repo + "#" + pr.number, mode: "full", maxCost: Number(this.maxCost),
@@ -640,7 +681,7 @@ export class BobShellAnalyzer implements Analyzer {
         `[bob-shell] repair finished in ${Math.round(repairRun.ms / 1000)}s, exit=${repairRun.code}, cost=$${repairRun.sessionCost.toFixed(3)}` +
           (repairRun.errorMessage ? `, error: ${repairRun.errorMessage}` : "")
       );
-      const repaired = findWalkthroughInEvents(repairRun.events);
+      const repaired = answerOf(repairRun);
       if (repaired) {
         draft = repaired;
         result = assemble(draft);

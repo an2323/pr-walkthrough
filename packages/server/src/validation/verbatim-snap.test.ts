@@ -48,3 +48,27 @@ describe("checkVerbatim corrects near-misses in place", () => {
     expect(d.steps[0].beats[1].code[0].lines[0].text).toBe("  }, [callbacksRef, open, menuNode]);");
   });
 });
+
+describe("checkVerbatim relabels a block quoted from the other revision", () => {
+  it("a block marked head whose lines exist only at base becomes a base block (#12053)", async () => {
+    const draft = {
+      steps: [{ id: "s5", beats: [{ code: [{ file: "Dropdown.tsx", revision: "head", lines: [{ kind: "context", text: "  }, [callbacksRef, open]);" }] }] }] }],
+    } as never;
+    const ws = { readFile: async (_f: string, rev: "base" | "head") => (rev === "base" ? BASE : HEAD) } as never;
+    const r = await checkVerbatim(draft, ws);
+    expect(r.errors).toEqual([]);
+    const d = draft as unknown as { steps: { beats: { code: { revision: string }[] }[] }[] };
+    expect(d.steps[0].beats[0].code[0].revision).toBe("base");
+  });
+
+  it("a block mixing lines from both revisions is not relabelled", async () => {
+    const draft = {
+      steps: [{ id: "s5", beats: [{ code: [{ file: "D.tsx", revision: "head", lines: [{ kind: "context", text: "  }, [callbacksRef, open]);" }, { kind: "context", text: "  }, [callbacksRef, open, menuNode]);" }] }] }] }],
+    } as never;
+    const ws = { readFile: async (_f: string, rev: "base" | "head") => (rev === "base" ? BASE : HEAD) } as never;
+    const r = await checkVerbatim(draft, ws);
+    const d = draft as unknown as { steps: { beats: { code: { revision: string }[] }[] }[] };
+    expect(d.steps[0].beats[0].code[0].revision).toBe("head");
+    expect(r.errors.length + r.snapped.length).toBeGreaterThan(0);
+  });
+});

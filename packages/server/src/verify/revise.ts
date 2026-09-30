@@ -15,7 +15,7 @@ import { promisify } from "node:util";
 import type { Ablation, Step, Walkthrough } from "@pr-walkthrough/shared";
 
 import type { AnalyzerInput } from "../analyzer/interface.js";
-import { findWalkthroughInEvents, repairBob, runBob } from "../analyzer/bob-shell.js";
+import { answerOf, repairBob, runBob } from "../analyzer/bob-shell.js";
 import { assembleDraft } from "../analyzer/assemble.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import type { RepoWorkspace } from "../git/workspace.js";
@@ -217,7 +217,7 @@ export async function reviseFromAblation(opts: ReviseOpts): Promise<ReviseResult
   const increment = Math.max(0, run.sessionCost - previousCost);
   const prLabel = opts.prLabel ?? `${wt.pr.repo}#${wt.pr.number}`;
 
-  const draftRaw = findWalkthroughInEvents(run.events);
+  const draftRaw = answerOf(run);
   if (!draftRaw) {
     await recordSpend({
       pr: prLabel,
@@ -285,7 +285,7 @@ export async function reviseFromAblation(opts: ReviseOpts): Promise<ReviseResult
     );
     repairs = 1;
     totalCost = repairRun.sessionCost;
-    const repairedRaw = findWalkthroughInEvents(repairRun.events);
+    const repairedRaw = answerOf(repairRun);
     if (repairedRaw) {
       currentDraft = assembleDraft(repairedRaw, wt.pr, wt.hunks);
       result = await validate({ ...currentDraft } as unknown as Walkthrough, input, ws);
