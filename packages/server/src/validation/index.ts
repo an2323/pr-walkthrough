@@ -9,6 +9,7 @@ import { validateSchema } from "./schema.js";
 import { checkVerbatim } from "./verbatim.js";
 import { computeCoverage } from "./coverage.js";
 import { annotateLines } from "./line-numbers.js";
+import { anchorQuotes } from "./anchor.js";
 
 export interface ValidationResult {
   valid: boolean;
@@ -90,6 +91,9 @@ async function validateOnce(
   }
 
   const allErrors: string[] = [];
+
+  // --- 1b. Tie every quote to the real file (anchor.ts): the shown code is the PR's own ---
+  await anchorQuotes(draft, workspace);
 
   // --- 2. Verbatim ---
   const verbatimResult = await checkVerbatim(draft, workspace);

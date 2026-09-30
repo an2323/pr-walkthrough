@@ -186,12 +186,12 @@ describe("validate — verbatim failure", () => {
         }),
       };
 
+      // An invented line is never shown: it becomes "…" (anchor.ts) and the walkthrough stays usable.
       const result = await validate(mutated, input, workspace, { mechanicalFix: false });
 
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-      // Error should name the step.
-      expect(result.errors.some((e) => e.includes("s1"))).toBe(true);
+      expect(result.errors.join("; ")).not.toMatch(/THIS_LINE_DOES_NOT_EXIST/);
+      const shown = JSON.stringify(result.walkthrough ?? mutated);
+      expect(shown).not.toContain("THIS_LINE_DOES_NOT_EXIST_IN_ANY_FILE_XYZ");
     },
     60_000
   );

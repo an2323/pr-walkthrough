@@ -111,30 +111,6 @@ export async function checkVerbatim(
         // Reconstructed blocks are exempt — they are not in any revision.
         if (block.reconstructed === true) continue;
 
-        // A whole block quoted from the OTHER revision of the same file: the code is real, only the label
-        // is wrong (#12053: a BASE-only line in a block marked "head"). Relabel it instead of failing.
-        if (block.revision === "base" || block.revision === "head") {
-          const own = await getLines(block.file, block.revision);
-          const other = block.revision === "base" ? "head" : "base";
-          const quoted = block.lines.filter((l) => l.kind !== "elided").map((l) => l.text.trimEnd());
-          if (quoted.length > 0 && quoted.some((t) => !own.has(t))) {
-            const otherLines = await getLines(block.file, other);
-            const baseLines = await getLines(block.file, "base");
-            const headLines = await getLines(block.file, "head");
-            const real = block.lines.filter((l) => l.kind !== "elided");
-            // A block with removed/added lines IS a diff: removed lines from BASE, the rest from HEAD.
-            const isDiff = real.some((l) => l.kind === "removed" || l.kind === "added") &&
-              real.every((l) => (l.kind === "removed" ? baseLines : headLines).has(l.text.trimEnd()));
-            if (quoted.every((t) => otherLines.has(t))) {
-              snapped.push(`step ${step.id} beat ${bi} block ${ci}: quoted from ${other}, labelled ${block.revision} → relabelled`);
-              block.revision = other;
-            } else if (isDiff) {
-              snapped.push(`step ${step.id} beat ${bi} block ${ci}: removed/added lines labelled ${block.revision} → relabelled diff`);
-              (block as { revision: string }).revision = "diff";
-            }
-          }
-        }
-
         for (let li = 0; li < block.lines.length; li++) {
           const line = block.lines[li];
 
