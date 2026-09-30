@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Walkthrough } from '@pr-walkthrough/shared';
 import { STATIC, walkthroughUrl, shotUrl, apiUrl } from './staticMode';
 import { parsePRUrl } from './prUrl';
-import { EXCALIDRAW_UI_FIXES_URL, HERO_PR, HERO_STEP, PROOF_CAPTIONS, SUGGESTED_PRS } from './landingData';
+import { EXCALIDRAW_UI_FIXES_URL, SUGGESTED_PRS } from './landingData';
 import './Landing.css';
 
 /** GET /api/preview — mirrors PrPreview in the server. */
@@ -158,6 +158,7 @@ export function LandingPage() {
         </span>
         <span className="lp-nav-links">
           {!STATIC && <a href="#demo">Watch the demo</a>}
+          <a href="#try">Try it</a>
           <a href="#analysed">Already analysed</a>
           <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
         </span>
@@ -169,12 +170,15 @@ export function LandingPage() {
           Bob reads the whole repo and explains the PR step by step — what broke, why, and whether the fix holds.{' '}
           <b>When the app can run, he runs it before and after and shows the difference.</b>
         </p>
-        <HeroViewer />
-        <PrInput />
+        <DemoVideo />
       </header>
 
-      <DemoVideo />
-      <ProofBand />
+      <section className="lp-try" id="try" aria-labelledby="lp-try-h">
+        <h2 id="lp-try-h">Try it on a PR</h2>
+        <TryIntro />
+        <PrInput />
+      </section>
+
       <Analysed cards={cards} />
 
       <p className="lp-numbers">
@@ -187,52 +191,6 @@ export function LandingPage() {
         <span>MIT licensed · Analysed with IBM Bob</span>
         <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">github.com/an2323/pr-walkthrough</a>
       </footer>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Hero: a real step of a real walkthrough (see landingData.ts), cropped and faded at the bottom.
-// ---------------------------------------------------------------------------------------------
-
-function HeroViewer() {
-  const s = HERO_STEP;
-  return (
-    <div className="lp-viewer-wrap" aria-label="A step of a real walkthrough">
-      <div className="lp-viewer">
-        <div className="lp-vtop">
-          <span><b>{s.repoLine}</b> · {s.prTitle}</span>
-          <span className="lp-phases"><span>DIAGRAM</span><span className="on">PROBLEM <i className="d" /><i className="d" /><i /></span><span>FIX</span></span>
-        </div>
-        <div className="lp-vbody">
-          <div>
-            <div className="lp-kick">{s.kicker}</div>
-            <h2>{s.headline}</h2>
-            <p className="lp-say">{s.say}</p>
-            <div className="lp-layers">
-              <div>
-                <small>BEFORE</small>
-                {s.layers.before.map((l) => <div key={l.name} className={`lp-layer lp-layer--${l.tone}`}><span>{l.name}</span><span>{l.z}</span></div>)}
-              </div>
-              <span className="lp-arrow">→</span>
-              <div>
-                <small>AFTER</small>
-                {s.layers.after.map((l) => <div key={l.name} className={`lp-layer lp-layer--${l.tone}`}><span>{l.name}</span><span>{l.z}</span></div>)}
-              </div>
-            </div>
-            <div className="lp-ask"><span><b>ASK?</b> {s.ask}</span><span className="lp-ask-btn">Ask</span></div>
-          </div>
-          <div className="lp-code">
-            <div className="lp-code-head"><span>styles.scss</span><span>+1 −1 · open file ↗</span></div>
-            {s.lines.map((l) => (
-              <div key={l.n}>
-                <div className={`lp-line${l.focus ? ' lp-line--focus' : ''}`}><i>{l.n}</i><span>{l.text}</span></div>
-                {'note' in l && l.note && <div className="lp-note">{l.note}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -389,7 +347,7 @@ function PrInput() {
       )}
       {STATIC && <p className="lp-micro">Demo: finished walkthroughs below open here; new PRs need a local/server build.</p>}
       <PreviewLine pv={pv} accessCodeRequired={!!config?.accessCodeRequired} />
-      {!STATIC && <Helper onPick={(u) => setInput(u)} />}
+      {!STATIC && <Suggested onPick={(u) => setInput(u)} />}
     </div>
   );
 }
@@ -440,22 +398,32 @@ function PreviewLine({ pv, accessCodeRequired }: { pv: PreviewState; accessCodeR
   );
 }
 
-function Helper({ onPick }: { onPick: (url: string) => void }) {
+function TryIntro() {
   return (
-    <div className="lp-helper">
-      <h3>Not sure what to paste?</h3>
-      <p>
-        <b>Best:</b> a visible UI-bug fix in Excalidraw — we can start that app, so you get before/after screenshots.{' '}
-        <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">Browse UI-fix PRs ↗</a>
-      </p>
+    <p className="lp-try-lead">
+      Paste a public GitHub PR. We recommend a <b>UI-bug fix in Excalidraw</b>: we can start that app, so Bob runs it before and
+      after and you get screenshots.{' '}
+      <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">Browse Excalidraw UI-fix PRs ↗</a>
+      {' '}Or skip the wait and <a href="#analysed">open one that is already analysed ↓</a>
+    </p>
+  );
+}
+
+/** PRs that have NOT been analysed yet: choosing one fills the field and starts a new run (~10 min, access code). */
+function Suggested({ onPick }: { onPick: (url: string) => void }) {
+  return (
+    <div className="lp-suggest">
       {SUGGESTED_PRS.length > 0 && (
-        <div className="lp-picks">
-          {SUGGESTED_PRS.map((p) => (
-            <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
-              <i>●</i>{p.label}<small>{p.size}</small>
-            </button>
-          ))}
-        </div>
+        <>
+          <p className="lp-suggest-h">Suggested for a new analysis <span>(about 10 minutes, needs the access code)</span></p>
+          <div className="lp-picks">
+            {SUGGESTED_PRS.map((p) => (
+              <button key={p.url} type="button" className="lp-pick" onClick={() => onPick(p.url)}>
+                <i>●</i>{p.label}<small>{p.size}</small>
+              </button>
+            ))}
+          </div>
+        </>
       )}
       <p className="lp-helper-quiet">
         Any other public PR works too — you get the narrated walkthrough, without screenshots (for now they need an app we have set up).
@@ -473,54 +441,19 @@ function DemoVideo() {
   const [failed, setFailed] = useState(false);
   if (STATIC || failed) return null;
   return (
-    <section className="lp-demo" id="demo" aria-labelledby="lp-demo-h">
-      <h2 id="lp-demo-h">See it work — one minute</h2>
-      <p className="lp-band-lead">A PR pasted, analysed and explained: the real screens, the real run, the real narration.</p>
+    <div className="lp-demo" id="demo">
       <video
         className="lp-video"
         controls
         preload="metadata"
         playsInline
         poster="/demo/pr-walkthrough-demo-poster.jpg"
+        aria-label="One-minute demo: a PR pasted, analysed and explained"
         onError={() => setFailed(true)}
       >
         <source src="/demo/pr-walkthrough-demo.mp4" type="video/mp4" onError={() => setFailed(true)} />
       </video>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Proof: Bob runs the PR on both commits. The frames are the hero PR's own pair.
-// ---------------------------------------------------------------------------------------------
-
-function ProofBand() {
-  const [broken, setBroken] = useState(false);
-  const before = shotUrl(HERO_PR.owner, HERO_PR.repo, HERO_PR.number, 'before-annotated.png');
-  const after = shotUrl(HERO_PR.owner, HERO_PR.repo, HERO_PR.number, 'after-annotated.png');
-  if (broken) return null; // no frames on this server: show nothing rather than a broken picture
-  return (
-    <section className="lp-band" aria-labelledby="lp-proof-h">
-      <h2 id="lp-proof-h">Bob doesn't just read it. He runs it.</h2>
-      <p className="lp-band-lead">Same clicks on the old and the new commit — then he shows you what changed.</p>
-      <div className="lp-pair">
-        <figure className="lp-shot lp-shot--before">
-          <span className="lp-tag">Before</span>
-          <img src={before} alt="Before: the menu is open and the sidebar is still open" onError={() => setBroken(true)} />
-          <figcaption>{PROOF_CAPTIONS.before}</figcaption>
-        </figure>
-        <figure className="lp-shot lp-shot--after">
-          <span className="lp-tag">After</span>
-          <img src={after} alt="After: the menu is open and the sidebar closed by itself" onError={() => setBroken(true)} />
-          <figcaption>{PROOF_CAPTIONS.after}</figcaption>
-        </figure>
-      </div>
-      <p className="lp-band-note">
-        Screenshots need an app we can start — Excalidraw today.{' '}
-        <a href={EXCALIDRAW_UI_FIXES_URL} target="_blank" rel="noopener noreferrer">See UI-fix PRs to try ↗</a>
-        {' '}· other repos still get the full walkthrough.
-      </p>
-    </section>
+    </div>
   );
 }
 
