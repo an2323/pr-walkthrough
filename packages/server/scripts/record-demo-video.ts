@@ -15,12 +15,11 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { chromium, type Page } from "playwright";
 
-import { generateSentenceAudio } from "../src/tts/elevenlabs.js";
 
 // ---- arguments -------------------------------------------------------------------------------
 const arg = (name: string, fallback: string): string => {
@@ -36,12 +35,13 @@ const VOICE_KIND = arg("voice", "eleven");
 const VOICE_ID = arg("voice-id", "EXAVITQu4vr4xnSDxMaL");
 const SAY_VOICE = arg("say-voice", "Daniel (Enhanced)");
 const VO_ON = VOICE_KIND !== "off";
+const SPEED = Number(arg("speed", "0.84")); // presenter pace (ElevenLabs speed 0.7–1.2); the default reads clearly and slowly
 const ENV_FILE = arg("env", "");
 if (ENV_FILE) process.loadEnvFile(path.resolve(ENV_FILE));
 const VOICE_CACHE = path.join(OUT, "voice-cache");
 const PR = { owner: "excalidraw", repo: "excalidraw", number: 10295 };
 const PASTE = arg("paste", `https://github.com/${PR.owner}/${PR.repo}/pull/${PR.number}`);
-const REPLAY_SECONDS = CUT === 25 ? 10 : 18; // long enough for one spoken line per phase // how long the recorded run takes on screen
+const REPLAY_SECONDS = CUT === 25 ? 13 : 22; // long enough for one spoken line per phase // how long the recorded run takes on screen
 const W = 1280;
 const H = 666; // the page; the 81 px under it (at 1920×1080) is the caption bar
 const SCALE = 1.5;
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
 
   // ---- presenter voice: a different voice from the site's narration; lines queue up, never overlap each other,
   //      and never start while the site's own narration is playing ---------------------------------
-  const presenter: { file: string; at: number; text: string }[] = [];
+  const presenter: { file: string; at: number; seconds: number; text: string }[] = [];
   const cache = new Map<string, { file: string; seconds: number }>();
   const synth = async (text: string): Promise<{ file: string; seconds: number }> => {
     const hit = cache.get(text);
@@ -141,15 +141,25 @@ async function main(): Promise<void> {
       const key = process.env.ELEVENLABS_API_KEY;
       if (!key) throw new Error("ELEVENLABS_API_KEY is not set (pass --env /path/to/.env)");
       mkdirSync(VOICE_CACHE, { recursive: true });
-      // cached by voice + text: a re-run never pays for a line it already has
-      file = path.join(VOICE_CACHE, `${createHash("sha256").update(VOICE_ID).update("\0").update(text).digest("hex").slice(0, 16)}.mp3`);
-      await generateSentenceAudio(text, VOICE_ID, key, file);
+      // cached by voice + settings + text: a re-run never pays for a line it already has
+      const settings = { stability: 0.6, similarity_boost: 0.8, style: 0, use_speaker_boost: true, speed: SPEED };
+      file = path.join(VOICE_CACHE, `${createHash("sha256").update(VOICE_ID).update("\0").update(JSON.stringify(settings)).update("\0").update(text).digest("hex").slice(0, 16)}.mp3`);
+      if (!existsSync(file)) {
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_128`, {
+          method: "POST",
+          headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
+          body: JSON.stringify({ text, model_id: "eleven_multilingual_v2", voice_settings: settings }),
+        });
+        if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+      }
     }
     const seconds = Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).trim());
     const made = { file, seconds };
     cache.set(text, made);
     return made;
   };
+  let ttsWindow = { a: 0, b: 0 }; // seconds since t0: while the site narrates, the music is (almost) gone
   let voiceFreeAt = 0; // seconds since t0: the earliest the presenter may speak again
   const ttsBusy = { until: 0 }; // seconds since t0: the site's narration is playing until then
   /** Caption + spoken line at the same moment; returns when the line ends (seconds since t0). */
@@ -158,7 +168,7 @@ async function main(): Promise<void> {
     if (!VO_ON || !spoken) return now();
     const clip = await synth(text);
     const at = Math.max(now(), voiceFreeAt, ttsBusy.until);
-    presenter.push({ file: clip.file, at, text });
+    presenter.push({ file: clip.file, at, seconds: clip.seconds, text });
     voiceFreeAt = at + clip.seconds + 0.25;
     return at + clip.seconds;
   };
@@ -283,6 +293,7 @@ async function main(): Promise<void> {
   }
   if (!stoppedAt) throw new Error("the site's narration did not finish in time");
   ttsBusy.until = (stoppedAt - t0) / 1000;
+  ttsWindow = { a: marks["listen"]! - 0.9, b: ttsBusy.until + 0.5 };
   await sleep(500); // the Resume state is on screen
   const l9 = await narrate("Paste a PR. Get the proof. Understand the fix.");
   await sleep(Math.max(1200, (l9 - now()) * 1000 + 500));
@@ -349,12 +360,20 @@ async function main(): Promise<void> {
     const voLabels = voIn.map((_, i) => `[v${i}]`).join("");
     const voChain = voIn.map((v, i) => `[${i + 2}:a]adelay=${Math.round(v.at * 1000)}|${Math.round(v.at * 1000)},volume=1.0[v${i}]`).join(";");
     const fade = `afade=t=in:st=0:d=1.5,afade=t=out:st=${Math.max(0, vdur - 2.4).toFixed(2)}:d=2.4`;
+    // The music level is a fixed envelope, not a compressor that pumps: full level, a gentle dip under the
+    // presenter, and almost nothing for the whole stretch where the site's own narration is shown.
+    const BASE = 0.4, DIP = 0.2, LOW = 0.02, F = 0.6;
+    const trap = (a: number, b: number) => `clip(min((t-${(a - F).toFixed(2)})/${F},(${(b + F).toFixed(2)}-t)/${F}),0,1)`;
+    const maxOf = (xs: string[]): string => (xs.length === 0 ? "0" : xs.length === 1 ? xs[0]! : `max(${xs[0]},${maxOf(xs.slice(1))})`);
+    const wp = maxOf(presenter.map((l) => trap(l.at, l.at + l.seconds)));
+    const wt = trap(ttsWindow.a, ttsWindow.b);
+    const dip = `(${BASE}+(${DIP - BASE})*${wp})`;
+    const env = `${dip}+(${LOW}-${dip})*${wt}`;
     const filter = [
-      `[1:a]atrim=0:${vdur.toFixed(2)},asetpts=PTS-STARTPTS,volume=0.42,${fade}[m]`,
+      `[1:a]atrim=0:${vdur.toFixed(2)},asetpts=PTS-STARTPTS,volume='${env}':eval=frame,${fade}[m]`,
       voChain,
-      `${voLabels}amix=inputs=${voIn.length}:normalize=0,apad=whole_dur=${vdur.toFixed(2)},asplit=2[voA][voB]`,
-      `[m][voA]sidechaincompress=threshold=0.03:ratio=10:attack=15:release=450[md]`,
-      `[md][voB]amix=inputs=2:normalize=0:duration=longest,loudnorm=I=-16:TP=-1.5:LRA=11[a]`,
+      `${voLabels}amix=inputs=${voIn.length}:normalize=0,apad=whole_dur=${vdur.toFixed(2)}[vo]`,
+      `[m][vo]amix=inputs=2:normalize=0:duration=longest,loudnorm=I=-16:TP=-1.5:LRA=11[a]`,
     ].join(";");
     sh("ffmpeg", ["-y", ...inputs, "-filter_complex", filter, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", vdur.toFixed(2), "-movflags", "+faststart", outFile]);
     console.log(`track ${idx + 1} (${name}): ${outFile}`);

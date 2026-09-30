@@ -17,3 +17,15 @@ Each run writes `video-<cut>.mp4` (silent), `timeline-<cut>.json`, and `demo-<cu
 
 Options: `--site` (default the Oracle VM), `--paste` (the PR typed into the input), `--cut 25|45`.
 Needs Google Chrome and ffmpeg. The replay plays the recorded run of excalidraw#10295 compressed to 7 / 16 s.
+
+## The video on the landing page
+
+The landing plays `packages/web/public/demo/pr-walkthrough-demo.mp4` (poster next to it). It is the long cut with the
+PaulYudin track, recorded against a local stack that serves the repo's committed #10295 data (clean desktop
+before/after pair) and the real recorded run (`--site http://localhost:5180`, server with `ANALYZER=cached`,
+`ELEVENLABS_VOICE_ID` from `deploy/.env.production` and a dummy key so the cached narration mp3s are served;
+copy the live run's events over `data/events/excalidraw/excalidraw/10295.ndjson` for the recording and
+`git checkout` it afterwards). Presenter: ElevenLabs "Sarah" at speed 0.84 (`--speed`), cached in
+`docs/video/out/voice-cache`. The music is a fixed envelope: full level, a dip under the presenter, almost silent
+for the whole stretch where the site's own narration plays. To replace the video: record, then copy the mp4 and a
+frame (`ffmpeg -ss 29 -i demo.mp4 -frames:v 1 poster.jpg`) into `packages/web/public/demo/`.

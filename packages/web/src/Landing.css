@@ -88,6 +88,11 @@
 .lp-pick i { font-style: normal; color: var(--good); margin-right: 6px; }
 .lp-pick small { color: var(--faint); margin-left: 6px; }
 
+/* ---- demo video ---- */
+.lp-demo { padding: 40px 0 8px; border-top: 1px solid var(--line); text-align: center; }
+.lp-demo h2 { margin: 0 0 6px; font-size: 24px; font-weight: 650; }
+.lp-video { display: block; width: 100%; max-width: 920px; aspect-ratio: 16 / 9; margin: 0 auto; border-radius: 12px; border: 1px solid var(--line); background: #000; }
+
 /* ---- proof band ---- */
 .lp-band { padding: 40px 0 34px; border-top: 1px solid var(--line); text-align: center; }
 .lp-band h2 { margin: 0 0 6px; font-size: 24px; font-weight: 650; }

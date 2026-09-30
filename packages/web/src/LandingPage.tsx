@@ -157,6 +157,7 @@ export function LandingPage() {
           PR Walkthrough
         </span>
         <span className="lp-nav-links">
+          {!STATIC && <a href="#demo">Watch the demo</a>}
           <a href="#analysed">Already analysed</a>
           <a href="https://github.com/an2323/pr-walkthrough" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
         </span>
@@ -172,6 +173,7 @@ export function LandingPage() {
         <PrInput />
       </header>
 
+      <DemoVideo />
       <ProofBand />
       <Analysed cards={cards} />
 
@@ -459,6 +461,32 @@ function Helper({ onPick }: { onPick: (url: string) => void }) {
         Any other public PR works too — you get the narrated walkthrough, without screenshots (for now they need an app we have set up).
       </p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The demo: a PR pasted, analysed and explained — recorded from these very screens (docs/video/README.md).
+// The file lives in public/, which the static demo build skips, so it is not offered there.
+// ---------------------------------------------------------------------------------------------
+
+function DemoVideo() {
+  const [failed, setFailed] = useState(false);
+  if (STATIC || failed) return null;
+  return (
+    <section className="lp-demo" id="demo" aria-labelledby="lp-demo-h">
+      <h2 id="lp-demo-h">See it work — one minute</h2>
+      <p className="lp-band-lead">A PR pasted, analysed and explained: the real screens, the real run, the real narration.</p>
+      <video
+        className="lp-video"
+        controls
+        preload="metadata"
+        playsInline
+        poster="/demo/pr-walkthrough-demo-poster.jpg"
+        onError={() => setFailed(true)}
+      >
+        <source src="/demo/pr-walkthrough-demo.mp4" type="video/mp4" onError={() => setFailed(true)} />
+      </video>
+    </section>
   );
 }
 
