@@ -6,7 +6,7 @@
  * never a silent gap, and never an internal error string.
  */
 
-import type { Walkthrough } from "@pr-walkthrough/shared";
+import type { ShotsOutcomeCode, Walkthrough } from "@pr-walkthrough/shared";
 
 export const IDENTICAL_FRAMES_NOTE =
   "The bug was reproduced in the running app, but before and after look the same in a still image — the difference is in behaviour, not in pixels.";
@@ -45,6 +45,24 @@ export function plainNoShotsReason(raw: string): string {
   }
   // Anything else is a reason the verifier itself wrote in plain words (skip.json).
   return r.length > MAX_REASON ? `${r.slice(0, MAX_REASON - 1).trimEnd()}…` : r;
+}
+
+/**
+ * The machine-readable twin of plainNoShotsReason: which kind of ending was it? Same patterns, same order,
+ * so the progress screen can pick the right card without parsing the sentence. A reason the verifier wrote in
+ * plain words itself (it declined: "only affects server-side rendering") means there was nothing to see.
+ */
+export function shotsOutcomeCode(raw: string): ShotsOutcomeCode {
+  const r = raw.trim();
+  if (/no app recipe/i.test(r)) return "no-recipe";
+  if (/turned off|VERIFY_SHOTS/i.test(r)) return "unavailable";
+  if (/non-visual change/i.test(r)) return "non-visual";
+  if (/base\/head sha/i.test(r)) return "unavailable";
+  if (/no credits left/i.test(r)) return "unavailable";
+  if (/screenshot tool|BOB_API_KEY/i.test(r)) return "unavailable";
+  if (/warm-up|dev server|didn't start|could not start|timed out waiting|install failed|only [\d.]+ GB free|\b(yarn|npm|pnpm)\b[^:]*\b(exited|timed out)\b/i.test(r)) return "app-failed";
+  if (/repro|not trusted|did not write|could not|couldn't|failed|error|timed? ?out|browser|install/i.test(r)) return "not-reproduced";
+  return "non-visual";
 }
 
 /** Record on the walkthrough that no before/after screenshots exist, and why. Never throws. */

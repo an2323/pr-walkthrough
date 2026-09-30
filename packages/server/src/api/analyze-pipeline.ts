@@ -30,7 +30,8 @@ import { recipeFor, resolveRecipe } from "../verify/recipes.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
-import { markVerified, recordNoShots, recordShotsNote } from "../verify/shots-status.js";
+import { markVerified, plainNoShotsReason, recordNoShots, recordShotsNote } from "../verify/shots-status.js";
+import { confirmedEvents, emitAll, filesEvent, outcomeEvent, planEvent, scenarioEvent, shotsNotPlannedReason, skippedOutcome } from "./progress-events.js";
 import { validate, checkQuality, criticalQualityWarnings } from "../validation/index.js";
 import { loadWalkthrough, saveWalkthrough } from "../storage.js";
 import { blobsEnabled, uploadBlob, uploadDir } from "../blobs.js";
@@ -146,11 +147,15 @@ async function runPipeline(
     // A fork (a PR copied into the user's own fork) runs the parent's app: without this it silently
     // got "no app recipe" — no screenshots, no ablation.
     await resolveRecipe(owner, repo);
+    // Tell the screen up front whether screenshots are planned for this repository — it is known now.
+    const canShots = process.env.VERIFY_SHOTS !== "0" && canVerify(`${owner}/${repo}`);
+    emit(planEvent(elapsed(), pr, shotsNotPlannedReason(canVerify(`${owner}/${repo}`), process.env.VERIFY_SHOTS === "0", `${owner}/${repo}`)));
     const repoUrl = `https://github.com/${owner}/${repo}`;
     const workspace = await prepareWorkspace(repoUrl, pr.headSha!, pr.baseSha!, number, GIT_CACHE_DIR);
     const diff = await workspace.diff();
     const hunks = parseHunks(diff);
     const { skipped } = classifyHunks(hunks);
+    emit(filesEvent(elapsed(), hunks, skipped));
 
     emit({
       kind: "stage",
@@ -184,6 +189,8 @@ async function runPipeline(
     }
 
     let walkthrough: Walkthrough = result.walkthrough;
+    // What the verifier will try in the running app — the analysis already wrote it.
+    if (canShots) emitAll(emit, [scenarioEvent(elapsed(), walkthrough.verification?.scenario)]);
     // Per-symptom frames from the verifier; kept here so every later rewrite by Bob can re-attach them.
     let symptomSrcs: Map<number, string> | undefined;
     // Measured BASE/HEAD facts of every confirmed scenario (for the fact check).
@@ -299,8 +306,9 @@ async function runPipeline(
           kind: "stage",
           t: elapsed(),
           stage: "shots",
-          label: `Screenshots skipped: ${shotGate.reason.slice(0, 120)}`,
+          label: `Screenshots skipped: ${plainNoShotsReason(shotGate.reason)}`,
         });
+        emit(skippedOutcome(elapsed(), shotGate.reason));
       } else {
         // If the process dies mid-stage (restart, OOM) the saved walkthrough must already say
         // why it has no screenshots — the placeholder is replaced by the real outcome below.
@@ -352,6 +360,7 @@ async function runPipeline(
                 ? "Screenshots taken by Bob"
                 : "Bug reproduced — no side-by-side shots for this one",
             });
+            emitAll(emit, confirmedEvents(elapsed(), vr.shots, vr.shotsNote));
 
             const recipe = recipeFor(owner, repo);
             if (process.env.VERIFY_ABLATION !== "0" && recipe && walkthrough.pr.baseSha) {
@@ -477,8 +486,9 @@ async function runPipeline(
               kind: "stage",
               t: elapsed(),
               stage: "shots",
-              label: `Screenshots skipped: ${vr.reason.slice(0, 160)}`,
+              label: `Screenshots skipped: ${vr.kind === "declined" ? vr.reason.slice(0, 160) : plainNoShotsReason(vr.reason)}`,
             });
+            emit(skippedOutcome(elapsed(), vr.reason, vr.kind === "declined" ? { alreadyPlain: true } : {}));
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -489,17 +499,19 @@ async function runPipeline(
             kind: "stage",
             t: elapsed(),
             stage: "shots",
-            label: `Screenshots failed: ${message.slice(0, 160)}`,
+            // The raw error stays in the log above; the screen gets a sentence, never the exception text.
+            label: "Screenshots couldn't be captured this time",
           });
+          emit(outcomeEvent(elapsed(), "unavailable", "Screenshots couldn't be captured this time."));
         }
       }
     } else {
       // The common case for most repositories (no app recipe) — say so instead of leaving a silent gap.
-      recordNoShots(
-        walkthrough,
-        process.env.VERIFY_SHOTS === "0" ? "screenshots turned off (VERIFY_SHOTS=0)" : `no app recipe for ${walkthrough.pr.repo}`
-      );
+      const notPlannedRaw =
+        process.env.VERIFY_SHOTS === "0" ? "screenshots turned off (VERIFY_SHOTS=0)" : `no app recipe for ${walkthrough.pr.repo}`;
+      recordNoShots(walkthrough, notPlannedRaw);
       await saveWalkthrough(walkthrough);
+      emit(skippedOutcome(elapsed(), notPlannedRaw));
     }
 
     // Fact check: the prose against what the running app measured (only after a confirmed repro).

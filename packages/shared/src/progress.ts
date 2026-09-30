@@ -22,7 +22,35 @@ export type ProgressStage =
   | "shots" // Bob reproduces the scenario and takes before/after screenshots
   | "voicing"; // narration audio generated (ElevenLabs) so the walkthrough plays at once
 
+/**
+ * How the screenshot stage ended (or why it will not run). Plain-language reasons travel with the code,
+ * so the screen never has to parse free text or show a raw error.
+ */
+export type ShotsOutcomeCode =
+  | "ok" // bug reproduced, before/after frames exist
+  | "identical" // reproduced and verified, but a still image shows no difference
+  | "no-recipe" // this repository is not one whose app we can start
+  | "non-visual" // nothing to see in the running app
+  | "app-failed" // the app could not be installed or started
+  | "not-reproduced" // the app ran, but the bug could not be reproduced reliably
+  | "unavailable"; // the screenshot tool is off, out of credits, or crashed
+
 export type ProgressEvent =
+  /** Sent once the PR is known: its size and whether screenshots are planned for this repository. */
+  | {
+      kind: "plan";
+      t: number;
+      pr: { title: string; additions: number; deletions: number; files: number };
+      shots: { planned: boolean; reason?: string };
+    }
+  /** The changed files (after the diff is parsed); `skipped` = only mechanical hunks, hidden from Bob. */
+  | { kind: "files"; t: number; files: { path: string; additions: number; deletions: number; skipped: boolean }[] }
+  /** What the verifier will try in the running app (the scenario lines from the analysis). */
+  | { kind: "scenario"; t: number; lines: string[] }
+  /** The screenshot stage ended. `message` is a plain sentence for the reader. */
+  | { kind: "outcome"; t: number; what: "shots"; code: ShotsOutcomeCode; message: string }
+  /** Before/after frames are ready (paths relative to /data/shots/{owner}/{repo}/{number}/). */
+  | { kind: "frames"; t: number; before: string; after: string; caption?: string }
   /** A pipeline stage started. */
   | { kind: "stage"; t: number; stage: ProgressStage; label: string }
   /** Bob read/searched something, or spawned a sub-agent. */

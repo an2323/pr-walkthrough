@@ -65,4 +65,4 @@ export {
 export { parseHunks, hunkId } from "./hunk-ids.js";
 
 // Live-analysis progress events (ST6c)
-export type { ProgressStage, ProgressEvent, ProgressEventOf } from "./progress.js";
+export type { ProgressStage, ProgressEvent, ProgressEventOf, ShotsOutcomeCode } from "./progress.js";

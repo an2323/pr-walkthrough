@@ -527,6 +527,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     // instead of throwing the paid run away — only with a task to resume and budget for it.
     const canRepair =
       !!taskId && repairMax > 0 && (await assertBudget(repairMax).then(() => true, () => false));
+    onStage?.("shots", "Replaying the script on both versions");
     const { results, repaired, flaky } = await confirmScenariosWithRepair(
       { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title, symptomTexts: listSymptomTexts(wt) },
       canRepair

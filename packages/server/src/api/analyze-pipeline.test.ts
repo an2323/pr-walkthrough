@@ -362,6 +362,30 @@ function expectFinishedCleanly(final: Walkthrough | undefined, wd: World, opts: 
     expect(wt.shots).toBeUndefined();
   }
 
+  // The analysis screen draws from structured events: a plan up front, the files, and exactly one
+  // screenshot outcome that agrees with what was saved — never a raw error in a label.
+  const kinds = wd.events.map((e) => e.kind);
+  expect(kinds.filter((k) => k === "plan")).toHaveLength(1);
+  expect(kinds.filter((k) => k === "files")).toHaveLength(1);
+  const analyzingAt = wd.events.findIndex((e) => e.kind === "stage" && (e as { stage: string }).stage === "analyzing");
+  expect(kinds.indexOf("plan")).toBeLessThan(analyzingAt);
+  expect(kinds.indexOf("files")).toBeLessThan(analyzingAt);
+  const outcomes = wd.events.filter((e): e is Extract<ProgressEvent, { kind: "outcome" }> => e.kind === "outcome");
+  expect(outcomes).toHaveLength(1);
+  const frames = wd.events.filter((e) => e.kind === "frames");
+  if (v!.status === "passed") {
+    expect(outcomes[0]!.code).toBe(wt.shots ? "ok" : "identical");
+    expect(frames).toHaveLength(wt.shots ? 1 : 0);
+    if (wt.shots) expect(kinds.indexOf("frames")).toBeLessThan(kinds.indexOf("outcome"));
+  } else {
+    expect(outcomes[0]!.code).not.toMatch(/^(ok|identical)$/);
+    expect(outcomes[0]!.message.length).toBeGreaterThan(5);
+    expect(frames).toHaveLength(0);
+  }
+  for (const e of wd.events) {
+    if (e.kind === "stage") expect(e.label).not.toMatch(/exited with code|ENOSPC|Error:|at \w+\.\w+ \(/);
+  }
+
   // Meta is the backend's, not whatever Bob echoed.
   expect(wt.meta.run?.taskId).toBe("task-1");
 
@@ -479,6 +503,9 @@ describe("runAnalyzeJob — every path ends in a trustworthy result", () => {
     const { final, world: wd } = await run({ verifier: new Error("yarn start exited with code 1") });
     const wt = expectFinishedCleanly(final, wd);
     expect(wt.verification?.status).toBe("skipped");
+    const outcome = wd.events.find((e) => e.kind === "outcome") as Extract<ProgressEvent, { kind: "outcome" }>;
+    expect(outcome.code).toBe("unavailable");
+    expect(outcome.message).not.toMatch(/yarn|exited/);
   });
 
   it("frames identical → honest note instead of a pair, ablation still measured", async () => {
@@ -489,6 +516,7 @@ describe("runAnalyzeJob — every path ends in a trustworthy result", () => {
     const wt = expectFinishedCleanly(final, wd);
     expect(wt.verification?.shotsNote).toMatch(/look the same/);
     expect(wt.verification?.ablation).toBeDefined();
+    expect((wd.events.find((e) => e.kind === "outcome") as { code: string }).code).toBe("identical");
   });
 
   it("ablation throws → frames kept, no verdicts invented", async () => {
@@ -516,6 +544,8 @@ describe("runAnalyzeJob — every path ends in a trustworthy result", () => {
     const wt = expectFinishedCleanly(final, wd);
     expect(wd.verifierCalls).toBe(0);
     expect(wt.verification?.skipReason).toMatch(/turned off/);
+    expect(wd.events.find((e) => e.kind === "plan")).toMatchObject({ shots: { planned: false } });
+    expect((wd.events.find((e) => e.kind === "outcome") as { code: string }).code).toBe("unavailable");
   });
 
   it("fact check corrects a sentence → frames, verdicts kept, cost counted, still no critical warnings", async () => {
