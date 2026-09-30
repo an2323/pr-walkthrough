@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ProgressEvent } from '@pr-walkthrough/shared';
 
-import { deriveProgressView } from './progressModel';
+import { deriveProgressView, plainStageLabel } from './progressModel';
 
 let t = 0;
 const at = (e: Record<string, unknown>): ProgressEvent => ({ ...e, t: (t += 1000) }) as ProgressEvent;
@@ -148,5 +148,24 @@ describe('deriveProgressView — a run with the structured events', () => {
     const v = deriveProgressView([]);
     expect(v.steps.map((s) => s.status)).toEqual(['pending', 'pending', 'pending', 'pending']);
     expect(v.elapsedMs).toBe(0);
+  });
+});
+
+describe('plainStageLabel — the rail never shows a file path or a hunk id', () => {
+  it('says the ablation in plain words', () => {
+    expect(plainStageLabel('Testing "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1" alone')).toBe('Testing which changes fix the bug');
+    expect(plainStageLabel('Testing everything except "packages/x/y.ts#2"')).toBe('Testing which changes fix the bug');
+    expect(plainStageLabel('Measured 4 change(s) against the running app')).toBe('Measured which changes fix the bug');
+  });
+  it('leaves ordinary labels alone', () => {
+    expect(plainStageLabel('Bob is reproducing the change and taking screenshots')).toBe('Bob is reproducing the change and taking screenshots');
+  });
+  it('the screenshot row shows the plain label while the ablation runs, before and after the verdict', () => {
+    t = 0;
+    const path = 'Testing "packages/excalidraw/components/dropdownMenu/DropdownMenuTrigger.tsx#1" alone';
+    const running = deriveProgressView([stage('clone'), plan(true), stage('shots', path)]);
+    expect(running.steps.find((s) => s.id === 'shots')?.detail).toBe('Testing which changes fix the bug');
+    const later = deriveProgressView([stage('clone'), plan(true), stage('shots'), outcome('ok', 'ok'), stage('shots', path)]);
+    expect(later.steps.find((s) => s.id === 'shots')?.detail).toBe('Testing which changes fix the bug');
   });
 });

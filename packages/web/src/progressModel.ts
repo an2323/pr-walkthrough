@@ -72,6 +72,16 @@ function targetPath(target: string): string {
   return target.replace(/^Reading\s+/, '').replace(/^\.walkthrough\/base\//, '');
 }
 
+/**
+ * A stage label written for the log, said for a reader. The ablation runs one label per hunk ("Testing "packages/…/x.tsx#1"
+ * alone") — file paths and hunk ids mean nothing on the screen, and an unbroken path used to push out of the rail.
+ */
+export function plainStageLabel(label: string): string {
+  if (/^Testing\b/.test(label)) return 'Testing which changes fix the bug';
+  if (/^Measured \d+ change/.test(label)) return 'Measured which changes fix the bug';
+  return label;
+}
+
 const OUTCOME_STATUS: Record<ShotsOutcomeCode, StepStatus> = {
   ok: 'done',
   identical: 'done',
@@ -132,13 +142,14 @@ export function deriveProgressView(events: ProgressEvent[]): ProgressView {
     shotsDetail = outcome.message;
     // Work that still belongs to the screenshot stage after the verdict (measuring, revising, checking the text).
     const busy = !done && lastStage && (lastStage.stage === 'shots' || lastStage.stage === 'repairing');
-    if (busy && outcome.code === 'ok') shotsDetail = lastStage.label;
+    if (busy && outcome.code === 'ok') shotsDetail = plainStageLabel(lastStage.label);
   } else if (planned === false) {
     shotsStatus = 'skipped';
     shotsDetail = plan?.shots.reason;
   } else if (inShots) {
     shotsStatus = done ? 'done' : 'current';
-    shotsDetail = labelOf('shots') ?? labelOf('app');
+    const raw = labelOf('shots') ?? labelOf('app');
+    shotsDetail = raw === undefined ? undefined : plainStageLabel(raw);
   } else if (planned === true) {
     shotsStatus = 'pending';
     shotsDetail = 'planned — this app can be started';

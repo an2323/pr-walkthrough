@@ -215,7 +215,7 @@ async function main(): Promise<void> {
   );
 
   // The presenter's lines are made (or fetched from the cache) BEFORE the clock starts, so none arrives late.
-  if (VO_ON) {
+  if (VO_ON && ONLY !== "progress") {
     const lines = [
       "Bob reads the whole PR — and runs it.",
       "Paste a PR. See what you'll get before you start.",
@@ -231,14 +231,15 @@ async function main(): Promise<void> {
   }
 
   // ---- go --------------------------------------------------------------------------------
-  await page.goto(ONLY === "viewer" ? `${SITE}/${PR.owner}/${PR.repo}/${PR.number}` : SITE + "/", { waitUntil: "networkidle" });
-  await page.mouse.move(W * 0.72, H * 0.3);
+  await page.goto(ONLY === "viewer" ? `${SITE}/${PR.owner}/${PR.repo}/${PR.number}` : ONLY === "progress" ? `${SITE}/${PR.owner}/${PR.repo}/${PR.number}/progress?job=demo` : SITE + "/", { waitUntil: "networkidle" });
+  await page.mouse.move(ONLY === "progress" ? -40 : W * 0.72, ONLY === "progress" ? -40 : H * 0.3); // a spliced stretch parks the cursor out of the way
   await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: Math.round(W * SCALE), maxHeight: Math.round(H * SCALE), everyNthFrame: 1 });
   t0 = Date.now();
   mark("landing");
 
   let l7 = 0;
   if (ONLY !== "viewer") {
+  if (ONLY !== "progress") {
   // 1 — the page
   const l1 = await narrate("Bob reads the whole PR — and runs it.");
   await sleep(Math.max(CUT === 45 ? 3400 : 2400, (l1 - now()) * 1000 + 300));
@@ -258,7 +259,8 @@ async function main(): Promise<void> {
   mark("analyse");
 
   // 4 — the real run, played back: captions follow what the screen is doing
-  await page.waitForURL(/progress/, { timeout: 15000 });
+  }
+  if (ONLY !== "progress") await page.waitForURL(/progress/, { timeout: 15000 });
   mark("progress");
   const phase = async (): Promise<string> => (await page.locator(".pg-pane-head h3").first().textContent().catch(() => "")) ?? "";
   const spoken = new Set<string>();
@@ -266,6 +268,7 @@ async function main(): Promise<void> {
   const deadline = Date.now() + 70_000;
   while (Date.now() < deadline) {
     if (await page.locator(".pg-done").count()) break;
+    if (ONLY === "progress" && marks["caption:proof"] !== undefined && now() > marks["caption:proof"]! + 3.9) break; // enough of the proof to splice
     const h = await phase();
     if (/What changed/.test(h)) await say("read", "Bob reads the diff and the code around it.", CUT === 45);
     else if (/Reproducing/.test(h)) await say("run", "Then he runs it — old commit and new commit.");
@@ -273,12 +276,15 @@ async function main(): Promise<void> {
     await sleep(200);
   }
   mark("done");
+  if (ONLY !== "progress") {
   l7 = await narrate("Done. The screenshots come from the running app.", CUT === 45);
   staged = false;
   await page.waitForURL(new RegExp(`/${PR.owner}/${PR.repo}/${PR.number}$`), { timeout: 15000 });
   await page.waitForLoadState("networkidle");
   }
+  }
 
+  if (ONLY !== "progress") {
   // 5 — the finished walkthrough, read aloud by the site itself: press "Listen" and let it play (Auto mode)
   mark("viewer");
   const l8 = await narrate(ONLY === "viewer" ? "Then it explains every change: the diagram and the code, read aloud." : "And then it explains every change, read aloud.");
@@ -308,6 +314,7 @@ async function main(): Promise<void> {
   await sleep(500); // the Resume state is on screen
   const l9 = await narrate("Paste a PR. Get the proof. Understand the fix.");
   await sleep(Math.max(1200, (l9 - now()) * 1000 + 500));
+  }
   mark("end");
   const total = now();
   // What the site actually played (and when), so the mix puts each clip exactly where the page started it.
@@ -340,6 +347,12 @@ async function main(): Promise<void> {
   const vdur = Number(sh("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video]).trim());
   writeFileSync(path.join(OUT, `timeline-${CUT}.json`), JSON.stringify({ total, videoSeconds: vdur, marks, captions, played, presenter, speed }, null, 2));
   console.log(`video: ${video}  (${vdur.toFixed(1)} s, ${frames.length} frames)`);
+
+  if (ONLY === "progress") {
+    writeFileSync(path.join(OUT, "marks-progress.json"), JSON.stringify({ videoSeconds: vdur, marks }, null, 2));
+    console.log(`progress scene: ${video} (caption:proof at ${marks["caption:proof"]?.toFixed(1)} s) + marks-progress.json`);
+    return;
+  }
 
   // ---- mix: narration over music, music ducked under the voice -----------------------------
   if (played.length === 0) throw new Error("the page played no narration — nothing to mix (is ELEVENLABS_* set, or the site's TTS cached?)");

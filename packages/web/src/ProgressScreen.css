@@ -27,12 +27,14 @@
 .pg-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   min-height: 0;
 }
 
 /* ---- rail ---- */
 .pg-rail {
+  min-width: 0;
+  overflow-wrap: anywhere; /* a long path or id must wrap inside the rail, never spill into the pane */
   padding: 24px 22px 24px 28px;
   border-right: 1px solid var(--line);
   background: var(--panel);
@@ -85,7 +87,7 @@
   display: grid; place-items: center;
   font-size: 10px; font-weight: 700;
 }
-.pg-step small { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--muted); line-height: 1.4; }
+.pg-step small { display: block; overflow-wrap: anywhere; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--muted); line-height: 1.4; }
 .pg-step--done { color: var(--muted); }
 .pg-step--done .pg-dot { background: var(--good); border-color: var(--good); color: #06210f; }
 .pg-step--current { color: var(--ink); font-weight: 600; }

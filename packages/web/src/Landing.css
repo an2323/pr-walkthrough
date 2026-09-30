@@ -46,8 +46,10 @@
 .lp-video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; border: 1px solid var(--line); background: #000; }
 
 /* ---- try it ---- */
-.lp-try { padding: 34px 0 30px; text-align: center; }
-.lp-try h2 { margin: 0 0 6px; font-size: 24px; font-weight: 650; }
+.lp-try { margin: 56px 0 10px; padding: 34px 32px 30px; text-align: center; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 16px; }
+.lp-try::before { content: "Your turn"; display: inline-block; margin-bottom: 10px; padding: 2px 11px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.lp-try h2 { margin: 0 0 8px; font-size: 30px; line-height: 1.2; letter-spacing: -.015em; font-weight: 700; }
+.lp-try .lp-input, .lp-try .lp-pv { background: var(--raised); }
 .lp-try-lead { max-width: 700px; margin: 0 auto; color: var(--muted); font-size: 15px; line-height: 1.55; }
 .lp-try-lead b { color: var(--ink); font-weight: 600; }
 .lp-try-lead a { color: var(--accent); font-weight: 600; text-decoration: none; }
@@ -93,6 +95,7 @@
 
 @media (max-width: 860px) {
   .lp { padding: 0 18px; }
+  .lp-try { padding: 26px 16px 24px; margin-top: 40px; }
   .lp-cards { grid-template-columns: 1fr; }
   .lp-input-row { flex-direction: column; }
 }

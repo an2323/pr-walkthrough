@@ -3,6 +3,7 @@
  *
  *   tsx scripts/assemble-demo-video.ts --a <earlier.mp4> --a-end 29.4 --a-voices a-voices.json \
  *       --b <scene.mp4> --b-voices voices-viewer.json --music track2.mp3 --out demo.mp4 [--poster-at 27.5 --poster poster.jpg]
+ *       [--patch <scene.mp4> --patch-at <s> --patch-len <s>]   # swap the tail of A for a re-filmed stretch (same length, same pace)
  *
  * Nothing is re-recorded: scene A is the first `--a-end` seconds of the earlier video (captions are burned into it), scene B is
  * a fresh recording (record-demo-video.ts --only viewer). The presenter's lines for A come from a small json
@@ -45,9 +46,14 @@ sh("mkdir", ["-p", tmp]);
 // ---- picture: A (cut) + B ---------------------------------------------------------------
 const aCut = path.join(tmp, "a.mp4");
 sh("ffmpeg", ["-y", "-ss", "0", "-t", String(A_END), "-i", A, "-an", "-vf", "fps=30", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", aCut]);
-const dA = dur(aCut);
+// optional: a re-filmed stretch spliced in right after A's cut point (its own picture, A's voices stay where they were)
+const PATCH = arg("patch") ? path.resolve(arg("patch")) : "";
+const pCut = path.join(tmp, "p.mp4");
+if (PATCH) sh("ffmpeg", ["-y", "-ss", arg("patch-at"), "-t", arg("patch-len"), "-i", PATCH, "-an", "-vf", "fps=30", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", pCut]);
+const dA = dur(aCut) + (PATCH ? dur(pCut) : 0);
 const silent = path.join(tmp, "ab.mp4");
-sh("ffmpeg", ["-y", "-i", aCut, "-i", B, "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]", "-map", "[v]", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", silent]);
+const parts = PATCH ? [aCut, pCut, B] : [aCut, B];
+sh("ffmpeg", ["-y", ...parts.flatMap((f) => ["-i", f]), "-filter_complex", `${parts.map((_, i) => `[${i}:v]`).join("")}concat=n=${parts.length}:v=1:a=0[v]`, "-map", "[v]", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", silent]);
 const total = dur(silent);
 
 // ---- voices ------------------------------------------------------------------------------
