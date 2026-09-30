@@ -534,7 +534,7 @@ async function runPipeline(
 
     // Fact check: the prose against what the running app measured (only after a confirmed repro).
     if (process.env.VERIFY_FACTCHECK !== "0" && scenarioFacts.length > 0 && walkthrough.verification?.status === "passed") {
-      emit({ kind: "stage", t: elapsed(), stage: "repairing", label: "Checking the text against the running app" });
+      emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: "Fact-checking the explanation — comparing what the text says with what the app actually did" });
       try {
         const fc = await factCheck({
           walkthrough,
@@ -556,7 +556,7 @@ async function runPipeline(
           const run = walkthrough.meta.run;
           walkthrough = fc.walkthrough;
           if (run) walkthrough.meta.run = run;
-          emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Corrected ${fc.changed.length} sentence(s) to match the running app` });
+          emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: `Fixed ${fc.changed.length} statement(s) the app contradicted` });
           await repairQuality();
           await saveWalkthrough(walkthrough);
           qualityWarnings = checkQuality(walkthrough);
@@ -564,8 +564,8 @@ async function runPipeline(
           emit({
             kind: "stage",
             t: elapsed(),
-            stage: "repairing",
-            label: fc.status === "unchanged" ? "Text matches the running app" : `Fact check skipped: ${fc.reason.slice(0, 100)}`,
+            stage: "factcheck",
+            label: fc.status === "unchanged" ? "The explanation matches what the app showed" : `Fact check skipped: ${fc.reason.slice(0, 100)}`,
           });
         }
       } catch (err) {

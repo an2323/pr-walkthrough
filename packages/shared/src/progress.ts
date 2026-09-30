@@ -20,6 +20,7 @@ export type ProgressStage =
   | "saving" // writing the walkthrough JSON to disk
   | "app" // installing and starting the app at BASE and HEAD (screenshot verifier)
   | "shots" // Bob reproduces the scenario and takes before/after screenshots
+  | "factcheck" // the explanation compared with what the running app measured; contradicted statements fixed
   | "ablation" // which of the PR's changes the fix needs: each change tried alone / left out in the running app
   | "voicing"; // narration audio generated (ElevenLabs) so the walkthrough plays at once
 
