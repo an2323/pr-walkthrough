@@ -39,7 +39,8 @@ const RECIPES: AppRecipe[] = [
       args: ["--cwd", "excalidraw-app", "vite", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
       // ESLINT off: the dev server's checker plugin would otherwise lint the whole monorepo
       // (twice, BASE and HEAD, on the same two cores) before the app is usable.
-      env: { VITE_APP_PORT: String(port), BROWSER: "none", VITE_APP_ENABLE_ESLINT: "false" },
+      // YARN_IGNORE_ENGINES: `yarn … vite` checks the "node" engine range too, not just install (#10199).
+      env: { VITE_APP_PORT: String(port), BROWSER: "none", VITE_APP_ENABLE_ESLINT: "false", YARN_IGNORE_ENGINES: "true" },
     }),
     readySelector: ".excalidraw",
     viewport: { width: 1280, height: 800 },

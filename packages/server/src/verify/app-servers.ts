@@ -138,7 +138,7 @@ export async function ensureInstalled(
     }
   }
   // HUSKY=0: the repo's `prepare` script would otherwise write git hooks config into the shared clone.
-  await run(recipe.install.cmd, recipe.install.args, worktree, opts.timeoutMs ?? 15 * 60_000, { HUSKY: "0" });
+  await run(recipe.install.cmd, recipe.install.args, worktree, opts.timeoutMs ?? 15 * 60_000, { HUSKY: "0", YARN_IGNORE_ENGINES: "true" });
   return donor ? "cloned" : "installed";
 }
 
