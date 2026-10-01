@@ -534,8 +534,13 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
     const { results, repaired, flaky } = await confirmScenariosWithRepair(
       { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title, symptomTexts: listSymptomTexts(wt), onProgress: (label) => onStage?.("shots", label) },
       canRepair
-        ? async (prompt) => {
-            onStage?.("shots", "A test script didn't reproduce the bug — Bob is rewriting the script with the real results");
+        ? async (prompt, why) => {
+            onStage?.(
+              "shots",
+              why.onlyMissing
+                ? "A problem has no test script yet — Bob is writing one"
+                : "A test script didn't reproduce the bug — Bob is rewriting the script with the real results"
+            );
             repairSpentBefore = costUsd;
             const cap = Number((costUsd + repairMax).toFixed(2));
             repairRun = await runBobVerifier(prompt, headWt, cap, runDir, onEvent, taskId);

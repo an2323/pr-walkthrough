@@ -20,7 +20,7 @@ import { readFile as readFileAsync } from "node:fs/promises";
 import { comparePngs } from "../shots/png-diff.js";
 import { isPhoneFrame } from "../shots/frames.js";
 import { runRepro, type ReproResult } from "./ablation.js";
-import { loadScenarios, type Scenario } from "./scenarios.js";
+import { loadScenarios, MAX_SCENARIOS, type Scenario } from "./scenarios.js";
 
 export type ReproRun = ReproResult | { error: string };
 
@@ -189,6 +189,27 @@ export function missingDesktopScenario(results: ScenarioResult[], symptomTexts: 
   );
 }
 
+/**
+ * Symptoms no scenario was even written for (#10199: three symptoms, two scripts — "hidden behind the
+ * properties popup" got no attempt, so its card had no picture). A scenario that was written and failed
+ * counts as tried: that is a different case and is not asked again. Only judged when Bob tags scenarios
+ * with `symptomIndex` at all, and only while there is room under MAX_SCENARIOS.
+ */
+export function symptomsWithoutScenario(results: ScenarioResult[], symptomTexts: string[] = []): string | undefined {
+  const tagged = new Set(results.map((r) => r.scenario.symptomIndex).filter((i): i is number => i !== undefined));
+  if (tagged.size === 0 || results.length >= MAX_SCENARIOS) return undefined;
+  const missing = symptomTexts.map((t, i) => ({ t, i })).filter(({ i }) => !tagged.has(i)).slice(0, MAX_SCENARIOS - results.length);
+  if (missing.length === 0) return undefined;
+  return (
+    `- No scenario was written for ` +
+    missing.map(({ t, i }) => `symptom [${i}] "${t}"`).join("; ") +
+    `. Write one script for each (same contract, \`symptomIndex\` set) so it gets its own before/after picture. ` +
+    `Start from your closest working script (same setup, same helpers) and change only the steps this symptom ` +
+    `needs; write the file FIRST, then run it — no page dumps or element listings. If it truly can't be shown ` +
+    `in the running app, leave it out — do not force it.`
+  );
+}
+
 /** A symptom text that says which of two things is drawn over the other. */
 const STACKING_CLAIM = /\b(on top of|covers?|covering|covered|behind|underneath|under|above|over(?:lap)?s?|hides?|hidden)\b/i;
 /** A measurement that says which element is on top (any reasonable key name, or an elementFromPoint result). */
@@ -296,7 +317,7 @@ export function buildScenarioRepairPrompt(o: { baseUrl: string; headUrl: string;
  */
 export async function confirmScenariosWithRepair(
   o: ScenariosOptions,
-  repair?: (prompt: string) => Promise<void>
+  repair?: (prompt: string, why: { onlyMissing: boolean }) => Promise<void>
 ): Promise<{ results: ScenarioResult[]; repaired: boolean; flaky: string[] }> {
   let results = await confirmScenarios(o);
   const allProblems = (rs: ScenarioResult[]) => {
@@ -311,11 +332,13 @@ export async function confirmScenariosWithRepair(
         );
     }
     const desktop = missingDesktopScenario(rs, o.symptomTexts);
-    return desktop ? [...p, desktop] : p;
+    const untried = symptomsWithoutScenario(rs, o.symptomTexts);
+    return [...p, ...(desktop ? [desktop] : []), ...(untried ? [untried] : [])];
   };
   let problems = allProblems(results);
   const flaky: string[] = [];
-  if (problems.length > 0) {
+  // Only a script that failed can be flaky; a missing scenario or a wrong label isn't helped by a re-run.
+  if (problems.length > 0 && results.some((r) => !r.outcome.ok)) {
     await logProblems(o, "first check", problems);
     // A second $0 check before paying for a rewrite: a rehearsal showed saved, previously confirmed
     // scripts failing once and passing on the next run — that is a flaky run, not a broken script.
@@ -333,7 +356,10 @@ export async function confirmScenariosWithRepair(
   }
   if (problems.length === 0 || !repair) return { results, repaired: false, flaky };
   await logProblems(o, "sent to repair", problems);
-  await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }));
+  const untried = symptomsWithoutScenario(results, o.symptomTexts);
+  await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }), {
+    onlyMissing: problems.length === 1 && problems[0] === untried,
+  });
   results = await confirmScenarios(o);
   const left = allProblems(results);
   if (left.length > 0) await logProblems(o, "after repair", left);

@@ -187,6 +187,31 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
     expect(calls).toBe(0);
   });
 
+  it("a symptom no scenario was written for → one repair asks for it (#10199); a tried-and-failed one is not asked again", async () => {
+    const texts = ["The picker shrinks to one button", "The popup hides the menu", "Labels overflow"];
+    const o = await setup({ "a.cjs": wideScript() }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    const prompts: string[] = [];
+    await confirmScenariosWithRepair({ ...o, symptomTexts: texts }, async (p) => void prompts.push(p));
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/No scenario was written for symptom \[1\] "The popup hides the menu"; symptom \[2\]/);
+
+    // Every symptom has a scenario (one of them failing): nothing about missing symptoms.
+    const fail = `console.error("panel did not open"); process.exit(1);`;
+    const all = await setup(
+      { "a.cjs": wideScript(), "b.cjs": fail, "c.cjs": wideScript() },
+      [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }, { id: "b", file: "b.cjs", title: "B", symptomIndex: 1 }, { id: "c", file: "c.cjs", title: "C", symptomIndex: 2 }]
+    );
+    const p2: string[] = [];
+    await confirmScenariosWithRepair({ ...all, symptomTexts: texts }, async (p) => void p2.push(p));
+    expect(p2.join("\n")).not.toMatch(/No scenario was written/);
+
+    // Scenarios not tagged with symptomIndex at all: can't tell, ask nothing.
+    const untagged = await setup({ "a.cjs": wideScript() }, [{ id: "a", file: "a.cjs", title: "A" }]);
+    let calls = 0;
+    await confirmScenariosWithRepair({ ...untagged, symptomTexts: texts }, async () => void calls++);
+    expect(calls).toBe(0);
+  });
+
   it("all scenarios on a phone while a symptom isn't phone-only → one repair asks for a desktop scenario (#10295)", async () => {
     const o = await setup({ "a.cjs": script(DARK) }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
     const prompts: string[] = [];
