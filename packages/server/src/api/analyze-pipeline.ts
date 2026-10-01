@@ -227,7 +227,7 @@ async function runPipeline(
       const critical = criticalQualityWarnings(checkQuality(walkthrough));
       const taskId = walkthrough.meta.run?.taskId;
       if (critical.length === 0 || !taskId) return;
-      emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Fixing ${critical.length} quality issue(s)` });
+      emit({ kind: "stage", t: elapsed(), stage: "repairing", label: `Polishing the explanation — ${critical.length} wording issue(s) in the text` });
       console.log(`[analyze-pipeline] quality issues sent to repair:\n${critical.map((w) => `  - ${w.stepId ?? "-"} ${w.code}: ${w.message}`).join("\n")}`);
       try {
         const previousCost = walkthrough.meta.run?.costUsd ?? 0;
@@ -423,7 +423,7 @@ async function runPipeline(
                       kind: "stage",
                       t: elapsed(),
                       stage: "repairing",
-                      label: "Revising the explanation from measured evidence",
+                      label: "Rewriting parts of the explanation to match the measurements",
                     });
                     const reviseEvents = createProgressNormalizer(started, emit, { tracker: spend, task: "analysis" });
                     try {
@@ -451,7 +451,7 @@ async function runPipeline(
                           kind: "stage",
                           t: elapsed(),
                           stage: "repairing",
-                          label: "Explanation revised to match measured evidence",
+                          label: "Explanation rewritten to match the measurements",
                         });
                         // The rewritten steps go through the same output-contract repair as the first draft.
                         await repairQuality();
@@ -462,7 +462,7 @@ async function runPipeline(
                           kind: "stage",
                           t: elapsed(),
                           stage: "repairing",
-                          label: `Revise skipped: ${revised.reason.slice(0, 120)}`,
+                          label: `Explanation left as written: ${revised.reason.slice(0, 120)}`,
                         });
                       } else {
                         reviseCost = revised.costUsd;
@@ -478,7 +478,7 @@ async function runPipeline(
                           kind: "stage",
                           t: elapsed(),
                           stage: "repairing",
-                          label: `Revise failed (kept prior draft): ${revised.reason.slice(0, 100)}`,
+                          label: `Explanation left as written (the rewrite didn't pass the checks): ${revised.reason.slice(0, 100)}`,
                         });
                       }
                     } catch (err) {
@@ -557,7 +557,7 @@ async function runPipeline(
           const run = walkthrough.meta.run;
           walkthrough = fc.walkthrough;
           if (run) walkthrough.meta.run = run;
-          emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: `Fixed ${fc.changed.length} statement(s) the app contradicted` });
+          emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: `Corrected ${fc.changed.length} sentence(s) in the explanation to match the running app` });
           await repairQuality();
           await saveWalkthrough(walkthrough);
           qualityWarnings = checkQuality(walkthrough);

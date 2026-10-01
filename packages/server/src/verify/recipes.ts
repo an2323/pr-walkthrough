@@ -31,7 +31,9 @@ const RECIPES: AppRecipe[] = [
     repo: "excalidraw/excalidraw",
     installedMarker: "node_modules/.yarn-integrity",
     lockfile: "yarn.lock",
-    install: { cmd: "yarn", args: ["install", "--frozen-lockfile", "--prefer-offline", "--non-interactive", "--network-timeout", "600000"] },
+    // --ignore-engines: older Excalidraw commits pin "node": "18.0.0 - 22.x.x" and yarn refused to install
+    // them on the server's Node 24 (#10199 from the site: no screenshots). The app itself runs fine.
+    install: { cmd: "yarn", args: ["install", "--frozen-lockfile", "--prefer-offline", "--non-interactive", "--ignore-engines", "--network-timeout", "600000"] },
     start: (port) => ({
       cmd: "yarn",
       args: ["--cwd", "excalidraw-app", "vite", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],

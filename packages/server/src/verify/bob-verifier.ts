@@ -535,7 +535,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       { verifyDir, baseUrl: base.url, headUrl: head.url, frameDir: outDir, logDir: runDir, fallbackTitle: wt.plain?.title, symptomTexts: listSymptomTexts(wt), onProgress: (label) => onStage?.("shots", label) },
       canRepair
         ? async (prompt) => {
-            onStage?.("shots", "Some scenarios didn't hold up — asking Bob to fix them with the real results");
+            onStage?.("shots", "A test script didn't reproduce the bug — Bob is rewriting the script with the real results");
             repairSpentBefore = costUsd;
             const cap = Number((costUsd + repairMax).toFixed(2));
             repairRun = await runBobVerifier(prompt, headWt, cap, runDir, onEvent, taskId);
