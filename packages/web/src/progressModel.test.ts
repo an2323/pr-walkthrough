@@ -173,10 +173,10 @@ describe('the long waits say what they are doing and what is left', () => {
     expect(['facts', 'voice'].map((id) => status(later, id))).toEqual(['done', 'current']);
   });
 
-  it('a finished run shows no stage that never ran', () => {
+  it('a finished run: the planned fact check reads done, a narration nobody planned is not shown', () => {
     t = 0;
     const v = deriveProgressView([...okRun(), at({ kind: 'done', walkthroughUrl: '/x', durationMs: 5000 })]);
-    expect(v.steps.map((s) => s.id)).not.toContain('facts');
+    expect(v.steps.find((s) => s.id === 'facts')?.status).toBe('done');
     expect(v.steps.map((s) => s.id)).not.toContain('voice');
   });
 
@@ -198,8 +198,9 @@ describe('narration, the estimate and the screenshot stage are visible from the 
     t = 0;
     const v = deriveProgressView([stage('clone'), planWith({ voice: { planned: true } })]);
     expect(v.steps.at(-1)).toMatchObject({ id: 'voice', label: 'Recording the narration', status: 'pending' });
-    // the fact check is named up front too, as conditional: it runs only if the app shows the bug
-    expect(v.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'pending', detail: 'if the app shows the bug' });
+    // the fact check is named up front too, with no note
+    expect(v.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'pending' });
+    expect(v.steps.find((s) => s.id === 'facts')?.detail).toBeUndefined();
     const noShots = deriveProgressView([stage('clone'), at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: false, reason: 'r' }, voice: { planned: true } })]);
     expect(noShots.steps.map((s) => s.id)).toContain('voice');
     expect(noShots.steps.map((s) => s.id)).not.toContain('facts');
@@ -297,10 +298,14 @@ describe('the fact check is its own stage', () => {
 describe('labels from Oct 1 (nothing reads like fixing the PR) and the old ones both work', () => {
   const planned = () => at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: true } });
 
-  it('the fact-check row goes away when the app does not show the bug, and loses its condition once it does', () => {
+  it('the fact-check row just turns done when it is not needed (the app did not show the bug), and waits when it is', () => {
     t = 0;
     const failed = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('not-reproduced', 'no')]);
-    expect(failed.steps.map((s) => s.id)).not.toContain('facts');
+    expect(failed.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'done' });
+    expect(failed.steps.find((s) => s.id === 'facts')?.detail).toBeUndefined();
+    t = 0;
+    const finished = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('app-failed', 'no'), at({ kind: 'done', walkthroughUrl: '/x', durationMs: 1 })]);
+    expect(finished.steps.find((s) => s.id === 'facts')?.status).toBe('done');
     t = 0;
     const ok = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('ok', 'ok')]);
     expect(ok.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'pending' });

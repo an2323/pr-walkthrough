@@ -211,9 +211,11 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
   }
   // What follows the screenshots is known, so name it while it is still ahead: the fact check and the narration.
   const expectAfter = !done && outcome?.code === 'ok';
-  // The fact check runs only on a reproduced bug: named up front when screenshots are planned, gone if the app doesn't show it.
+  // The fact check is named up front when screenshots are planned. It runs only on a reproduced bug; when it isn't
+  // needed the row just turns done after the screenshots — the screen doesn't explain why.
   const factsSeen = seen.has('factcheck') || stages.some((x) => isFactCheck(x.label));
-  const showFacts = factsSeen || (!done && (outcome ? outcome.code === 'ok' || outcome.code === 'identical' : planned === true));
+  const factsNotNeeded = !factsSeen && !!outcome && outcome.code !== 'ok' && outcome.code !== 'identical';
+  const showFacts = factsSeen || planned === true || (!done && outcome?.code === 'ok');
   // The narration is recorded on every run, screenshots or not: the plan says so from the first second.
   const showVoice = seen.has('voicing') || (!done && (plan?.voice ? plan.voice.planned : expectAfter));
 
@@ -259,9 +261,8 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
       row.status = 'current';
       if (detail[st.id]) row.detail = detail[st.id];
       if (st.id === 'read' && writingBar) row.progress = writingBar;
-    } else if (st.id === 'facts' && !outcome) {
-      row.detail = 'if the app shows the bug';
     }
+    if (st.id === 'facts' && factsNotNeeded) row.status = 'done';
     steps.push(row);
   }
 
