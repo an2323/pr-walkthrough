@@ -18,6 +18,12 @@ function symptomSrc(item: SymptomItem): string | undefined {
   return typeof item === 'string' ? undefined : item.src;
 }
 
+/**
+ * The Problem block. Symptoms with a picture are cards in one row of equal height, each as wide as its picture's
+ * shape needs (a desktop frame wide, a phone frame narrow), so both are shown whole and readable. Symptoms
+ * without a picture are a compact list under the cards. Every symptom keeps its number from the text, so a card
+ * and a list line are easy to match to what the narration says.
+ */
 function SymptomsVisual({
   items,
   owner,
@@ -29,44 +35,60 @@ function SymptomsVisual({
   owner: string;
   repo: string;
   number: number;
-  /** Which symptom card the current narration sentence maps to (or null). */
+  /** Which symptom the current narration sentence maps to (or null). */
   activeIndex: number | null;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const withShots = items.some((i) => symptomSrc(i));
+  // width / height of each picture once loaded; a desktop frame until then
+  const [ratio, setRatio] = useState<Record<string, number>>({});
+  const numbered = items.map((item, i) => ({ i, text: symptomText(item), src: symptomSrc(item) }));
+  const withShot = numbered.filter((x) => x.src);
+  const plain = numbered.filter((x) => !x.src);
+  const many = items.length > 1;
+  const mark = (i: number) => (many ? String(i + 1) : '!');
 
   return (
-    <div className={`visual${withShots ? ' symptoms-shots' : ''}`}>
-      <ul className={`symptoms${withShots ? ' symptoms-with-shots' : ''}`}>
-        {items.map((item, i) => {
-          const text = symptomText(item);
-          const src = symptomSrc(item);
-          const narrating = activeIndex === i;
-          return (
-            <li
-              key={i}
-              className={[src ? 'symptom-card' : undefined, narrating ? 'is-narrating' : undefined]
-                .filter(Boolean)
-                .join(' ') || undefined}
-            >
-              {src && (
-                <button
-                  type="button"
-                  className="symptom-shot"
-                  onClick={() => setOpen(src)}
-                  aria-label={`${text} — open full size`}
-                >
-                  <img src={shotUrl(owner, repo, number, src)} alt="" className="symptom-shot-img" />
+    <div className={`visual${withShot.length ? ' symptoms-shots' : ''}`}>
+      {withShot.length > 0 && (
+        <ul className="symptom-cards">
+          {withShot.map(({ i, text, src }) => {
+            const r = ratio[src!] ?? 1.6;
+            return (
+              <li
+                key={i}
+                className={`symptom-card${activeIndex === i ? ' is-narrating' : ''}${r < 1 ? ' is-tall' : ''}`}
+                style={{ flexGrow: r, flexBasis: 0, maxWidth: `calc(${r} * var(--symptom-h))` }}
+              >
+                <button type="button" className="symptom-shot" onClick={() => setOpen(src!)} aria-label={`${text} — open full size`}>
+                  <img
+                    src={shotUrl(owner, repo, number, src!)}
+                    alt=""
+                    className="symptom-shot-img"
+                    onLoad={(e) => {
+                      const im = e.currentTarget;
+                      if (im.naturalWidth && im.naturalHeight) setRatio((m) => ({ ...m, [src!]: im.naturalWidth / im.naturalHeight }));
+                    }}
+                  />
                 </button>
-              )}
-              <div className="symptom-copy">
-                <span className="ic" aria-hidden="true">!</span>
-                <span>{text}</span>
-              </div>
+                <div className="symptom-copy">
+                  <span className="ic" aria-hidden="true">{mark(i)}</span>
+                  <span>{text}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {plain.length > 0 && (
+        <ul className={`symptoms${withShot.length ? ' symptoms-rest' : ''}`}>
+          {plain.map(({ i, text }) => (
+            <li key={i} className={activeIndex === i ? 'is-narrating' : undefined}>
+              <span className="ic" aria-hidden="true">{mark(i)}</span>
+              <span>{text}</span>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
       {open && (
         <div className="lightbox" role="dialog" aria-modal="true" aria-label="Symptom screenshot">
           <button type="button" className="lightbox-scrim" aria-label="Close" onClick={() => setOpen(null)} />

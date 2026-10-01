@@ -123,33 +123,37 @@ html, body { height: 100%; }
 /* ---- Symptoms visual ---- */
 .symptoms { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .symptoms li { display: flex; gap: 12px; align-items: center; font-size: 16px; }
-.symptoms .ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bad-soft); color: var(--bad); font-weight: 600; flex: none; }
-.symptoms-with-shots {
-  grid-template-columns: 1fr;
+.symptoms .ic, .symptom-card .ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bad-soft); color: var(--bad); font-weight: 600; flex: none; }
+.symptom-cards {
+  --symptom-h: min(46vh, 420px); /* the row's picture height: a desktop frame gets ~1.6× this in width */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
-  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-@media (min-width: 720px) {
-  .symptoms-with-shots { grid-template-columns: 1fr 1fr; gap: 18px; }
-}
-.symptoms-with-shots .symptom-card {
+.symptom-card {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 8px;
+  min-width: 0;
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 8px;
   transition: border-color 0.2s ease, outline-color 0.2s ease;
-  height: 100%;
   box-sizing: border-box;
 }
-.symptoms-with-shots .symptom-card .symptom-copy {
-  margin-top: auto;
+.symptom-card.is-tall { min-width: 180px; }
+.symptoms-rest { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 719px) {
+  .symptom-card { flex-basis: 100% !important; max-width: none !important; }
+  .symptom-card.is-tall { max-width: 260px !important; margin: 0 auto; }
 }
 .symptoms li.is-narrating,
-.symptoms-with-shots .symptom-card.is-narrating {
+.symptom-card.is-narrating {
   border-color: color-mix(in srgb, var(--bad) 70%, var(--line));
   background: color-mix(in srgb, var(--bad-soft) 55%, var(--raised));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 35%, transparent);
@@ -186,10 +190,7 @@ html, body { height: 100%; }
   display: block;
   width: 100%;
   height: auto;
-  max-height: min(28vh, 240px);
-  object-fit: contain;
-  object-position: top;
-  background: #1c1c1c;
+  background: #fff;
 }
 .symptom-copy {
   display: flex;
