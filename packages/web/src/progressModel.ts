@@ -69,6 +69,7 @@ function of<K extends ProgressEvent['kind']>(events: ProgressEvent[], kind: K): 
 
 /** The analysis text is one long answer: say it is being written, and about how far along it is. */
 function writingDetail(chars: number): string {
+  if (chars < WRITING_COUNT_FROM) return 'Bob is writing the walkthrough…';
   return chars < TYPICAL_WRITING_CHARS
     ? `Bob is writing the walkthrough — about ${chars.toLocaleString('en-US')} of ~${TYPICAL_WRITING_CHARS.toLocaleString('en-US')} characters`
     : `Bob is still writing — ${chars.toLocaleString('en-US')} characters so far`;
@@ -93,7 +94,8 @@ export function isAblationEvent(e: ProgressEvent): boolean {
   if (e.kind !== 'stage') return false;
   if (e.stage === 'ablation') return true;
   if (e.stage === 'shots') return /^Testing\b/.test(e.label) || /^Measured \d+ change/.test(e.label);
-  if (e.stage === 'repairing') return /^(Revising the explanation from measured evidence|Explanation revised to match measured evidence|Revise skipped\b)/.test(e.label);
+  if (e.stage === 'repairing')
+    return /^(Revising the explanation from measured evidence|Explanation revised to match measured evidence|Revise skipped\b|Rewriting parts of the explanation to match the measurements|Explanation rewritten to match the measurements|Explanation left as written\b)/.test(e.label);
   return false;
 }
 
@@ -118,6 +120,8 @@ export function plainTool(tool: string, target: string): string {
 
 /** How much of the walkthrough text is usually written when a run is about to finish (a bar needs a guess). */
 export const TYPICAL_WRITING_CHARS = 50_000;
+/** Below this the count reads oddly ("about 3 of ~50,000"): just say it has started. */
+const WRITING_COUNT_FROM = 2_000;
 
 const OUTCOME_STATUS: Record<ShotsOutcomeCode, StepStatus> = {
   ok: 'done',
@@ -146,8 +150,8 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
   const lastStage = last(stages);
   const labelOf = (stage: string): string | undefined => last(stages.filter((s) => s.stage === stage))?.label;
 
-  // Newer servers send stage "factcheck"; older ones sent it as "repairing" with this label.
-  const isFactCheck = (label: string) => /^Checking the text/.test(label);
+  // Newer servers send stage "factcheck"; older ones sent it, and its result, as "repairing" with these labels.
+  const isFactCheck = (label: string) => /^(Checking the text|Text matches the running app|Corrected \d+ sentence)/.test(label);
   const inShots = seen.has('app') || seen.has('shots');
   const planned = plan ? plan.shots.planned : undefined;
 
@@ -207,6 +211,9 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
   }
   // What follows the screenshots is known, so name it while it is still ahead: the fact check and the narration.
   const expectAfter = !done && outcome?.code === 'ok';
+  // The fact check runs only on a reproduced bug: named up front when screenshots are planned, gone if the app doesn't show it.
+  const factsSeen = seen.has('factcheck') || stages.some((x) => isFactCheck(x.label));
+  const showFacts = factsSeen || (!done && (outcome ? outcome.code === 'ok' || outcome.code === 'identical' : planned === true));
   // The narration is recorded on every run, screenshots or not: the plan says so from the first second.
   const showVoice = seen.has('voicing') || (!done && (plan?.voice ? plan.voice.planned : expectAfter));
 
@@ -225,16 +232,18 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
     read: writing ? writingDetail(writing.chars) : undefined,
     check: !inShots ? labelOf('repairing') ?? labelOf('validating') : undefined,
     voice: labelOf('voicing'),
-    facts: labelOf('factcheck'),
+    facts: labelOf('factcheck') ?? last(stages.filter((x) => x.stage === 'repairing' && isFactCheck(x.label)))?.label,
   };
   const writingBar: StepView['progress'] | undefined = writing
-    ? writing.chars < TYPICAL_WRITING_CHARS ? { done: writing.chars, total: TYPICAL_WRITING_CHARS } : { indeterminate: true }
+    ? writing.chars >= WRITING_COUNT_FROM && writing.chars < TYPICAL_WRITING_CHARS
+      ? { done: writing.chars, total: TYPICAL_WRITING_CHARS }
+      : { indeterminate: true }
     : undefined;
   const steps: StepView[] = [];
   for (const st of base) {
     // Old recordings have no screenshot row unless a screenshot stage ran; the voice row exists only when voicing ran.
     if (st.id === 'shots' && shotsStatus === undefined) continue;
-    if (st.id === 'facts' && !seen.has('factcheck') && !stages.some((x) => isFactCheck(x.label)) && !expectAfter) continue;
+    if (st.id === 'facts' && !showFacts) continue;
     if (st.id === 'voice' && !showVoice) continue;
     const idx = order.indexOf(st.id);
     const row = { ...st };
@@ -244,12 +253,14 @@ export function deriveProgressView(all: ProgressEvent[]): ProgressView {
     } else if (done || idx < currentIdx) {
       row.status = 'done';
       if (st.id === 'diff' && detail.diff) row.detail = detail.diff;
-      // The fact check ends with a verdict in words ("Fixed 2 statements…" / "The explanation matches…").
-      if (st.id === 'facts' && detail.facts && /^(Fixed|The explanation matches|Fact check skipped)/.test(detail.facts)) row.detail = detail.facts;
+      // The fact check ends with a verdict in words ("Corrected 2 sentences…" / "The explanation matches…").
+      if (st.id === 'facts' && detail.facts && /^(Corrected|Fixed|The explanation matches|Text matches|Fact check skipped)/.test(detail.facts)) row.detail = detail.facts;
     } else if (idx === currentIdx) {
       row.status = 'current';
       if (detail[st.id]) row.detail = detail[st.id];
       if (st.id === 'read' && writingBar) row.progress = writingBar;
+    } else if (st.id === 'facts' && !outcome) {
+      row.detail = 'if the app shows the bug';
     }
     steps.push(row);
   }

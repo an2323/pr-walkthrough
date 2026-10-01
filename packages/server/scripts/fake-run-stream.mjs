@@ -62,7 +62,7 @@ at(700, { kind: 'stage', stage: 'shots', label: 'Trying "Sidebar closes by itsel
 at(760, { kind: 'frames', before: 'before-annotated.png', after: 'after-annotated.png', caption: 'Same clicks, both versions' });
 at(762, { kind: 'outcome', what: 'shots', code: 'ok', message: 'The bug reproduced at the old commit and is gone at the new one.' });
 at(772, { kind: 'stage', stage: 'factcheck', label: 'Fact-checking the explanation — comparing what the text says with what the app actually did' });
-at(830, { kind: 'stage', stage: 'factcheck', label: 'Fixed 1 statement(s) the app contradicted' });
+at(830, { kind: 'stage', stage: 'factcheck', label: 'Corrected 1 sentence(s) in the explanation to match the running app' });
 at(840, { kind: 'stage', stage: 'voicing', label: 'Recording the narration' });
 at(900, { kind: 'cost', costUsd: 3.4 });
 at(940, { kind: 'done', walkthroughUrl: '/excalidraw/excalidraw/10295', durationMs: 940_000, costUsd: 3.4, toolCalls: 11, subagents: 1 });

@@ -198,10 +198,11 @@ describe('narration, the estimate and the screenshot stage are visible from the 
     t = 0;
     const v = deriveProgressView([stage('clone'), planWith({ voice: { planned: true } })]);
     expect(v.steps.at(-1)).toMatchObject({ id: 'voice', label: 'Recording the narration', status: 'pending' });
-    // …while the ablation and the fact check still wait for the screenshot verdict
-    expect(v.steps.map((s) => s.id)).not.toContain('facts');
+    // the fact check is named up front too, as conditional: it runs only if the app shows the bug
+    expect(v.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'pending', detail: 'if the app shows the bug' });
     const noShots = deriveProgressView([stage('clone'), at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: false, reason: 'r' }, voice: { planned: true } })]);
     expect(noShots.steps.map((s) => s.id)).toContain('voice');
+    expect(noShots.steps.map((s) => s.id)).not.toContain('facts');
   });
 
   it('no narration row when the server will not record one', () => {
@@ -290,5 +291,47 @@ describe('the fact check is its own stage', () => {
     expect(running.steps.find((s) => s.id === 'facts')).toMatchObject({ label: 'Fact-checking the explanation', status: 'current' });
     const after = deriveProgressView([...ok(), stage('factcheck', 'Fact-checking the explanation'), stage('factcheck', 'Fixed 2 statement(s) the app contradicted'), stage('voicing', 'Recording the narration')]);
     expect(after.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'done', detail: 'Fixed 2 statement(s) the app contradicted' });
+  });
+});
+
+describe('labels from Oct 1 (nothing reads like fixing the PR) and the old ones both work', () => {
+  const planned = () => at({ kind: 'plan', pr: { title: 'x', additions: 1, deletions: 0, files: 1 }, shots: { planned: true } });
+
+  it('the fact-check row goes away when the app does not show the bug, and loses its condition once it does', () => {
+    t = 0;
+    const failed = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('not-reproduced', 'no')]);
+    expect(failed.steps.map((s) => s.id)).not.toContain('facts');
+    t = 0;
+    const ok = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('ok', 'ok')]);
+    expect(ok.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'pending' });
+    expect(ok.steps.find((s) => s.id === 'facts')?.detail).toBeUndefined();
+  });
+
+  it('the new fact-check verdict stays under its row', () => {
+    t = 0;
+    const v = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('ok', 'ok'),
+      stage('factcheck', 'Fact-checking the explanation'), stage('factcheck', 'Corrected 2 sentence(s) in the explanation to match the running app'), stage('voicing', 'Recording the narration')]);
+    expect(v.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'done', detail: 'Corrected 2 sentence(s) in the explanation to match the running app' });
+  });
+
+  it('an old recording (fact check under "repairing") keeps its verdict on the fact-check row, not under Screenshots', () => {
+    t = 0;
+    const v = deriveProgressView([stage('clone'), planned(), stage('shots'), outcome('ok', 'The bug reproduced.'),
+      stage('repairing', 'Checking the text against the running app'), stage('repairing', 'Corrected 10 sentence(s) to match the running app'), stage('voicing', 'Recording the narration')]);
+    expect(v.steps.find((s) => s.id === 'facts')).toMatchObject({ status: 'done', detail: 'Corrected 10 sentence(s) to match the running app' });
+    expect(v.steps.find((s) => s.id === 'shots')?.detail).toBe('The bug reproduced.');
+  });
+
+  it('the new revise labels are left out with the ablation', () => {
+    for (const label of ['Rewriting parts of the explanation to match the measurements', 'Explanation rewritten to match the measurements', 'Explanation left as written: no contradiction'])
+      expect(isAblationEvent(stage('repairing', label))).toBe(true);
+    expect(isAblationEvent(stage('repairing', 'Polishing the explanation — 2 wording issue(s) in the text'))).toBe(false);
+  });
+
+  it('writing: no count while it is tiny', () => {
+    t = 0;
+    const row = deriveProgressView([stage('clone'), stage('analyzing'), at({ kind: 'writing', chars: 3 })]).steps.find((s) => s.id === 'read')!;
+    expect(row.detail).toBe('Bob is writing the walkthrough…');
+    expect(row.progress).toEqual({ indeterminate: true });
   });
 });
