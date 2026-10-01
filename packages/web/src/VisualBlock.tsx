@@ -9,6 +9,7 @@ import type { PlainVisual } from './v2types';
 import { MapSvg, MapLegend } from './MapSvg';
 import { ShotsVisual, SingleShotVisual } from './ShotsVisual';
 import { shotUrl } from './staticMode';
+import { symptomForSentence } from './symptomHighlight';
 
 function symptomText(item: SymptomItem): string {
   return typeof item === 'string' ? item : item.text;
@@ -117,18 +118,6 @@ interface Props {
   narrationSentence?: number | null;
 }
 
-/**
- * Map a narration sentence index → symptom card index.
- * Typical pattern (as on #10295 s1): intro → one sentence per symptom → wrap-up.
- * So sentence 1 highlights item 0, sentence 2 → item 1, etc.
- */
-function symptomIndexForSentence(sentence: number | null | undefined, itemCount: number): number | null {
-  if (sentence == null || itemCount <= 0) return null;
-  const idx = sentence - 1;
-  if (idx < 0 || idx >= itemCount) return null;
-  return idx;
-}
-
 function edgeSet(
   graph: Walkthrough['graph'],
   mode: 'before' | 'after',
@@ -163,7 +152,7 @@ export function VisualBlock({
         owner={owner}
         repo={repo}
         number={walkthrough.pr.number}
-        activeIndex={symptomIndexForSentence(narrationSentence, visual.items.length)}
+        activeIndex={symptomForSentence(narrationSentence, step.narration ?? '', visual.items.map(symptomText))}
       />
     );
   }

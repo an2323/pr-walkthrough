@@ -1,0 +1,67 @@
+[
+ {
+  "pr": "excalidraw/excalidraw/10199",
+  "narration": "When the sidebar is open and you right-click on an element, the context menu pops open but is immediately drawn underneath the sidebar, making it unreachable. On touch devices the same menu also shows four layer-ordering options that don't belong there.",
+  "items": [
+   "Right-click menu opens but is hidden behind the sidebar",
+   "On mobile or tablet, the menu shows layer-ordering items that belong to the desktop panel"
+  ]
+ },
+ {
+  "pr": "excalidraw/excalidraw/10295",
+  "narration": "The problems come in a pair. First, the floating sidebar renders behind the top toolbar buttons, so buttons poke out over the panel. Second, if you open the main menu while the sidebar is showing, both stay open at the same time \u2014 on mobile the menu is drawn on top of the sidebar, leaving the sidebar unreachable behind it.",
+  "items": [
+   "Toolbar buttons appear on top of the open sidebar panel",
+   "Opening the main menu leaves the sidebar and menu both visible \u2014 the menu sits on top of the sidebar on mobile"
+  ]
+ },
+ {
+  "pr": "excalidraw/excalidraw/12053",
+  "narration": "Two dropdown menus in the editor \u2014 the main menu and the More Tools menu \u2014 are supposed to close when you click anywhere outside them. After a recent refactor, that stopped working. Clicking the canvas or a toolbar button leaves the menu open.",
+  "items": [
+   "Clicking the canvas while a dropdown is open does not close it",
+   "Tapping a toolbar button while a dropdown is open does not close it"
+  ]
+ },
+ {
+  "pr": "excalidraw/excalidraw/10943",
+  "narration": "When you select an arrow and click one of the arrowhead buttons in the properties panel, a small popup appears to pick the arrowhead style. The bug is that this popup can overflow the visible area and be partially or fully hidden off the edge of the screen. On phones the problem is most visible.",
+  "items": [
+   "The arrowhead style popup extends beyond the edge of the screen",
+   "On a narrow or phone-sized screen the popup appears to the right and is clipped"
+  ]
+ },
+ {
+  "pr": "excalidraw/excalidraw/10682",
+  "narration": "Several dropdown menu items carry a small coloured badge \u2014 for example the AI label on the diagram-from-text option. That badge was rendered inside the text portion of the row instead of its own dedicated position, putting it in the wrong place in the layout.",
+  "items": [
+   "The \"AI\" badge on a menu item appears in the wrong position in the row",
+   "In the font picker, the badge for a font variant is not in its own slot"
+  ]
+ },
+ {
+  "pr": "an2323/excalidraw/21",
+  "narration": "When you open the hamburger menu on a tablet-sized screen, the canvas background color picker should show a strip of preset colors above a swatch button. Instead, it collapses to just a tiny button \u2014 the whole strip vanishes and the UI looks broken.",
+  "items": [
+   "On a tablet, the canvas background picker in the menu shows only a single small button with no color strip",
+   "The compact sizing class is applied, hiding the top-picks row and altering the trigger's shape"
+  ]
+ },
+ {
+  "pr": "excalidraw/excalidraw/8340 (local)",
+  "narration": "Drawing any shape \u2014 especially free-draw \u2014 triggers a pointer-move event for each pixel. Before this PR, each of those events caused the entire scene to repaint. On a large scene with many elements, that paint was expensive enough to feel like lag.",
+  "items": [
+   "Free-draw strokes stutter on large scenes",
+   "Every pointer-move triggers a full static canvas repaint",
+   "Lag is proportional to the number of existing elements"
+  ]
+ },
+ {
+  "pr": "outline/outline/13673 (local)",
+  "narration": "When you look at an older version of a document, the header shows how many changes it contains and lets you jump between them. According to the pull request, that counter often doesn't appear at all, and when it does, it gets stuck instead of showing which change you're on. The counter is drawn in the header, so that's where we start.",
+  "items": [
+   "The counter doesn\u2019t appear when the page loads",
+   "When it does, it stays on \u201cN changes\u201d instead of \u201c2 of N\u201d"
+  ]
+ }
+]

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Step } from '@pr-walkthrough/shared';
 import { audioUrl } from './staticMode';
+import { splitSentences } from './symptomHighlight';
 
 export type ListenMode = 'autoplay' | 'follow' | 'off';
 export type ListenStatus = 'idle' | 'playing' | 'paused';
@@ -25,12 +26,6 @@ const synth =
     ? window.speechSynthesis
     : null;
 
-function splitSentences(text: string): string[] {
-  return text
-    .split(/(?<=[.?!])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-}
 
 /** Short Done-screen cue — only when a diagram is on screen. */
 export const OUTRO_STEP_ID = 'outro';
