@@ -27,6 +27,7 @@ import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { canVerify, verifyShots } from "../verify/bob-verifier.js";
 import { ablationHasSignal, logicUnits, runAblation, verdictForStep } from "../verify/ablation.js";
 import { recipeFor, resolveRecipe } from "../verify/recipes.js";
+import { INSTALL_STAMP } from "../verify/app-servers.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
@@ -159,7 +160,7 @@ async function runPipeline(
     {
       const recipe = recipeFor(owner, repo);
       const installed = (sha: string | undefined) =>
-        !!recipe && !!sha && existsSync(path.join(GIT_CACHE_DIR, `${owner}__${repo}`, "wt", sha, recipe.installedMarker));
+        !!recipe && !!sha && existsSync(path.join(GIT_CACHE_DIR, `${owner}__${repo}`, "wt", sha, INSTALL_STAMP));
       const voice = voicingConfigured();
       const estimate = estimateRun({
         shotsPlanned: canShots,

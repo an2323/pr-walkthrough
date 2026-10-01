@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { cloneDirArgs, ensureInstalled, startApp } from "./app-servers.js";
+import { INSTALL_STAMP, cloneDirArgs, ensureInstalled, startApp } from "./app-servers.js";
 import type { AppRecipe } from "./recipes.js";
 
 const dirs: string[] = [];
@@ -51,12 +51,42 @@ describe("cloneDirArgs", () => {
 });
 
 describe("ensureInstalled", () => {
-  it("returns 'ready' without running anything when the marker exists", async () => {
+  it("returns 'ready' without running anything when the marker AND our stamp for this lockfile exist", async () => {
+    const wt = await tmp();
+    await ensureInstalled(fakeRecipe(), wt, { minFreeBytes: 1 });
+    await rm(path.join(wt, "install-runs.txt"));
+    expect(await ensureInstalled(fakeRecipe(), wt)).toBe("ready");
+    expect(existsSync(path.join(wt, "install-runs.txt"))).toBe(false);
+  });
+
+  it("a marker without our stamp is not trusted — reinstalls (#10199: a donor's marker was copied, then the install failed)", async () => {
     const wt = await tmp();
     await mkdir(path.join(wt, "node_modules"));
     await writeFile(path.join(wt, "node_modules/.marker"), "1");
-    expect(await ensureInstalled(fakeRecipe(), wt)).toBe("ready");
-    expect(existsSync(path.join(wt, "install-runs.txt"))).toBe(false);
+    await writeFile(path.join(wt, "node_modules/foreign-package"), "from another commit");
+    expect(await ensureInstalled(fakeRecipe(), wt, { minFreeBytes: 1 })).toBe("installed");
+    expect(existsSync(path.join(wt, "node_modules/foreign-package"))).toBe(false);
+  });
+
+  it("an install for another lockfile is not 'ready' after the lockfile changed", async () => {
+    const wt = await tmp();
+    await writeFile(path.join(wt, "lock.txt"), "v1");
+    await ensureInstalled(fakeRecipe(), wt, { minFreeBytes: 1 });
+    await writeFile(path.join(wt, "lock.txt"), "v2");
+    expect(await ensureInstalled(fakeRecipe(), wt, { minFreeBytes: 1 })).toBe("installed");
+  });
+
+  it("a failed install after copying from a donor leaves nothing that counts as installed", async () => {
+    const root = await tmp();
+    const donor = path.join(root, "donor");
+    const wt = path.join(root, "wt");
+    await mkdir(donor, { recursive: true });
+    await mkdir(wt, { recursive: true });
+    await ensureInstalled(fakeRecipe(), donor, { minFreeBytes: 1 });
+    const failing = fakeRecipe({ install: { cmd: process.execPath, args: ["-e", "process.exit(1)"] } });
+    await expect(ensureInstalled(failing, wt, { donor, minFreeBytes: 1 })).rejects.toThrow();
+    expect(existsSync(path.join(wt, "node_modules/.marker"))).toBe(false);
+    expect(await ensureInstalled(fakeRecipe(), wt, { donor, minFreeBytes: 1 })).toBe("cloned");
   });
 
   it("installs from scratch when there is no donor", async () => {
@@ -73,6 +103,7 @@ describe("ensureInstalled", () => {
     const wt = path.join(root, "wt-head");
     await mkdir(path.join(donor, "node_modules/pkg"), { recursive: true });
     await writeFile(path.join(donor, "node_modules/.marker"), "1");
+    await writeFile(path.join(donor, INSTALL_STAMP), "no-lockfile"); // a finished install of ours
     await writeFile(path.join(donor, "node_modules/pkg/index.js"), "module.exports = 1");
     await mkdir(wt);
 
@@ -86,6 +117,7 @@ describe("ensureInstalled", () => {
     const wt = path.join(root, "wt-new");
     await mkdir(path.join(sibling, "node_modules"), { recursive: true });
     await writeFile(path.join(sibling, "node_modules/.marker"), "1");
+    await writeFile(path.join(sibling, INSTALL_STAMP), "no-lockfile");
     await mkdir(wt);
     expect(await ensureInstalled(fakeRecipe(), wt, { minFreeBytes: 1 })).toBe("cloned");
   });

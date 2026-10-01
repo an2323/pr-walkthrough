@@ -13,7 +13,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile, rm, statfs } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, statfs, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 
@@ -100,13 +100,29 @@ export interface InstallOptions {
   timeoutMs?: number;
 }
 
-/** Best donor among `worktree`'s siblings: same lockfile first, else any installed one. */
+/**
+ * Our own proof that an install finished FOR THIS lockfile, written only after the recipe's install
+ * succeeds. The package manager's marker alone isn't proof: it is copied along with a donor's
+ * node_modules, so an install that failed right after the copy (#10199: yarn refused the Node version)
+ * left another commit's packages behind, marked as installed — TypeScript 5.9 instead of 4.9, a
+ * missing dependency, and a dev server that never rendered, on every later run.
+ */
+export const INSTALL_STAMP = "node_modules/.prw-lockfile-sha1";
+
+/** Installed, and installed for the lockfile this worktree has now. */
+export async function isInstalled(recipe: AppRecipe, worktree: string): Promise<boolean> {
+  if (!existsSync(path.join(worktree, recipe.installedMarker))) return false;
+  const stamp = await readFile(path.join(worktree, INSTALL_STAMP), "utf-8").catch(() => undefined);
+  return stamp !== undefined && stamp.trim() === ((await fileHash(path.join(worktree, recipe.lockfile))) ?? "no-lockfile");
+}
+
+/** Best donor among `worktree`'s siblings: same lockfile first, else any properly installed one. */
 async function findDonor(recipe: AppRecipe, worktree: string): Promise<string | undefined> {
   const siblingsDir = path.dirname(worktree);
   const lock = await fileHash(path.join(worktree, recipe.lockfile));
-  const installed = (await readdir(siblingsDir))
-    .map((n) => path.join(siblingsDir, n))
-    .filter((p) => p !== worktree && existsSync(path.join(p, recipe.installedMarker)));
+  const all = (await readdir(siblingsDir)).map((n) => path.join(siblingsDir, n)).filter((p) => p !== worktree);
+  const ok = await Promise.all(all.map((p) => isInstalled(recipe, p)));
+  const installed = all.filter((_, i) => ok[i]);
   const hashes = await Promise.all(installed.map((p) => fileHash(path.join(p, recipe.lockfile))));
   return installed[hashes.findIndex((h) => h === lock)] ?? installed[0];
 }
@@ -116,9 +132,9 @@ export async function ensureInstalled(
   worktree: string,
   opts: InstallOptions = {}
 ): Promise<"ready" | "cloned" | "installed"> {
-  if (existsSync(path.join(worktree, recipe.installedMarker))) return "ready";
+  if (await isInstalled(recipe, worktree)) return "ready";
 
-  const explicit = opts.donor && existsSync(path.join(opts.donor, recipe.installedMarker)) ? opts.donor : undefined;
+  const explicit = opts.donor && (await isInstalled(recipe, opts.donor)) ? opts.donor : undefined;
   const donor = explicit ?? (await findDonor(recipe, worktree));
 
   const minFreeBytes = opts.minFreeBytes ?? (donor ? 4 : 8) * 1024 ** 3;
@@ -128,7 +144,7 @@ export async function ensureInstalled(
     throw new Error(`only ${(free / 1024 ** 3).toFixed(1)} GB free — need ${(minFreeBytes / 1024 ** 3).toFixed(0)} GB to install the app`);
   }
 
-  // Wipe a half-finished install (no marker) so it can't be mistaken for a good one.
+  // Wipe a half-finished or unproven install so it can't be mistaken for a good one.
   for (const dir of await nodeModulesDirs(worktree)) await rm(path.join(worktree, dir), { recursive: true, force: true });
 
   if (donor) {
@@ -136,9 +152,14 @@ export async function ensureInstalled(
       if (!existsSync(path.join(worktree, path.dirname(dir)))) continue; // workspace package missing here
       await run("cp", cloneDirArgs(process.platform, path.join(donor, dir), path.join(worktree, dir)), worktree, 10 * 60_000);
     }
+    // The donor's "installed" marks came along with its packages; only our own install may set them.
+    await rm(path.join(worktree, recipe.installedMarker), { force: true });
+    await rm(path.join(worktree, INSTALL_STAMP), { force: true });
   }
   // HUSKY=0: the repo's `prepare` script would otherwise write git hooks config into the shared clone.
   await run(recipe.install.cmd, recipe.install.args, worktree, opts.timeoutMs ?? 15 * 60_000, { HUSKY: "0", YARN_IGNORE_ENGINES: "true" });
+  await mkdir(path.dirname(path.join(worktree, INSTALL_STAMP)), { recursive: true });
+  await writeFile(path.join(worktree, INSTALL_STAMP), (await fileHash(path.join(worktree, recipe.lockfile))) ?? "no-lockfile");
   return donor ? "cloned" : "installed";
 }
 
