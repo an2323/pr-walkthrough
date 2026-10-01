@@ -21,6 +21,7 @@ import { comparePngs } from "../shots/png-diff.js";
 import { isPhoneFrame } from "../shots/frames.js";
 import { runRepro, type ReproResult } from "./ablation.js";
 import { loadScenarios, MAX_SCENARIOS, type Scenario } from "./scenarios.js";
+import { readUnchanged, UNCHANGED_FILE } from "./unchanged-symptoms.js";
 
 export type ReproRun = ReproResult | { error: string };
 
@@ -195,10 +196,11 @@ export function missingDesktopScenario(results: ScenarioResult[], symptomTexts: 
  * counts as tried: that is a different case and is not asked again. Only judged when Bob tags scenarios
  * with `symptomIndex` at all, and only while there is room under MAX_SCENARIOS.
  */
-export function symptomsWithoutScenario(results: ScenarioResult[], symptomTexts: string[] = []): string | undefined {
+export function symptomsWithoutScenario(results: ScenarioResult[], symptomTexts: string[] = [], unchanged: number[] = []): string | undefined {
   const tagged = new Set(results.map((r) => r.scenario.symptomIndex).filter((i): i is number => i !== undefined));
+  const answered = new Set([...tagged, ...unchanged]);
   if (tagged.size === 0 || results.length >= MAX_SCENARIOS) return undefined;
-  const missing = symptomTexts.map((t, i) => ({ t, i })).filter(({ i }) => !tagged.has(i)).slice(0, MAX_SCENARIOS - results.length);
+  const missing = symptomTexts.map((t, i) => ({ t, i })).filter(({ i }) => !answered.has(i)).slice(0, MAX_SCENARIOS - results.length);
   if (missing.length === 0) return undefined;
   return (
     `- No scenario was written for ` +
@@ -206,7 +208,9 @@ export function symptomsWithoutScenario(results: ScenarioResult[], symptomTexts:
     `. Write one script for each (same contract, \`symptomIndex\` set) so it gets its own before/after picture. ` +
     `Start from your closest working script (same setup, same helpers) and change only the steps this symptom ` +
     `needs; write the file FIRST, then run it — no page dumps or element listings. If it truly can't be shown ` +
-    `in the running app, leave it out — do not force it.`
+    `in the running app, leave it out — do not force it. If the PR does not change it at all (the same on BASE ` +
+    `and HEAD, e.g. the code keeps it on purpose), write no script: add \`{"symptomIndex": <i>, "why": "<one ` +
+    `sentence with the values you read>"}\` to the array in \`.walkthrough/verify/${UNCHANGED_FILE}\` and stop.`
   );
 }
 
@@ -332,7 +336,7 @@ export async function confirmScenariosWithRepair(
         );
     }
     const desktop = missingDesktopScenario(rs, o.symptomTexts);
-    const untried = symptomsWithoutScenario(rs, o.symptomTexts);
+    const untried = symptomsWithoutScenario(rs, o.symptomTexts, readUnchanged(o.verifyDir).map((u) => u.symptomIndex));
     return [...p, ...(desktop ? [desktop] : []), ...(untried ? [untried] : [])];
   };
   let problems = allProblems(results);
@@ -356,7 +360,7 @@ export async function confirmScenariosWithRepair(
   }
   if (problems.length === 0 || !repair) return { results, repaired: false, flaky };
   await logProblems(o, "sent to repair", problems);
-  const untried = symptomsWithoutScenario(results, o.symptomTexts);
+  const untried = symptomsWithoutScenario(results, o.symptomTexts, readUnchanged(o.verifyDir).map((u) => u.symptomIndex));
   await repair(buildScenarioRepairPrompt({ baseUrl: o.baseUrl, headUrl: o.headUrl, problems }), {
     onlyMissing: problems.length === 1 && problems[0] === untried,
   });

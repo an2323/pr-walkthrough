@@ -29,6 +29,7 @@ import { ablationHasSignal, logicUnits, runAblation, verdictForStep } from "../v
 import { recipeFor, resolveRecipe } from "../verify/recipes.js";
 import { INSTALL_STAMP } from "../verify/app-servers.js";
 import { attachSymptomShots } from "../verify/symptom-shots.js";
+import { removeSymptoms, symptomsToDrop, type DroppedSymptom } from "../verify/unchanged-symptoms.js";
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../verify/revise.js";
 import { shouldAttemptShots } from "../verify/should-attempt-shots.js";
 import { markVerified, plainNoShotsReason, recordNoShots, recordShotsNote } from "../verify/shots-status.js";
@@ -215,6 +216,8 @@ async function runPipeline(
     let symptomSrcs: Map<number, string> | undefined;
     // Measured BASE/HEAD facts of every confirmed scenario (for the fact check).
     let scenarioFacts: ScenarioFact[] = [];
+    // Listed symptoms the verifier found unchanged by the PR: shown to the fact check, then removed.
+    let unchangedDrops: DroppedSymptom[] = [];
     // Quality-repair spend that is NOT already inside `meta.run.costUsd` (a failed resume still costs).
     let qualityOrphanCost = 0;
 
@@ -371,6 +374,7 @@ async function runPipeline(
                 label: `Attached ${vr.symptomSrcs.size} per-symptom screenshot(s)`,
               });
             }
+            unchangedDrops = symptomsToDrop(walkthrough, vr.unchanged ?? []);
             await saveWalkthrough(walkthrough);
             emit({
               kind: "stage",
@@ -535,12 +539,13 @@ async function runPipeline(
     }
 
     // Fact check: the prose against what the running app measured (only after a confirmed repro).
-    if (process.env.VERIFY_FACTCHECK !== "0" && scenarioFacts.length > 0 && walkthrough.verification?.status === "passed") {
+    if (process.env.VERIFY_FACTCHECK !== "0" && (scenarioFacts.length > 0 || unchangedDrops.length > 0) && walkthrough.verification?.status === "passed") {
       emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: "Fact-checking the explanation — comparing what the text says with what the app actually did" });
       try {
         const fc = await factCheck({
           walkthrough,
           facts: scenarioFacts,
+          dropped: unchangedDrops,
           repoPath: workspace.repoPath,
           prLabel: `${owner}/${repo}#${number}`,
           onEvent: (() => {
@@ -573,6 +578,12 @@ async function runPipeline(
       } catch (err) {
         console.warn("[analyze-pipeline] fact check failed:", err instanceof Error ? err.message : err);
       }
+    }
+
+    if (unchangedDrops.length > 0) {
+      removeSymptoms(walkthrough, unchangedDrops);
+      await saveWalkthrough(walkthrough);
+      emit({ kind: "stage", t: elapsed(), stage: "factcheck", label: `Removed ${unchangedDrops.length} listed problem(s) this PR doesn't change` });
     }
 
     // Voice last: the text is final now. A rehearsal only voices with plan tts=on (it costs characters).

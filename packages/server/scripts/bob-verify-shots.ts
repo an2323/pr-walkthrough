@@ -33,6 +33,7 @@ import { markVerified, recordNoShots, recordShotsNote } from "../src/verify/shot
 import { ablationContradictsWalkthrough, reviseFromAblation } from "../src/verify/revise.js";
 import { checkQuality, criticalQualityWarnings } from "../src/validation/quality.js";
 import { factCheck } from "../src/verify/fact-check.js";
+import { removeSymptoms, symptomsToDrop } from "../src/verify/unchanged-symptoms.js";
 import { voiceWalkthrough, voicingConfigured } from "../src/tts/voice-stage.js";
 import { prepareWorkspace } from "../src/git/workspace.js";
 import { blobsEnabled, uploadDir } from "../src/blobs.js";
@@ -106,6 +107,9 @@ if (apply) {
   await saveWalkthrough(wt);
   console.log("walkthrough updated (verification passed, shots / note, symptom frames)");
 }
+// Listed symptoms the verifier found unchanged by the PR: shown to the fact check, removed at the end.
+const drops = symptomsToDrop(wt, result.unchanged ?? []);
+if (drops.length) console.log("not changed by the PR:", drops.map((d) => `[${d.index}] "${d.text}" — ${d.why}`).join("; "));
 
 if (flag("ablate")) {
   const recipe = await resolveRecipe(owner, repo);
@@ -168,7 +172,7 @@ if (flag("ablate")) {
 if (flag("factcheck")) {
   // The same fact check the pipeline runs: one resume of the analysis session (paid, small).
   console.log("\nfact check against the running app…");
-  const fc = await factCheck({ walkthrough: wt, facts: result.facts ?? [], repoPath: workspace.repoPath, prLabel: `${owner}/${repo}#${num}` });
+  const fc = await factCheck({ walkthrough: wt, facts: result.facts ?? [], dropped: drops, repoPath: workspace.repoPath, prLabel: `${owner}/${repo}#${num}` });
   console.log(`fact check: ${fc.status}${"reason" in fc ? ` — ${fc.reason}` : ""}${"changed" in fc ? ` — ${fc.changed.join(", ")}` : ""} (cost $${fc.costUsd.toFixed(3)})`);
   if (fc.status === "ok") {
     for (const f of fc.changed) console.log(`  ${f}`);
@@ -181,6 +185,12 @@ if (flag("factcheck")) {
       console.log(`saved; critical quality warnings now: ${criticalQualityWarnings(checkQuality(wt)).map((w) => `${w.stepId}:${w.code}`).join(", ") || "none"}`);
     }
   }
+}
+
+if (apply && drops.length) {
+  removeSymptoms(wt, drops);
+  await saveWalkthrough(wt);
+  console.log(`removed ${drops.length} symptom(s) the PR does not change`);
 }
 
 // A revise or fact check rewrote narration: record the new sentences, as the pipeline's last stage does

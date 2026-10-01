@@ -55,6 +55,7 @@ import { recipeFor, resolveRecipe, type AppRecipe } from "./recipes.js";
 import { confirmScenariosWithRepair } from "./repro-confirm.js";
 import { changedRegion, comparePngs } from "../shots/png-diff.js";
 import { listSymptomTexts } from "./symptom-shots.js";
+import { readUnchanged, UNCHANGED_FILE, type UnchangedSymptom } from "./unchanged-symptoms.js";
 import type { ScenarioFact } from "./fact-check.js";
 import { IDENTICAL_FRAMES_NOTE, NO_FRAMES_NOTE } from "./shots-status.js";
 
@@ -112,6 +113,8 @@ export type VerifyResult =
       facts?: ScenarioFact[];
       /** Every confirmed scenario (one per user-visible problem), scripts persisted next to `reproPath`. */
       scenarios?: { id: string; title: string; path: string }[];
+      /** Listed symptoms the verifier found the PR does not change (no confirmed scenario for them). */
+      unchanged?: UnchangedSymptom[];
     }
   | {
       status: "skipped";
@@ -146,6 +149,10 @@ export function buildPrompt(wt: Walkthrough, recipe: AppRecipe, baseUrl: string,
 ## The user-visible problems the walkthrough lists (0-based index)
 ${symptomTexts.map((t, i) => `${i}. ${t}`).join("\n")}
 Each one of these that can be SEEN on screen gets its own scenario (see "Your job").
+One that this PR does NOT change (the same on BASE and HEAD — e.g. the diff keeps that order or value
+on purpose) gets no script: write \`[{"symptomIndex": <i>, "why": "<one sentence with the values you
+read, BASE vs HEAD>"}]\` to \`.walkthrough/verify/${UNCHANGED_FILE}\` instead. The backend removes it from
+the walkthrough — only do this when the diff itself shows it is unchanged, never because a script was hard.
 `;
   const { width, height } = recipe.viewport;
   return `You are checking a pull request by writing a script that PROVES its user-visible change is
@@ -486,6 +493,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
           if (f.endsWith(".cjs") && f !== "pw.cjs") await copyFile(path.join(saved, f), path.join(verifyDir, f));
         }
         await copyFile(path.join(saved, "scenarios.json"), path.join(verifyDir, "scenarios.json"));
+        if (existsSync(path.join(saved, UNCHANGED_FILE))) await copyFile(path.join(saved, UNCHANGED_FILE), path.join(verifyDir, UNCHANGED_FILE));
         outcomeNote = "re-rendered from saved scenarios (no Bob)";
       } else {
         // Nothing confirmed was ever saved (e.g. the session died after Bob wrote scripts): use whatever
@@ -570,6 +578,10 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       path.join(persistDir, "scenarios.json"),
       JSON.stringify(passing.map((r) => ({ id: r.scenario.id, file: r.scenario.file, title: r.scenario.title, ...(r.scenario.symptomIndex !== undefined ? { symptomIndex: r.scenario.symptomIndex } : {}) })), null, 2)
     );
+    // A symptom with a confirmed scenario changes, whatever unchanged.json says.
+    const unchanged = readUnchanged(verifyDir).filter((u) => !passing.some((r) => r.scenario.symptomIndex === u.symptomIndex));
+    if (unchanged.length > 0) await writeFile(path.join(persistDir, UNCHANGED_FILE), JSON.stringify(unchanged, null, 2));
+    else await rm(path.join(persistDir, UNCHANGED_FILE), { force: true });
     outcomeOk = true;
     outcomeNote = `${passing.length} scenario(s) confirmed true@BASE/false@HEAD${repaired ? " after one repair" : ""}${flaky.length ? ` (flaky on first check: ${flaky.join(", ")})` : ""}`;
     const dropped = results.length - passing.length;
@@ -654,6 +666,7 @@ export async function verifyShots(opts: VerifyOptions): Promise<VerifyResult> {
       ...(symptomSrcs ? { symptomSrcs } : {}),
       measures: { base: (first.before as { measure?: unknown }).measure, head: (first.after as { measure?: unknown }).measure },
       scenarios: passing.map((r) => ({ id: r.scenario.id, title: r.scenario.title, path: path.join(persistDir, r.scenario.file) })),
+      ...(unchanged.length > 0 ? { unchanged } : {}),
       facts: passing.map((r) => ({
         id: r.scenario.id,
         title: r.scenario.title,

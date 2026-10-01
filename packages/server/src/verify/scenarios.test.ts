@@ -205,6 +205,13 @@ console.log(JSON.stringify({ bugPresent: base && n > 0, measure: {}, highlights:
     await confirmScenariosWithRepair({ ...all, symptomTexts: texts }, async (p) => void p2.push(p));
     expect(p2.join("\n")).not.toMatch(/No scenario was written/);
 
+    // The verifier said the PR doesn't change the missing ones: nothing more to ask.
+    const said = await setup({ "a.cjs": wideScript() }, [{ id: "a", file: "a.cjs", title: "A", symptomIndex: 0 }]);
+    await writeFile(path.join(said.verifyDir, "unchanged.json"), JSON.stringify([{ symptomIndex: 1, why: "same z-order" }, { symptomIndex: 2, why: "same" }]));
+    let asked = 0;
+    await confirmScenariosWithRepair({ ...said, symptomTexts: texts }, async () => void asked++);
+    expect(asked).toBe(0);
+
     // Scenarios not tagged with symptomIndex at all: can't tell, ask nothing.
     const untagged = await setup({ "a.cjs": wideScript() }, [{ id: "a", file: "a.cjs", title: "A" }]);
     let calls = 0;

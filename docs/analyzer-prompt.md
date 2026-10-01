@@ -280,6 +280,9 @@ words per label). Types:
 
 - `symptoms` — 2–3 distinct things the user sees go wrong, as a user would say them
   ("the list looks empty right after saving"), not as an engineer would diagnose them.
+  **Only what this PR changes for the user**: a thing that looks the same before and after
+  the PR is not its symptom — e.g. when the diff raises one layer above another and keeps a
+  third above both on purpose, "hidden behind the third" is not fixed and is not listed.
   Prefer objects: `items: [{ "text": "..." }, ...]`, not bare strings. Each item should
   be a distinct user-visible scenario (different viewport or UI state when that matters),
   so the verifier can later attach a dedicated BASE screenshot per item when useful.

@@ -18,6 +18,7 @@ import type { Walkthrough } from "@pr-walkthrough/shared";
 import { answerOf, runBob } from "../analyzer/bob-shell.js";
 import { assertBudget, recordSpend } from "../analyzer/budget.js";
 import { validateSchema } from "../validation/schema.js";
+import type { DroppedSymptom } from "./unchanged-symptoms.js";
 
 const FACTCHECK_MAX_COST = Number(process.env.FACTCHECK_MAX_COST ?? 0.6);
 /** A measurement is shown to Bob truncated to this many characters (they can be large objects). */
@@ -38,7 +39,7 @@ const clip = (v: unknown): string => {
   return s.length > MAX_MEASURE_CHARS ? `${s.slice(0, MAX_MEASURE_CHARS)}…` : s;
 };
 
-export function buildFactCheckPrompt(wt: Walkthrough, facts: ScenarioFact[]): string {
+export function buildFactCheckPrompt(wt: Walkthrough, facts: ScenarioFact[], dropped: DroppedSymptom[] = []): string {
   const symptoms = wt.steps.find((s) => s.visual?.type === "symptoms");
   const symptomItems =
     symptoms?.visual?.type === "symptoms"
@@ -55,14 +56,23 @@ export function buildFactCheckPrompt(wt: Walkthrough, facts: ScenarioFact[]): st
         `  BASE (before the PR): ${clip(f.base)}\n  HEAD (with the PR):   ${clip(f.head)}`
     )
     .join("\n");
+  const notChanged = dropped.length
+    ? `
+## Not changed by this PR (read from the code at BASE and HEAD)
+${dropped.map((d) => `- "${d.text}" — ${d.why}`).join("\n")}
+The backend removes these from the symptoms list. Every other sentence that presents them as a problem
+this PR fixes is wrong too: rewrite it to leave them out (or, where the text explains the change, say what
+the PR keeps). Keep the symptoms list itself as it is above — the backend removes the items.
+`
+    : "";
 
   return `Fact check against the running app. The backend ran your PR's app at BASE and at HEAD and
 measured each confirmed scenario with its script. These values are observed facts from the real
 program — where your text disagrees with them, the text is wrong (a PR description or a guess can be).
 
 ## Measured (per scenario, BASE and HEAD)
-${measured}
-
+${measured || "(none)"}
+${notChanged}
 ## Your current text
 plain.title: ${wt.plain?.title ?? ""}
 plain.problem: ${wt.plain?.problem ?? ""}
@@ -74,7 +84,8 @@ ${symptomItems}
 ${steps}
 
 ## Your job
-Look ONLY for sentences a measured value above directly contradicts — e.g. the text says one element
+Look ONLY for sentences a measured value above directly contradicts, and for sentences that present an
+item from "Not changed by this PR" as fixed — e.g. the text says one element
 is drawn on top of another and the measurement says which one is on top; the text says something
 stays open and the measurement says it closed; the text states a number the measurement shows
 differently. Rewrite only those sentences so they say what was measured, in the same plain style.
@@ -117,7 +128,8 @@ export function mergeProse(wt: Walkthrough, answer: Record<string, unknown>): { 
       take(`${step.id}.${k}`, step[k] as string | undefined, a[k], (v) => ((step as unknown as Record<string, unknown>)[k] = v));
     }
     const av = a.visual as { type?: string; items?: unknown[] } | undefined;
-    if (step.visual?.type === "symptoms" && av?.type === "symptoms" && Array.isArray(av.items)) {
+    // Matched by position, so only when the answer has the same number of items.
+    if (step.visual?.type === "symptoms" && av?.type === "symptoms" && Array.isArray(av.items) && av.items.length === step.visual.items.length) {
       step.visual.items = step.visual.items.map((item, n) => {
         const next = av.items![n];
         const nextText = typeof next === "string" ? next : (next as { text?: unknown } | undefined)?.text;
@@ -139,6 +151,8 @@ export type FactCheckResult =
 export async function factCheck(opts: {
   walkthrough: Walkthrough;
   facts: ScenarioFact[];
+  /** Symptoms the verifier found unchanged by the PR (still in the list; removed after the check). */
+  dropped?: DroppedSymptom[];
   repoPath: string;
   prLabel?: string;
   onEvent?: (e: unknown) => void;
@@ -147,12 +161,13 @@ export async function factCheck(opts: {
   const taskId = wt.meta.run?.taskId;
   if (!taskId) return { status: "skipped", reason: "no analysis session to resume", costUsd: 0 };
   const facts = opts.facts.filter((f) => f.base !== undefined || f.head !== undefined);
-  if (facts.length === 0) return { status: "skipped", reason: "no measurements", costUsd: 0 };
+  const dropped = opts.dropped ?? [];
+  if (facts.length === 0 && dropped.length === 0) return { status: "skipped", reason: "no measurements", costUsd: 0 };
 
   const previous = wt.meta.run?.costUsd ?? 0;
   const cap = (previous + FACTCHECK_MAX_COST).toFixed(2);
   await assertBudget(FACTCHECK_MAX_COST);
-  const run = await runBob(buildFactCheckPrompt(wt, facts), opts.repoPath, cap, { resumeTaskId: taskId, onEvent: opts.onEvent });
+  const run = await runBob(buildFactCheckPrompt(wt, facts, dropped), opts.repoPath, cap, { resumeTaskId: taskId, onEvent: opts.onEvent });
   const costUsd = Math.max(0, run.sessionCost - previous);
   const answer = answerOf(run);
   const base = {
